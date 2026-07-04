@@ -39,7 +39,7 @@ function metricValue(company: RankingCompany, metric: RankingCardProps["metric"]
 
 function metricLabel(metric: RankingCardProps["metric"]) {
   if (metric === "score") return "Score";
-  if (metric === "danger") return "Danger";
+  if (metric === "danger") return "リスク";
   if (metric === "revenue") return "売上高";
   if (metric === "operatingIncome") return "営業利益";
   return "営業CF";

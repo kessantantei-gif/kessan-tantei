@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { supabaseAdmin } from "@/lib/supabase";
+import { rankingDefinitions } from "@/lib/rankings/definitions";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.kessan-tantei.jp";
 
@@ -20,34 +21,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     },
     {
-      url: `${appUrl}/ranking/score`,
+      url: `${appUrl}/ranking`,
       lastModified: new Date(),
       changeFrequency: "daily",
       priority: 0.9,
-    },
-    {
-      url: `${appUrl}/ranking/revenue`,
-      lastModified: new Date(),
-      changeFrequency: "daily",
-      priority: 0.8,
-    },
-    {
-      url: `${appUrl}/ranking/operating-income`,
-      lastModified: new Date(),
-      changeFrequency: "daily",
-      priority: 0.8,
-    },
-    {
-      url: `${appUrl}/ranking/operating-cf`,
-      lastModified: new Date(),
-      changeFrequency: "daily",
-      priority: 0.8,
-    },
-    {
-      url: `${appUrl}/ranking/danger`,
-      lastModified: new Date(),
-      changeFrequency: "daily",
-      priority: 0.8,
     },
     {
       url: `${appUrl}/about-growth`,
@@ -56,6 +33,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.5,
     },
   ];
+
+  const rankingPages: MetadataRoute.Sitemap = rankingDefinitions.map(
+    (ranking) => ({
+      url: `${appUrl}/ranking/${ranking.slug}`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.8,
+    })
+  );
 
   const { data } = await supabaseAdmin
     .from("company_analyses")
@@ -70,5 +56,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.9,
   }));
 
-  return [...staticPages, ...companyPages];
+  return [...staticPages, ...rankingPages, ...companyPages];
 }

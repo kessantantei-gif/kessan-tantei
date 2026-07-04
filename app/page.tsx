@@ -7,6 +7,15 @@ import {
   isProUser,
 } from "@/lib/pro-engine";
 
+type NewsItem = {
+  id: string | number;
+  ticker?: string | null;
+  title: string;
+  url: string;
+  source?: string | null;
+  published_at?: string | null;
+};
+
 function formatNewsDate(value?: string | null) {
   if (!value) return "日付不明";
 
@@ -137,7 +146,7 @@ export default async function HomePage() {
 
           <p className="mt-5 max-w-4xl text-sm leading-7 text-slate-300 sm:mt-6 sm:text-lg sm:leading-9">
             決算探偵は、グロース市場に特化した財務分析ダッシュボードです。
-            売上成長、営業利益、営業CF、資金繰り、Red Flagsを横断的に整理し、
+            売上成長、営業利益、営業CF、資金繰り、リスクシグナルを横断的に整理し、
             「伸びている会社」と「注意すべき会社」を見える化します。
           </p>
 
@@ -186,15 +195,15 @@ export default async function HomePage() {
           <RankingCard
             title="営業CFランキング"
             description="現金創出力が強い企業。"
-            href="/ranking/operating-cf"
+            href="/ranking/operating-cash-flow"
             companies={operatingCFTop}
             metric="operatingCF"
           />
           <div className="lg:col-span-2">
             <RankingCard
-              title="Danger Scoreランキング"
+              title="リスクシグナルランキング"
               description="財務リスクや注意シグナルが強い企業。内訳詳細はPro限定。"
-              href="/ranking/danger"
+              href="/ranking/risk-signal"
               companies={dangerTop}
               metric="danger"
             />
@@ -206,7 +215,7 @@ export default async function HomePage() {
             Proで見えるもの
           </h2>
           <p className="mt-3 leading-8 text-slate-300">
-            Sランク全件、Danger内訳、AI詳細分析、決算変化速報を初月100円で確認できます。
+            Sランク全件、リスクシグナル内訳、AI詳細分析、決算変化速報を初月100円で確認できます。
           </p>
           <Link
             href="/pricing"
@@ -231,7 +240,7 @@ export default async function HomePage() {
             {news.length === 0 ? (
               <p className="text-slate-400">ニュースはまだありません。</p>
             ) : (
-              news.map((item: any) => (
+              (news as NewsItem[]).map((item) => (
                 <a
                   key={item.id}
                   href={item.url}

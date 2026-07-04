@@ -10,7 +10,7 @@ import FeedbackButton from "@/components/feedback-button";
 export const metadata: Metadata = {
   title: "決算探偵 | グロース市場特化の財務分析ランキング",
   description:
-    "決算探偵は、グロース市場に特化した財務分析ランキングです。EDINET決算データを自動解析し、成長性・収益品質・安全性・Red Flagsから伸びる会社と危ない会社を可視化します。",
+    "決算探偵は、グロース市場に特化した財務分析ランキングです。EDINET決算データを自動解析し、成長性・収益品質・安全性・リスクシグナルから企業の特徴を可視化します。",
   verification: {
     google: "GprsF0U3m9SZj2MJ5AUo9FK-Ame_DGhpPLv5LKiIyqA",
   },
