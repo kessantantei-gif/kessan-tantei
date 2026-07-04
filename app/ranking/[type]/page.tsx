@@ -3,11 +3,7 @@ import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
 import MetricBadge from "@/components/MetricBadge";
 import CompanySearch from "@/components/company-search";
-import {
-  FREE_VISIBLE_S_RANK_LIMIT,
-  isProUser,
-  isSRankCompany,
-} from "@/lib/pro-engine";
+import { isProUser } from "@/lib/pro-engine";
 
 type PageProps = {
   params: Promise<{ type: string }>;
@@ -24,15 +20,43 @@ type Company = {
     revenue?: number;
     operatingIncome?: number;
     operatingCF?: number;
+    revenueGrowth?: number;
+    operatingMargin?: number;
+    equityRatio?: number;
   } | null;
 };
 
 const rankingConfig = {
   score: {
-    title: "総合スコアランキング",
+    title: "財務スコアランキング",
     description:
       "成長性・安全性・希薄化リスクを総合評価したランキングです。FreeはSランク上位3社まで表示します。",
     metric: "score",
+  },
+  "revenue-growth": {
+    title: "売上成長率ランキング",
+    description: "前期から売上高がどれだけ伸びたかを比較するランキングです。",
+    metric: "revenueGrowth",
+  },
+  "operating-margin": {
+    title: "営業利益率ランキング",
+    description: "売上高に対して本業の利益をどれだけ残せたかを比較するランキングです。",
+    metric: "operatingMargin",
+  },
+  "operating-cash-flow": {
+    title: "営業CFランキング",
+    description: "営業活動によるキャッシュ創出力が高い企業のランキングです。",
+    metric: "operatingCF",
+  },
+  "equity-ratio": {
+    title: "自己資本比率ランキング",
+    description: "総資産に占める自己資本の割合が高い企業のランキングです。",
+    metric: "equityRatio",
+  },
+  "risk-signal": {
+    title: "リスクシグナルランキング",
+    description: "決算データから注意して確認したい財務シグナルが強い企業のランキングです。",
+    metric: "danger",
   },
   revenue: {
     title: "売上高ランキング",
@@ -65,6 +89,9 @@ function metricValue(company: Company, metric: string) {
 
   if (metric === "score") return `${company.score}`;
   if (metric === "danger") return `${company.danger_score}`;
+  if (metric === "revenueGrowth") return `${company.financials?.revenueGrowth ?? 0}%`;
+  if (metric === "operatingMargin") return `${company.financials?.operatingMargin ?? 0}%`;
+  if (metric === "equityRatio") return `${company.financials?.equityRatio ?? 0}%`;
   if (metric === "revenue") return yenOku(company.financials?.revenue ?? 0);
   if (metric === "operatingIncome") return yenOku(company.financials?.operatingIncome ?? 0);
   return yenOku(company.financials?.operatingCF ?? 0);
@@ -72,7 +99,10 @@ function metricValue(company: Company, metric: string) {
 
 function metricLabel(metric: string) {
   if (metric === "score") return "Score";
-  if (metric === "danger") return "Danger";
+  if (metric === "danger") return "リスク";
+  if (metric === "revenueGrowth") return "売上成長率";
+  if (metric === "operatingMargin") return "営業利益率";
+  if (metric === "equityRatio") return "自己資本比率";
   if (metric === "revenue") return "売上高";
   if (metric === "operatingIncome") return "営業利益";
   return "営業CF";
@@ -91,6 +121,9 @@ function sortCompanies(companies: Company[], metric: string) {
   const getter = (company: Company) => {
     if (metric === "score") return company.score;
     if (metric === "danger") return company.danger_score;
+    if (metric === "revenueGrowth") return company.financials?.revenueGrowth ?? 0;
+    if (metric === "operatingMargin") return company.financials?.operatingMargin ?? 0;
+    if (metric === "equityRatio") return company.financials?.equityRatio ?? 0;
     if (metric === "revenue") return company.financials?.revenue ?? 0;
     if (metric === "operatingIncome") return company.financials?.operatingIncome ?? 0;
     return company.financials?.operatingCF ?? 0;
