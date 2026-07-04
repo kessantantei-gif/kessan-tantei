@@ -1,0 +1,40 @@
+{
+  "ticker": "135A",
+  "companyName": "ＶＲＡＩＮ　Ｓｏｌｕｔｉｏｎ",
+  "industryType": "normal",
+  "docID": "S100Y2CG",
+  "score": 25,
+  "scoreBreakdown": {
+    "growth": 10,
+    "quality": 0,
+    "safety": 15
+  },
+  "risk": {
+    "dangerScore": 10,
+    "riskLevel": "SAFE",
+    "flags": [
+      {
+        "title": "営業CF 単期マイナス",
+        "scoreImpact": 10
+      }
+    ]
+  },
+  "financials": {
+    "revenue": 0,
+    "operatingIncome": 914000000,
+    "operatingCF": -374000000,
+    "cash": 427000000,
+    "currentAssets": 2747000000,
+    "currentLiabilities": 1129000000,
+    "assets": 3215000000,
+    "netAssets": 2086000000
+  },
+  "history": [
+    {
+      "year": "2024",
+      "revenue": 0,
+      "operatingIncome": 914000000,
+      "operatingCF": -374000000
+    }
+  ]
+}

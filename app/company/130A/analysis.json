@@ -1,0 +1,56 @@
+{
+  "ticker": "130A",
+  "companyName": "Ｖｅｒｉｔａｓ　Ｉｎ　Ｓｉｌｉｃｏ",
+  "industryType": "normal",
+  "docID": "S100XSIT",
+  "score": 30,
+  "scoreBreakdown": {
+    "growth": 0,
+    "quality": 0,
+    "safety": 30
+  },
+  "risk": {
+    "dangerScore": 50,
+    "riskLevel": "WARNING",
+    "flags": [
+      {
+        "title": "営業CF 2期連続マイナス",
+        "scoreImpact": 25
+      },
+      {
+        "title": "増資",
+        "scoreImpact": 25
+      }
+    ]
+  },
+  "financials": {
+    "revenue": 0,
+    "operatingIncome": -396748000,
+    "operatingCF": -299265000,
+    "cash": 325213000,
+    "currentAssets": 1865371000,
+    "currentLiabilities": 101035000,
+    "assets": 1884912000,
+    "netAssets": 1783876000
+  },
+  "history": [
+    {
+      "year": "2024",
+      "revenue": 0,
+      "operatingIncome": 37623000,
+      "operatingCF": 68710000
+    },
+    {
+      "year": "2025",
+      "revenue": 0,
+      "operatingIncome": -212851000,
+      "operatingCF": -217944000
+    },
+    {
+      "year": "2026",
+      "revenue": 0,
+      "operatingIncome": -396748000,
+      "operatingCF": -299265000
+    }
+  ]
+}

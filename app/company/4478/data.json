@@ -1,0 +1,18 @@
+{
+  "ticker": "4478",
+  "revenue": 8299000000,
+  "operatingIncome": 3029000000,
+  "operatingCF": -2362000000,
+  "cash": 11531000000,
+  "currentLiabilities": 25623000000,
+  "assets": 74759000000,
+  "netAssets": 46871000000,
+  "growthScore": 40,
+  "qualityScore": 15,
+  "safetyScore": 15,
+  "totalScore": 70,
+  "operatingMargin": 36.5,
+  "ocfMargin": -28.46,
+  "equityRatio": 62.7,
+  "dangerScore": 60
+}

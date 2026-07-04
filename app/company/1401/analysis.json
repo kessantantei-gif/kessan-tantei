@@ -1,0 +1,47 @@
+{
+  "ticker": "1401",
+  "companyName": "エムビーエス",
+  "industryType": "normal",
+  "docID": "S100WUBZ",
+  "score": 40,
+  "scoreBreakdown": {
+    "growth": 10,
+    "quality": 0,
+    "safety": 30
+  },
+  "risk": {
+    "dangerScore": 0,
+    "riskLevel": "SAFE",
+    "flags": []
+  },
+  "financials": {
+    "revenue": 0,
+    "operatingIncome": 909774000,
+    "operatingCF": 567895000,
+    "cash": 1827413000,
+    "currentAssets": 3290133000,
+    "currentLiabilities": 1169950000,
+    "assets": 1362572000,
+    "netAssets": 3696628000
+  },
+  "history": [
+    {
+      "year": "2024",
+      "revenue": 0,
+      "operatingIncome": 647375000,
+      "operatingCF": 233103000
+    },
+    {
+      "year": "2025",
+      "revenue": 0,
+      "operatingIncome": 654215000,
+      "operatingCF": 54044000
+    },
+    {
+      "year": "2026",
+      "revenue": 0,
+      "operatingIncome": 760088000,
+      "operatingCF": 547568000
+    }
+  ]
+}

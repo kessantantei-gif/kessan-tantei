@@ -1,0 +1,44 @@
+{
+  "ticker": "137A",
+  "companyName": "Ｃｏｃｏｌｉｖｅ",
+  "industryType": "normal",
+  "docID": "S100WKSO",
+  "score": 40,
+  "scoreBreakdown": {
+    "growth": 10,
+    "quality": 0,
+    "safety": 30
+  },
+  "risk": {
+    "dangerScore": 65,
+    "riskLevel": "WARNING",
+    "flags": [
+      {
+        "title": "MSワラント",
+        "scoreImpact": 40
+      },
+      {
+        "title": "増資",
+        "scoreImpact": 25
+      }
+    ]
+  },
+  "financials": {
+    "revenue": 0,
+    "operatingIncome": 279617000,
+    "operatingCF": 221406000,
+    "cash": 878485000,
+    "currentAssets": 1020383000,
+    "currentLiabilities": 168279000,
+    "assets": 1057970000,
+    "netAssets": 889690000
+  },
+  "history": [
+    {
+      "year": "2025",
+      "revenue": 0,
+      "operatingIncome": 279617000,
+      "operatingCF": 221406000
+    }
+  ]
+}

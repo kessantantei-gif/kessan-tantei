@@ -1,0 +1,47 @@
+{
+  "ticker": "138A",
+  "companyName": "光フードサービス",
+  "industryType": "normal",
+  "docID": "S100XMX3",
+  "score": 33,
+  "scoreBreakdown": {
+    "growth": 10,
+    "quality": 0,
+    "safety": 23
+  },
+  "risk": {
+    "dangerScore": 0,
+    "riskLevel": "SAFE",
+    "flags": []
+  },
+  "financials": {
+    "revenue": 0,
+    "operatingIncome": 225861000,
+    "operatingCF": 290255000,
+    "cash": 1388132000,
+    "currentAssets": 1632487000,
+    "currentLiabilities": 653672000,
+    "assets": 2652516000,
+    "netAssets": 1310100000
+  },
+  "history": [
+    {
+      "year": "2024",
+      "revenue": 0,
+      "operatingIncome": 262417000,
+      "operatingCF": 373047000
+    },
+    {
+      "year": "2025",
+      "revenue": 0,
+      "operatingIncome": 217082000,
+      "operatingCF": 209007000
+    },
+    {
+      "year": "2026",
+      "revenue": 0,
+      "operatingIncome": 225861000,
+      "operatingCF": 290255000
+    }
+  ]
+}

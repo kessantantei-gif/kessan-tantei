@@ -1,0 +1,39 @@
+# Query: kessan-tantei.vercel.app
+# ContextLines: 1
+
+7 results - 7 files
+
+app/layout.tsx:
+  18        "グロース市場に潜む財務リスクと成長性を、会計士視点で可視化する分析サイトです。",
+  19:     url: "https://kessan-tantei.jp",
+  20      siteName: "決算探偵",
+
+app/robots.ts:
+  2  
+  3: const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://kessan-tantei.jp";
+  4  
+
+app/sitemap.ts:
+  3  
+  4: const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://kessan-tantei.jp";
+  5  
+
+app/api/stripe/checkout/route.ts:
+  13    const appUrl =
+  14:     process.env.NEXT_PUBLIC_APP_URL || "https://kessan-tantei.jp";
+  15  
+
+app/company/[ticker]/layout.tsx:
+  8  
+  9: const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://kessan-tantei.jp";
+  10  
+
+app/pricing/actions.ts:
+  15    const appUrl =
+  16:     process.env.NEXT_PUBLIC_APP_URL || "https://kessan-tantei.jp";
+  17  
+
+components/x-share-button.tsx:
+  15  }) {
+  16:   const url = `https://kessan-tantei.jp/company/${ticker}`;
+  17  

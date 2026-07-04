@@ -1,0 +1,52 @@
+{
+  "ticker": "8706",
+  "companyName": "極東証券",
+  "industryType": "finance",
+  "docID": "S100YEU4",
+  "score": 70,
+  "scoreBreakdown": {
+    "growth": 40,
+    "quality": 15,
+    "safety": 15
+  },
+  "risk": {
+    "dangerScore": 10,
+    "riskLevel": "SAFE",
+    "flags": [
+      {
+        "title": "金融業: 営業CF 3期マイナス（参考）",
+        "scoreImpact": 10
+      }
+    ]
+  },
+  "financials": {
+    "revenue": 8299000000,
+    "operatingIncome": 3029000000,
+    "operatingCF": -2362000000,
+    "cash": 11531000000,
+    "currentAssets": 50028000000,
+    "currentLiabilities": 25623000000,
+    "assets": 74759000000,
+    "netAssets": 46871000000
+  },
+  "history": [
+    {
+      "year": "2024",
+      "revenue": 7711000000,
+      "operatingIncome": 2909000000,
+      "operatingCF": -26000000
+    },
+    {
+      "year": "2025",
+      "revenue": 7993000000,
+      "operatingIncome": 2688000000,
+      "operatingCF": -4098000000
+    },
+    {
+      "year": "2026",
+      "revenue": 8299000000,
+      "operatingIncome": 3029000000,
+      "operatingCF": -2362000000
+    }
+  ]
+}

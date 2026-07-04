@@ -1,0 +1,28 @@
+{
+  "ticker": "4478",
+  "docID": "S100YEU4",
+  "score": 70,
+  "risk": {
+    "dangerScore": 30,
+    "riskLevel": "WATCH",
+    "flags": [
+      {
+        "title": "営業CF 単期マイナス",
+        "scoreImpact": 10
+      },
+      {
+        "title": "現預金 < 流動負債",
+        "scoreImpact": 20
+      }
+    ]
+  },
+  "financials": {
+    "revenue": 8299000000,
+    "operatingIncome": 3029000000,
+    "operatingCF": -2362000000,
+    "cash": 11531000000,
+    "currentLiabilities": 25623000000,
+    "assets": 74759000000,
+    "netAssets": 46871000000
+  }
+}
