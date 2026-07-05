@@ -2,6 +2,8 @@ import type { RankedCompany, RankingCompany, RankingDefinition } from "./types";
 
 type GrowthKey = "revenue" | "operatingIncome" | "operatingCF" | "netIncome";
 
+const MIN_PRIOR_REVENUE_FOR_GROWTH_RANKING = 100_000_000;
+
 function financialNumber(
   company: RankingCompany,
   key: keyof NonNullable<RankingCompany["financials"]>
@@ -16,15 +18,26 @@ function historyValues(company: RankingCompany, key: GrowthKey) {
     .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
 }
 
-function latestHistoryGrowth(company: RankingCompany, key: GrowthKey) {
+function latestHistoryPair(company: RankingCompany, key: GrowthKey) {
   const values = historyValues(company, key);
   if (values.length < 2) return null;
 
-  const previous = values.at(-2)!;
-  const current = values.at(-1)!;
+  return {
+    previous: values.at(-2)!,
+    current: values.at(-1)!,
+  };
+}
 
-  if (previous === 0) return null;
-  return ((current - previous) / Math.abs(previous)) * 100;
+function latestHistoryGrowth(company: RankingCompany, key: GrowthKey) {
+  const pair = latestHistoryPair(company, key);
+  if (!pair || pair.previous === 0) return null;
+
+  return ((pair.current - pair.previous) / Math.abs(pair.previous)) * 100;
+}
+
+function hasMeaningfulPriorRevenue(company: RankingCompany) {
+  const pair = latestHistoryPair(company, "revenue");
+  return pair !== null && pair.previous >= MIN_PRIOR_REVENUE_FOR_GROWTH_RANKING;
 }
 
 function isProfitable(company: RankingCompany) {
@@ -32,6 +45,7 @@ function isProfitable(company: RankingCompany) {
 }
 
 function computedRevenueGrowth(company: RankingCompany) {
+  if (!hasMeaningfulPriorRevenue(company)) return null;
   return latestHistoryGrowth(company, "revenue");
 }
 
