@@ -13,6 +13,23 @@ const title = "決算ランキング一覧｜グロース企業の財務スコ�
 const description =
   "決算探偵のランキング一覧ページです。グロース企業を財務スコア、売上成長率、営業利益率、営業CF、自己資本比率、リスクシグナルなどで比較できます。";
 
+const COMPARISON_REQUIRED_SLUGS = new Set([
+  "revenue-growth",
+  "high-growth",
+  "profitable-high-growth",
+  "featured-companies",
+  "recommended",
+  "rule-of-40",
+  "rule40-excellent",
+  "gross-profit-growth",
+  "operating-income-growth",
+  "net-income-growth",
+  "ocf-growth",
+  "revenue-cagr-3y",
+  "margin-improvement",
+  "ocf-improvement",
+]);
+
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
@@ -46,8 +63,15 @@ async function loadCompanies() {
   return (data ?? []) as RankingCompany[];
 }
 
+function shouldKeepEmptyRanking(ranking: RankingDefinition) {
+  return COMPARISON_REQUIRED_SLUGS.has(ranking.slug);
+}
+
 function getVisibleRankings(companies: RankingCompany[]) {
-  return rankingDefinitions.filter((ranking) => rankCompanies(companies, ranking).length > 0);
+  return rankingDefinitions.filter((ranking) => {
+    const hasCompanies = rankCompanies(companies, ranking).length > 0;
+    return hasCompanies || shouldKeepEmptyRanking(ranking);
+  });
 }
 
 function getVisibleRankingsByCategory(
@@ -99,7 +123,7 @@ export default async function RankingsPage() {
           </p>
           <p className="mt-3 text-sm text-slate-500">
             公開中：{visibleRankings.length}ランキング
-            <span className="ml-2 text-slate-600">対象企業があるランキングのみ表示しています。</span>
+            <span className="ml-2 text-slate-600">成長率系は、2期分以上の比較データが揃い次第ランキングに反映されます。</span>
           </p>
         </section>
 
@@ -133,24 +157,34 @@ export default async function RankingsPage() {
                 </div>
 
                 <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {rankings.map((ranking) => (
-                    <Link
-                      key={ranking.slug}
-                      href={`/ranking/${ranking.slug}`}
-                      className="group rounded-2xl border border-white/10 bg-black/20 p-5 transition hover:-translate-y-0.5 hover:border-green-400/40 hover:bg-green-500/10"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <h3 className="font-black">{ranking.shortTitle}</h3>
-                        <span className="shrink-0 rounded-full border border-green-400/30 bg-green-500/10 px-2 py-0.5 text-[11px] font-black text-green-200">
-                          TOP3無料
+                  {rankings.map((ranking) => {
+                    const isComparisonEmpty =
+                      shouldKeepEmptyRanking(ranking) && rankCompanies(companies, ranking).length === 0;
+
+                    return (
+                      <Link
+                        key={ranking.slug}
+                        href={`/ranking/${ranking.slug}`}
+                        className="group rounded-2xl border border-white/10 bg-black/20 p-5 transition hover:-translate-y-0.5 hover:border-green-400/40 hover:bg-green-500/10"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="font-black">{ranking.shortTitle}</h3>
+                          <span className="shrink-0 rounded-full border border-green-400/30 bg-green-500/10 px-2 py-0.5 text-[11px] font-black text-green-200">
+                            TOP3無料
+                          </span>
+                        </div>
+                        <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">{ranking.description}</p>
+                        {isComparisonEmpty ? (
+                          <p className="mt-3 rounded-xl border border-yellow-400/20 bg-yellow-400/10 px-3 py-2 text-xs font-bold leading-5 text-yellow-100">
+                            2期分の比較データ待ち
+                          </p>
+                        ) : null}
+                        <span className="mt-4 inline-block text-sm font-bold text-green-300">
+                          見る <span className="transition group-hover:translate-x-1">→</span>
                         </span>
-                      </div>
-                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">{ranking.description}</p>
-                      <span className="mt-4 inline-block text-sm font-bold text-green-300">
-                        見る <span className="transition group-hover:translate-x-1">→</span>
-                      </span>
-                    </Link>
-                  ))}
+                      </Link>
+                    );
+                  })}
                 </div>
               </section>
             );
