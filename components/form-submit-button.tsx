@@ -15,7 +15,11 @@ export default function FormSubmitButton({
   const { pending } = useFormStatus();
 
   return (
-    <button disabled={pending} className={className}>
+    <button
+      disabled={pending}
+      aria-busy={pending}
+      className={`${className} inline-flex items-center justify-center transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60`}
+    >
       <span className="flex items-center justify-center gap-2">
         {pending ? (
           <>
