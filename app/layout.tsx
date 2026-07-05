@@ -9,6 +9,8 @@ import FeedbackButton from "@/components/feedback-button";
 import SiteNav from "@/components/site-nav";
 import CompanyTrendChartEnhancer from "@/components/company-trend-chart-enhancer";
 import ScoreExplanationInjector from "@/components/score-explanation-injector";
+import CompareButtonInjector from "@/components/compare-button-injector";
+import CompareTray from "@/components/compare-tray";
 
 export const metadata: Metadata = {
   title: "決算探偵 | グロース市場特化の財務分析ランキング",
@@ -58,6 +60,8 @@ export default function RootLayout({
           {children}
           <CompanyTrendChartEnhancer />
           <ScoreExplanationInjector />
+          <CompareButtonInjector />
+          <CompareTray />
           <FeedbackButton />
           <AuthButton />
           <Toaster richColors position="top-right" />
