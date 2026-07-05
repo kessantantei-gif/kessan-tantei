@@ -38,6 +38,27 @@ function shortYenOku(value?: number | null) {
   return `${oku.toLocaleString("ja-JP", { maximumFractionDigits: 2 })}億`;
 }
 
+function yoyLabel(current: number, previous?: number) {
+  if (typeof previous !== "number" || !Number.isFinite(previous) || previous === 0) {
+    return { text: "前年差 —", tone: "neutral" as const };
+  }
+
+  const value = ((current - previous) / Math.abs(previous)) * 100;
+  const sign = value >= 0 ? "+" : "";
+  const arrow = value >= 0 ? "↑" : "↓";
+
+  return {
+    text: `${arrow}${sign}${value.toFixed(1)}%`,
+    tone: value >= 0 ? "up" as const : "down" as const,
+  };
+}
+
+function changeClass(tone: "up" | "down" | "neutral") {
+  if (tone === "up") return "border-green-300/30 bg-green-950/70 text-green-200";
+  if (tone === "down") return "border-red-300/30 bg-red-950/70 text-red-200";
+  return "border-white/10 bg-black/55 text-slate-300";
+}
+
 function findTrendPanel(title: string) {
   const headings = Array.from(document.querySelectorAll("h2"));
   const heading = headings.find((node) => node.textContent?.trim() === title);
@@ -57,49 +78,60 @@ function findChartArea(card: Element) {
 function buildRichChart(rows: HistoryRow[], keyName: keyof HistoryRow) {
   const values = rows.map((row) => Math.abs(Number(row[keyName] ?? 0)));
   const max = Math.max(...values, 1);
+  const latestYear = rows.at(-1)?.year;
 
   const chart = document.createElement("div");
   chart.dataset.trendValues = "true";
   chart.className = "mt-5 rounded-2xl border border-white/10 bg-black/20 p-4";
 
   const bars = document.createElement("div");
-  bars.className = "flex h-44 items-end gap-3 sm:h-48 sm:gap-4";
+  bars.className = "flex h-52 items-end gap-3 sm:h-56 sm:gap-4";
 
-  for (const row of rows) {
+  rows.forEach((row, index) => {
     const rawValue = Number(row[keyName] ?? 0);
-    const height = Math.max(42, (Math.abs(rawValue) / max) * 150);
+    const previousValue = index > 0 ? Number(rows[index - 1][keyName] ?? NaN) : undefined;
+    const change = yoyLabel(rawValue, previousValue);
+    const height = Math.max(58, (Math.abs(rawValue) / max) * 170);
+    const isLatest = row.year === latestYear;
 
     const item = document.createElement("div");
     item.className = "flex min-w-0 flex-1 flex-col items-center gap-2";
 
     const barWrap = document.createElement("div");
     barWrap.className = "relative flex w-full items-end justify-center";
-    barWrap.style.height = "158px";
+    barWrap.style.height = "180px";
 
     const bar = document.createElement("div");
     bar.className = rawValue >= 0
-      ? "relative flex w-full items-start justify-center overflow-hidden rounded-t-2xl border border-green-300/20 bg-gradient-to-t from-green-500/70 to-cyan-300/90 shadow-lg shadow-green-950/20"
-      : "relative flex w-full items-start justify-center overflow-hidden rounded-t-2xl border border-red-300/20 bg-gradient-to-t from-red-600/70 to-orange-300/90 shadow-lg shadow-red-950/20";
+      ? `relative flex w-full items-start justify-center overflow-hidden rounded-t-2xl border bg-gradient-to-t from-green-500/70 to-cyan-300/90 shadow-lg shadow-green-950/20 ${isLatest ? "border-yellow-200/70 ring-2 ring-yellow-300/50" : "border-green-300/20"}`
+      : `relative flex w-full items-start justify-center overflow-hidden rounded-t-2xl border bg-gradient-to-t from-red-600/70 to-orange-300/90 shadow-lg shadow-red-950/20 ${isLatest ? "border-yellow-200/70 ring-2 ring-yellow-300/50" : "border-red-300/20"}`;
     bar.style.height = `${height}px`;
+    bar.title = `${row.year ?? "—"}: ${yenOku(rawValue)} / ${change.text}`;
 
-    const label = document.createElement("div");
-    label.className = "absolute left-1 right-1 top-2 rounded-xl bg-black/45 px-1.5 py-1 text-center text-[10px] font-black leading-tight text-white backdrop-blur sm:text-xs";
-    label.textContent = shortYenOku(rawValue);
+    const valueLabel = document.createElement("div");
+    valueLabel.className = "absolute left-1 right-1 top-2 rounded-xl bg-black/50 px-1.5 py-1 text-center text-[10px] font-black leading-tight text-white backdrop-blur sm:text-xs";
+    valueLabel.textContent = shortYenOku(rawValue);
 
-    bar.append(label);
+    const changeLabel = document.createElement("div");
+    changeLabel.className = `absolute bottom-2 left-1 right-1 rounded-xl border px-1.5 py-1 text-center text-[10px] font-black leading-tight backdrop-blur sm:text-xs ${changeClass(change.tone)}`;
+    changeLabel.textContent = change.text;
+
+    bar.append(valueLabel, changeLabel);
     barWrap.append(bar);
 
     const year = document.createElement("div");
-    year.className = "rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-black text-slate-300 sm:text-xs";
-    year.textContent = String(row.year ?? "—");
+    year.className = isLatest
+      ? "rounded-full border border-yellow-300/50 bg-yellow-300/15 px-2 py-1 text-[10px] font-black text-yellow-100 sm:text-xs"
+      : "rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-black text-slate-300 sm:text-xs";
+    year.textContent = isLatest ? `${row.year ?? "—"} 最新` : String(row.year ?? "—");
 
     item.append(barWrap, year);
     bars.append(item);
-  }
+  });
 
   const caption = document.createElement("p");
   caption.className = "mt-3 text-xs leading-6 text-slate-500";
-  caption.textContent = "棒グラフ内の数値は億円単位です。";
+  caption.textContent = "棒グラフ内の上段は金額、下段は前年差です。最新年度は黄色枠で表示しています。";
 
   chart.append(bars, caption);
   return chart;
