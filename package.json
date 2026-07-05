@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "backfill:history": "tsx scripts/backfill-zero-financials.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.5.9",
