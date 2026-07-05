@@ -69,7 +69,7 @@ function displayPeriod(row?: HistoryRow) {
   const rawYear = row.fiscalYear ?? row.fiscal_year ?? row.year;
   if (rawYear === undefined || rawYear === null || rawYear === "") return "年度不明";
 
-  return `${rawYear}年期`;
+  return `${rawYear}年度`;
 }
 
 function sortKey(row: HistoryRow) {
@@ -214,7 +214,7 @@ function buildChart(rows: HistoryRow[], key: TrendKey) {
 
   const caption = document.createElement("p");
   caption.className = "mt-3 text-xs leading-6 text-slate-500";
-  caption.textContent = "表示は直近最大3期です。棒の上に金額、棒の下に前年差率を表示しています。";
+  caption.textContent = "表示は直近最大3期です。決算月が取得できた会社は○年○月期、未取得の会社は年度で表示します。";
 
   root.append(summary, graph, caption);
   return root;
