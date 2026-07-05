@@ -23,6 +23,13 @@ type CompanyAnalysis = {
   history: HistoryRow[] | null;
 };
 
+type Severity = "ERROR" | "WARNING" | "INFO";
+
+type AuditIssue = {
+  severity: Severity;
+  message: string;
+};
+
 function requiredEnv(name: string) {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is missing`);
@@ -49,29 +56,49 @@ function hasAnyMetric(row: HistoryRow) {
   );
 }
 
+function isForeignOrJdr(company: CompanyAnalysis) {
+  return (
+    company.company_name.includes("ＪＤＲ") ||
+    company.company_name.includes("リミテッド") ||
+    company.company_name.toLowerCase().includes("limited")
+  );
+}
+
+function pushIssue(issues: AuditIssue[], severity: Severity, message: string) {
+  if (!issues.some((issue) => issue.severity === severity && issue.message === message)) {
+    issues.push({ severity, message });
+  }
+}
+
 function auditCompany(company: CompanyAnalysis) {
-  const issues: string[] = [];
+  const issues: AuditIssue[] = [];
   const history = Array.isArray(company.history) ? company.history : [];
+  const foreignOrJdr = isForeignOrJdr(company);
 
   if (history.length === 0) {
-    issues.push("historyなし");
+    pushIssue(issues, "ERROR", "historyなし");
     return issues;
   }
 
   if (history.length > 3) {
-    issues.push(`表示候補が3期超: ${history.length}期`);
+    pushIssue(issues, "INFO", `表示候補が3期超: ${history.length}期（表示側で直近3期に丸めればOK）`);
   }
 
   const years = history.map(rowYear).filter((value): value is number => value !== null);
   const uniqueYears = new Set(years);
   if (uniqueYears.size !== years.length) {
-    issues.push("年度重複あり");
+    pushIssue(issues, "ERROR", "年度重複あり");
   }
 
   const sortedYears = [...years].sort((a, b) => a - b);
   for (let i = 1; i < sortedYears.length; i += 1) {
     if (sortedYears[i] - sortedYears[i - 1] > 1) {
-      issues.push(`年度飛び: ${sortedYears[i - 1]}→${sortedYears[i]}`);
+      const gap = `年度飛び: ${sortedYears[i - 1]}→${sortedYears[i]}`;
+      pushIssue(
+        issues,
+        foreignOrJdr ? "INFO" : "WARNING",
+        foreignOrJdr ? `${gap}（外国会社/JDRは会計期間・タグ体系が異なる可能性）` : `${gap}（上場直後・比較情報の欠落なら許容）`
+      );
       break;
     }
   }
@@ -82,27 +109,41 @@ function auditCompany(company: CompanyAnalysis) {
     const period = periodText(row);
 
     if (!year) {
-      issues.push("年度なし行あり");
+      pushIssue(issues, "ERROR", "年度なし行あり");
     }
 
     if (!period) {
-      issues.push(`${year ?? "不明"}: 決算期表記なし`);
+      pushIssue(
+        issues,
+        foreignOrJdr ? "INFO" : "ERROR",
+        `${year ?? "不明"}: 決算期表記なし${foreignOrJdr ? "（外国会社/JDRは別対応）" : ""}`
+      );
     }
 
     if (!month) {
-      issues.push(`${year ?? "不明"}: 決算月なし`);
+      pushIssue(
+        issues,
+        foreignOrJdr ? "INFO" : "ERROR",
+        `${year ?? "不明"}: 決算月なし${foreignOrJdr ? "（外国会社/JDRは別対応）" : ""}`
+      );
     }
 
     if (period && month && !period.includes(`${month}月`)) {
-      issues.push(`${year ?? "不明"}: 決算期表記と決算月が不一致`);
+      pushIssue(issues, "ERROR", `${year ?? "不明"}: 決算期表記と決算月が不一致`);
     }
 
     if (!hasAnyMetric(row)) {
-      issues.push(`${year ?? "不明"}: 主要指標なし`);
+      pushIssue(issues, "ERROR", `${year ?? "不明"}: 主要指標なし`);
     }
   }
 
-  return [...new Set(issues)];
+  return issues;
+}
+
+function severityRank(severity: Severity) {
+  if (severity === "ERROR") return 0;
+  if (severity === "WARNING") return 1;
+  return 2;
 }
 
 async function main() {
@@ -119,21 +160,32 @@ async function main() {
   if (error) throw error;
 
   const companies = (data ?? []) as CompanyAnalysis[];
-  const bad = companies
+  const audited = companies
     .map((company) => ({ company, issues: auditCompany(company) }))
     .filter((item) => item.issues.length > 0);
 
+  const errorItems = audited.filter((item) => item.issues.some((issue) => issue.severity === "ERROR"));
+  const warningItems = audited.filter(
+    (item) => !item.issues.some((issue) => issue.severity === "ERROR") && item.issues.some((issue) => issue.severity === "WARNING")
+  );
+  const infoItems = audited.filter((item) =>
+    item.issues.every((issue) => issue.severity === "INFO")
+  );
+
   const summary = {
     total: companies.length,
-    problematic: bad.length,
-    missingFiscalMonth: bad.filter((item) =>
-      item.issues.some((issue) => issue.includes("決算月なし"))
+    flagged: audited.length,
+    errorCompanies: errorItems.length,
+    warningOnlyCompanies: warningItems.length,
+    infoOnlyCompanies: infoItems.length,
+    missingFiscalMonth: audited.filter((item) =>
+      item.issues.some((issue) => issue.message.includes("決算月なし"))
     ).length,
-    missingFiscalPeriod: bad.filter((item) =>
-      item.issues.some((issue) => issue.includes("決算期表記なし"))
+    missingFiscalPeriod: audited.filter((item) =>
+      item.issues.some((issue) => issue.message.includes("決算期表記なし"))
     ).length,
-    tooManyPeriods: bad.filter((item) =>
-      item.issues.some((issue) => issue.includes("3期超"))
+    tooManyPeriods: audited.filter((item) =>
+      item.issues.some((issue) => issue.message.includes("3期超"))
     ).length,
   };
 
@@ -141,14 +193,19 @@ async function main() {
   console.log(summary);
   console.log("");
 
-  for (const item of bad.slice(0, 200)) {
+  for (const item of audited.slice(0, 200)) {
+    const sortedIssues = [...item.issues].sort(
+      (a, b) => severityRank(a.severity) - severityRank(b.severity)
+    );
     console.log(`${item.company.ticker} ${item.company.company_name}`);
     console.log(`  doc_id: ${item.company.doc_id ?? "なし"}`);
-    console.log(`  issues: ${item.issues.join(" / ")}`);
+    for (const issue of sortedIssues) {
+      console.log(`  [${issue.severity}] ${issue.message}`);
+    }
   }
 
-  if (bad.length > 200) {
-    console.log(`...and ${bad.length - 200} more`);
+  if (audited.length > 200) {
+    console.log(`...and ${audited.length - 200} more`);
   }
 }
 
