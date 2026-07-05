@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { supabaseAdmin } from "@/lib/supabase";
+import ComparePageActions from "@/components/compare-page-actions";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -134,7 +135,7 @@ export default async function ComparePage({ searchParams }: PageProps) {
           </div>
 
           <Link
-            href="/"
+            href="/ranking"
             className="rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-slate-200 hover:bg-white/10"
           >
             ランキングへ戻る
@@ -144,56 +145,84 @@ export default async function ComparePage({ searchParams }: PageProps) {
         <div className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-xl sm:p-6">
           <p className="text-sm font-bold text-slate-300">使い方</p>
           <p className="mt-2 text-sm leading-7 text-slate-400">
-            URLに <span className="font-mono text-cyan-200">/compare?tickers=4478,7048,4881</span> のように指定してください。最大5社まで比較できます。
+            会社ページやランキングの「＋比較に追加」から最大5社まで追加できます。右上の「比較」ボタンからこのページへ移動できます。
           </p>
         </div>
 
+        <ComparePageActions companies={companies.map((company) => ({ ticker: company.ticker, company_name: company.company_name }))} />
+
         {tickers.length === 0 ? (
           <div className="mt-6 rounded-3xl border border-yellow-300/20 bg-yellow-500/10 p-6 text-yellow-100">
-            比較したい証券コードを指定してください。
+            比較したい銘柄を会社ページまたはランキングから追加してください。
           </div>
         ) : companies.length === 0 ? (
           <div className="mt-6 rounded-3xl border border-red-300/20 bg-red-500/10 p-6 text-red-100">
             指定された銘柄が見つかりませんでした。
           </div>
         ) : (
-          <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-black/20 shadow-2xl shadow-black/30">
-            <div className="overflow-x-auto">
-              <table className="min-w-[760px] w-full border-collapse text-left">
-                <thead>
-                  <tr className="border-b border-white/10 bg-white/[0.04]">
-                    <th className="sticky left-0 z-10 bg-[#101423] px-4 py-4 text-xs font-black tracking-[0.18em] text-slate-400">
-                      指標
-                    </th>
-                    {companies.map((company) => (
-                      <th key={company.ticker} className="px-4 py-4 align-top">
-                        <Link href={`/company/${company.ticker}`} className="group block">
-                          <p className="text-lg font-black text-white group-hover:text-cyan-200">
-                            {company.company_name}
-                          </p>
-                          <p className="mt-1 text-sm font-bold text-slate-500">{company.ticker}</p>
-                        </Link>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.label} className="border-b border-white/10 last:border-b-0">
-                      <th className="sticky left-0 z-10 bg-[#101423] px-4 py-4 text-sm font-black text-slate-300">
-                        {row.label}
+          <>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              {companies.map((company) => (
+                <Link
+                  key={company.ticker}
+                  href={`/company/${company.ticker}`}
+                  className="rounded-3xl border border-white/10 bg-white/5 p-4 transition hover:border-cyan-300/40 hover:bg-cyan-500/10"
+                >
+                  <p className="truncate text-lg font-black text-white">{company.company_name}</p>
+                  <p className="mt-1 text-sm font-bold text-slate-500">{company.ticker}</p>
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <p className="text-xs text-slate-500">Score</p>
+                      <p className="mt-1 text-xl font-black text-cyan-100">{num(company.score)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <p className="text-xs text-slate-500">Danger</p>
+                      <p className="mt-1 text-xl font-black text-yellow-100">{num(company.danger_score)}</p>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs font-bold text-cyan-200">会社ページを見る →</p>
+                </Link>
+              ))}
+            </div>
+
+            <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-black/20 shadow-2xl shadow-black/30">
+              <div className="overflow-x-auto">
+                <table className="min-w-[760px] w-full border-collapse text-left">
+                  <thead>
+                    <tr className="border-b border-white/10 bg-white/[0.04]">
+                      <th className="sticky left-0 z-10 bg-[#101423] px-4 py-4 text-xs font-black tracking-[0.18em] text-slate-400">
+                        指標
                       </th>
                       {companies.map((company) => (
-                        <td key={`${company.ticker}-${row.label}`} className={`px-4 py-4 text-lg font-black ${row.tone(company)}`}>
-                          {row.get(company)}
-                        </td>
+                        <th key={company.ticker} className="px-4 py-4 align-top">
+                          <Link href={`/company/${company.ticker}`} className="group block">
+                            <p className="text-lg font-black text-white group-hover:text-cyan-200">
+                              {company.company_name}
+                            </p>
+                            <p className="mt-1 text-sm font-bold text-slate-500">{company.ticker}</p>
+                          </Link>
+                        </th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={row.label} className="border-b border-white/10 last:border-b-0">
+                        <th className="sticky left-0 z-10 bg-[#101423] px-4 py-4 text-sm font-black text-slate-300">
+                          {row.label}
+                        </th>
+                        {companies.map((company) => (
+                          <td key={`${company.ticker}-${row.label}`} className={`px-4 py-4 text-lg font-black ${row.tone(company)}`}>
+                            {row.get(company)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          </>
         )}
       </section>
     </main>
