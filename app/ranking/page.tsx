@@ -5,7 +5,6 @@ import {
   rankingDefinitions,
 } from "@/lib/rankings/definitions";
 import { rankCompanies } from "@/lib/rankings/engine";
-import { isPremiumRanking } from "@/lib/rankings/premium";
 import type { RankingCategory, RankingCompany, RankingDefinition } from "@/lib/rankings/types";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -134,29 +133,24 @@ export default async function RankingsPage() {
                 </div>
 
                 <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {rankings.map((ranking) => {
-                    const premium = isPremiumRanking(ranking);
-                    return (
-                      <Link
-                        key={ranking.slug}
-                        href={`/ranking/${ranking.slug}`}
-                        className="group rounded-2xl border border-white/10 bg-black/20 p-5 transition hover:-translate-y-0.5 hover:border-green-400/40 hover:bg-green-500/10"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <h3 className="font-black">{ranking.shortTitle}</h3>
-                          {premium ? (
-                            <span className="shrink-0 rounded-full bg-yellow-400 px-2 py-0.5 text-[11px] font-black text-slate-950">
-                              Pro
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">{ranking.description}</p>
-                        <span className="mt-4 inline-block text-sm font-bold text-green-300">
-                          {premium ? "Proで見る" : "見る"} <span className="transition group-hover:translate-x-1">→</span>
+                  {rankings.map((ranking) => (
+                    <Link
+                      key={ranking.slug}
+                      href={`/ranking/${ranking.slug}`}
+                      className="group rounded-2xl border border-white/10 bg-black/20 p-5 transition hover:-translate-y-0.5 hover:border-green-400/40 hover:bg-green-500/10"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <h3 className="font-black">{ranking.shortTitle}</h3>
+                        <span className="shrink-0 rounded-full border border-green-400/30 bg-green-500/10 px-2 py-0.5 text-[11px] font-black text-green-200">
+                          TOP3無料
                         </span>
-                      </Link>
-                    );
-                  })}
+                      </div>
+                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">{ranking.description}</p>
+                      <span className="mt-4 inline-block text-sm font-bold text-green-300">
+                        見る <span className="transition group-hover:translate-x-1">→</span>
+                      </span>
+                    </Link>
+                  ))}
                 </div>
               </section>
             );
