@@ -9,6 +9,7 @@ import {
   extractRowsFromEdinetCsvZip,
 } from "@/lib/edinet-financial-parser";
 import { calculateFinancialMetrics } from "@/lib/financial-metrics";
+import type { FinancialFacts } from "@/lib/financial-metrics";
 import {
   hasAuditorChanged,
   parseDisclosureSignalsFromBuffer,
@@ -61,6 +62,38 @@ function shouldProcessDoc(doc: EdinetDocument) {
     desc.includes("四半期報告書") ||
     desc.includes("半期報告書")
   );
+}
+
+function hasAnyFinancialValue(facts: Partial<FinancialFacts>) {
+  return [
+    facts.revenue,
+    facts.grossProfit,
+    facts.netIncome,
+    facts.operatingIncome,
+    facts.operatingCF,
+  ].some((value) => typeof value === "number" && Number.isFinite(value));
+}
+
+function historyRowFromFacts(year: number, facts: Partial<FinancialFacts>) {
+  return {
+    year,
+    ...(facts.revenue === null || facts.revenue === undefined ? {} : { revenue: facts.revenue }),
+    ...(facts.grossProfit === null || facts.grossProfit === undefined ? {} : { grossProfit: facts.grossProfit }),
+    ...(facts.netIncome === null || facts.netIncome === undefined ? {} : { netIncome: facts.netIncome }),
+    ...(facts.operatingIncome === null || facts.operatingIncome === undefined ? {} : { operatingIncome: facts.operatingIncome }),
+    ...(facts.operatingCF === null || facts.operatingCF === undefined ? {} : { operatingCF: facts.operatingCF }),
+  };
+}
+
+function buildHistory(currentYear: number, current: FinancialFacts, prior: FinancialFacts) {
+  const rows = [];
+
+  if (hasAnyFinancialValue(prior)) {
+    rows.push(historyRowFromFacts(currentYear - 1, prior));
+  }
+
+  rows.push(historyRowFromFacts(currentYear, current));
+  return rows;
 }
 
 async function fetchEdinetDocuments(date: string) {
@@ -148,6 +181,7 @@ export async function GET(req: Request) {
 
   const date = todayJST();
   const docs = await fetchEdinetDocuments(date);
+  const currentYear = new Date().getFullYear();
 
   let processed = 0;
   let updated = 0;
@@ -267,15 +301,7 @@ export async function GET(req: Request) {
             riskLevel,
             dangerScore,
           },
-          history: [
-            {
-              year: new Date().getFullYear(),
-              ...(f.revenue === null ? {} : { revenue: f.revenue }),
-              ...(f.operatingIncome === null ? {} : { operatingIncome: f.operatingIncome }),
-              ...(f.operatingCF === null ? {} : { operatingCF: f.operatingCF }),
-              ...(f.netIncome === null ? {} : { netIncome: f.netIncome }),
-            },
-          ],
+          history: buildHistory(currentYear, f, extracted.prior),
           updated_at: new Date().toISOString(),
         },
         { onConflict: "ticker" }
