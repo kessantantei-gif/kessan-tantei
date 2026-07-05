@@ -128,7 +128,7 @@ function buildChart(rows: HistoryRow[], key: TrendKey) {
   }
 
   const graph = document.createElement("div");
-  graph.className = "mt-5 flex h-44 items-end gap-3 sm:h-48 sm:gap-4";
+  graph.className = "mt-5 flex h-48 items-end gap-3 sm:h-52 sm:gap-4";
 
   if (cleanRows.length === 0) {
     const empty = document.createElement("p");
@@ -142,34 +142,35 @@ function buildChart(rows: HistoryRow[], key: TrendKey) {
     const value = Number(row[key] ?? 0);
     const prev = index > 0 ? Number(cleanRows[index - 1][key] ?? NaN) : undefined;
     const diff = formatDiff(value, prev);
-    const height = Math.max(38, (Math.abs(value) / max) * 145);
+    const height = Math.max(34, (Math.abs(value) / max) * 135);
     const isLatest = row.year === latest?.year;
 
     const item = document.createElement("div");
     item.className = "flex min-w-0 flex-1 flex-col items-center gap-2";
 
     const barWrap = document.createElement("div");
-    barWrap.className = "relative flex h-36 w-full items-end justify-center sm:h-40";
+    barWrap.className = "relative flex h-34 w-full items-end justify-center sm:h-38";
+    barWrap.style.height = "150px";
 
     const bar = document.createElement("div");
     bar.className = value >= 0
-      ? `relative w-full overflow-hidden rounded-t-2xl border bg-gradient-to-t from-green-500/75 to-cyan-300/90 ${isLatest ? "border-yellow-200/70 ring-2 ring-yellow-300/40" : "border-green-300/20"}`
-      : `relative w-full overflow-hidden rounded-t-2xl border bg-gradient-to-t from-red-600/75 to-orange-300/90 ${isLatest ? "border-yellow-200/70 ring-2 ring-yellow-300/40" : "border-red-300/20"}`;
+      ? `relative w-full overflow-visible rounded-t-2xl border bg-gradient-to-t from-green-500/75 to-cyan-300/90 ${isLatest ? "border-yellow-200/70 ring-2 ring-yellow-300/40" : "border-green-300/20"}`
+      : `relative w-full overflow-visible rounded-t-2xl border bg-gradient-to-t from-red-600/75 to-orange-300/90 ${isLatest ? "border-yellow-200/70 ring-2 ring-yellow-300/40" : "border-red-300/20"}`;
     bar.style.height = `${height}px`;
     bar.title = `${row.year ?? "—"}: ${formatOku(value, "億円")} / 前年差 ${diff.amount} / ${diff.rate}`;
 
     const valueLabel = document.createElement("div");
-    valueLabel.className = "absolute left-1 right-1 top-2 rounded-xl bg-black/50 px-1 py-1 text-center text-[10px] font-black leading-tight text-white backdrop-blur sm:text-xs";
+    valueLabel.className = "absolute -top-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-xl bg-black/65 px-2 py-1 text-center text-[10px] font-black leading-tight text-white shadow-sm backdrop-blur sm:text-xs";
     valueLabel.textContent = formatOku(value);
 
-    const diffLabel = document.createElement("div");
-    diffLabel.className = diff.up === false
-      ? "absolute bottom-2 left-1 right-1 rounded-xl border border-red-300/30 bg-red-950/70 px-1 py-1 text-center text-[10px] font-black leading-tight text-red-100 backdrop-blur sm:text-xs"
-      : "absolute bottom-2 left-1 right-1 rounded-xl border border-green-300/30 bg-green-950/70 px-1 py-1 text-center text-[10px] font-black leading-tight text-green-100 backdrop-blur sm:text-xs";
-    diffLabel.textContent = index === 0 ? "前年差—" : diff.rate;
-
-    bar.append(valueLabel, diffLabel);
+    bar.append(valueLabel);
     barWrap.append(bar);
+
+    const diffBadge = document.createElement("div");
+    diffBadge.className = diff.up === false
+      ? "max-w-full rounded-full border border-red-300/30 bg-red-950/70 px-2 py-1 text-center text-[10px] font-black leading-tight text-red-100 sm:text-xs"
+      : "max-w-full rounded-full border border-green-300/30 bg-green-950/70 px-2 py-1 text-center text-[10px] font-black leading-tight text-green-100 sm:text-xs";
+    diffBadge.textContent = index === 0 ? "前年差—" : diff.rate;
 
     const year = document.createElement("div");
     year.className = isLatest
@@ -177,13 +178,13 @@ function buildChart(rows: HistoryRow[], key: TrendKey) {
       : "rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-black text-slate-300 sm:text-xs";
     year.textContent = isLatest ? `${row.year ?? "—"} 最新` : String(row.year ?? "—");
 
-    item.append(barWrap, year);
+    item.append(barWrap, diffBadge, year);
     graph.append(item);
   });
 
   const caption = document.createElement("p");
   caption.className = "mt-3 text-xs leading-6 text-slate-500";
-  caption.textContent = "棒の上段は金額、下段は前年差率です。最新年度は黄色枠で表示しています。";
+  caption.textContent = "棒の上に金額、棒の下に前年差率を表示しています。最新年度は黄色枠です。";
 
   root.append(summary, graph, caption);
   return root;
