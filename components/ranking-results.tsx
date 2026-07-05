@@ -5,6 +5,23 @@ import type { RankedCompany, RankingDefinition } from "@/lib/rankings/types";
 const FREE_VISIBLE_RANKING_LIMIT = 3;
 const LOCKED_PREVIEW_LIMIT = 6;
 
+const COMPARISON_REQUIRED_SLUGS = new Set([
+  "revenue-growth",
+  "high-growth",
+  "profitable-high-growth",
+  "featured-companies",
+  "recommended",
+  "rule-of-40",
+  "rule40-excellent",
+  "gross-profit-growth",
+  "operating-income-growth",
+  "net-income-growth",
+  "ocf-growth",
+  "revenue-cagr-3y",
+  "margin-improvement",
+  "ocf-improvement",
+]);
+
 type Props = {
   definition: RankingDefinition;
   rankings: RankedCompany[];
@@ -16,6 +33,28 @@ function rankIcon(index: number) {
   if (index === 1) return "🥈";
   if (index === 2) return "🥉";
   return `#${index + 1}`;
+}
+
+function EmptyRankingState({ definition }: { definition: RankingDefinition }) {
+  const requiresComparison = COMPARISON_REQUIRED_SLUGS.has(definition.slug);
+
+  return (
+    <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center text-slate-300">
+      <p className="text-lg font-bold text-white">
+        現在、表示できる企業がありません
+      </p>
+      <p className="mx-auto mt-3 max-w-2xl text-sm leading-7">
+        {requiresComparison
+          ? "このランキングは前期との比較が必要なため、2期分以上の決算データが取得できた企業のみを表示します。1年分しかない企業は、成長率が正しく計算できないため除外しています。"
+          : "必要な決算データが取得でき次第、自動的にランキングへ反映されます。"}
+      </p>
+      {requiresComparison ? (
+        <div className="mx-auto mt-5 max-w-2xl rounded-2xl border border-yellow-400/20 bg-yellow-400/10 px-4 py-3 text-sm leading-7 text-yellow-100">
+          売上成長率・利益成長率・営業CF成長率などは、単年度データだけでは正しく比較できません。
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function LockedRankingRow({ index }: { index: number }) {
@@ -94,14 +133,7 @@ function RankingUpgradeCard({ lockedCount }: { lockedCount: number }) {
 
 export default function RankingResults({ definition, rankings, isPro = false }: Props) {
   if (rankings.length === 0) {
-    return (
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center text-slate-300">
-        <p className="text-lg font-bold text-white">現在、表示できる企業がありません</p>
-        <p className="mt-2 text-sm leading-7">
-          必要な決算データが取得でき次第、自動的にランキングへ反映されます。
-        </p>
-      </div>
-    );
+    return <EmptyRankingState definition={definition} />;
   }
 
   const visibleRankings = isPro ? rankings : rankings.slice(0, FREE_VISIBLE_RANKING_LIMIT);
