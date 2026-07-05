@@ -10,6 +10,7 @@ import SiteNav from "@/components/site-nav";
 import CompanyTrendChartEnhancer from "@/components/company-trend-chart-enhancer";
 import ScoreExplanationInjector from "@/components/score-explanation-injector";
 import CompareButtonInjector from "@/components/compare-button-injector";
+import RankingCompareInjector from "@/components/ranking-compare-injector";
 import CompareTray from "@/components/compare-tray";
 
 export const metadata: Metadata = {
@@ -61,6 +62,7 @@ export default function RootLayout({
           <CompanyTrendChartEnhancer />
           <ScoreExplanationInjector />
           <CompareButtonInjector />
+          <RankingCompareInjector />
           <CompareTray />
           <FeedbackButton />
           <AuthButton />
