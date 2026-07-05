@@ -1,5 +1,6 @@
 import Link from "next/link";
 import MetricBadge from "@/components/MetricBadge";
+import CompareButton from "@/components/compare-button";
 import type { RankedCompany, RankingDefinition } from "@/lib/rankings/types";
 
 const FREE_VISIBLE_RANKING_LIMIT = 3;
@@ -159,29 +160,31 @@ export default function RankingResults({ definition, rankings, isPro = false }: 
       <ol className="space-y-4">
         {visibleRankings.map(({ company, value, comment }, index) => (
           <li key={company.ticker}>
-            <Link
-              href={`/company/${company.ticker}`}
-              className="grid gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 transition hover:border-green-400/40 hover:bg-white/10 sm:p-5 lg:grid-cols-[72px_minmax(180px,1fr)_180px_minmax(220px,1.2fr)_24px] lg:items-center"
-            >
-              <div className="flex items-center gap-3 lg:block">
-                <span className="text-xs font-bold text-slate-500 lg:hidden">順位</span>
-                <span className="text-3xl font-black text-slate-300">{rankIcon(index)}</span>
+            <div className="grid gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 transition hover:border-green-400/40 hover:bg-white/10 sm:p-5 lg:grid-cols-[72px_minmax(180px,1fr)_180px_minmax(220px,1.2fr)_150px] lg:items-center">
+              <Link href={`/company/${company.ticker}`} className="contents">
+                <div className="flex items-center gap-3 lg:block">
+                  <span className="text-xs font-bold text-slate-500 lg:hidden">順位</span>
+                  <span className="text-3xl font-black text-slate-300">{rankIcon(index)}</span>
+                </div>
+
+                <div className="min-w-0">
+                  <p className="truncate text-lg font-black sm:text-xl">{company.company_name}</p>
+                  <p className="mt-1 text-sm text-slate-500">証券コード {company.ticker}</p>
+                </div>
+
+                <MetricBadge
+                  label={definition.metricLabel}
+                  value={definition.formatValue(value)}
+                  tone={definition.metricTone}
+                />
+
+                <p className="text-sm leading-6 text-slate-300">{comment}</p>
+              </Link>
+
+              <div className="flex justify-start lg:justify-end">
+                <CompareButton ticker={company.ticker} name={company.company_name} />
               </div>
-
-              <div className="min-w-0">
-                <p className="truncate text-lg font-black sm:text-xl">{company.company_name}</p>
-                <p className="mt-1 text-sm text-slate-500">証券コード {company.ticker}</p>
-              </div>
-
-              <MetricBadge
-                label={definition.metricLabel}
-                value={definition.formatValue(value)}
-                tone={definition.metricTone}
-              />
-
-              <p className="text-sm leading-6 text-slate-300">{comment}</p>
-              <span className="hidden text-green-300 lg:block" aria-hidden="true">→</span>
-            </Link>
+            </div>
           </li>
         ))}
 
