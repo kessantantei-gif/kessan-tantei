@@ -44,6 +44,7 @@ export type Financials = {
 export type HistoryItem = {
   year?: string | number;
   revenue?: number;
+  grossProfit?: number;
   operatingIncome?: number;
   operatingCF?: number;
   netIncome?: number;
