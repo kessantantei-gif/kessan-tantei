@@ -1,0 +1,49 @@
+"use client";
+
+import { useEffect, useMemo } from "react";
+import { createRoot } from "react-dom/client";
+import { usePathname } from "next/navigation";
+import CompanyAiSummary from "./company-ai-summary";
+
+function findInsertTarget() {
+  const h1 = document.querySelector("h1");
+  const heroCard = h1?.closest("div.rounded-3xl") as HTMLElement | null;
+  if (heroCard) return heroCard;
+
+  const main = document.querySelector("main section");
+  return main?.firstElementChild as HTMLElement | null;
+}
+
+export default function CompanyAiSummaryInjector() {
+  const pathname = usePathname();
+  const ticker = useMemo(() => pathname?.match(/^\/company\/([^/]+)/)?.[1] ?? null, [pathname]);
+
+  useEffect(() => {
+    if (!ticker) return;
+    let observer: MutationObserver | null = null;
+
+    const run = () => {
+      if (document.querySelector("[data-company-ai-summary='true']")) return;
+      const target = findInsertTarget();
+      if (!target || !target.parentElement) return;
+
+      const mount = document.createElement("div");
+      mount.dataset.companyAiSummary = "true";
+      target.insertAdjacentElement("afterend", mount);
+      createRoot(mount).render(<CompanyAiSummary ticker={ticker} />);
+    };
+
+    run();
+    requestAnimationFrame(run);
+    window.setTimeout(run, 200);
+    window.setTimeout(run, 800);
+
+    observer = new MutationObserver(run);
+    observer.observe(document.body, { childList: true, subtree: true });
+    window.setTimeout(() => observer?.disconnect(), 3000);
+
+    return () => observer?.disconnect();
+  }, [ticker]);
+
+  return null;
+}
