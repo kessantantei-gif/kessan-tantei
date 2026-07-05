@@ -3,6 +3,8 @@
 import { useEffect, useMemo } from "react";
 import { usePathname } from "next/navigation";
 
+type TrendKey = "revenue" | "operatingIncome" | "operatingCF";
+
 type HistoryRow = {
   year?: string | number;
   revenue?: number;
@@ -61,7 +63,24 @@ function yoyLabel(current: number, previous?: number) {
   };
 }
 
-function trendSummary(rows: HistoryRow[], keyName: keyof HistoryRow) {
+function verdictForTrend(keyName: TrendKey, current: number, previous?: number) {
+  if (!Number.isFinite(current)) return "データ不足";
+  if (typeof previous !== "number" || !Number.isFinite(previous)) return "比較データ不足";
+
+  if (keyName === "revenue") {
+    if (current > previous) return "増収";
+    if (current < previous) return "減収";
+    return "横ばい";
+  }
+
+  if (previous < 0 && current >= 0) return keyName === "operatingCF" ? "CF黒字転換" : "黒字転換";
+  if (previous >= 0 && current < 0) return keyName === "operatingCF" ? "CF赤字転落" : "赤字転落";
+  if (current > previous) return previous < 0 ? "赤字縮小" : "改善・拡大";
+  if (current < previous) return current < 0 ? "赤字拡大" : "悪化・縮小";
+  return "横ばい";
+}
+
+function trendSummary(rows: HistoryRow[], keyName: TrendKey) {
   const latest = rows.at(-1);
   const previous = rows.length >= 2 ? rows.at(-2) : undefined;
   const latestValue = Number(latest?.[keyName] ?? NaN);
@@ -69,17 +88,12 @@ function trendSummary(rows: HistoryRow[], keyName: keyof HistoryRow) {
   const change = yoyLabel(latestValue, previousValue);
   const diff = diffYenOku(latestValue, previousValue);
 
-  let verdict = "横ばい";
-  if (change.tone === "up") verdict = "改善・拡大";
-  if (change.tone === "down") verdict = "悪化・縮小";
-  if (!Number.isFinite(latestValue)) verdict = "データ不足";
-
   return {
     latestYear: latest?.year ?? "最新",
     latestValue,
     diff,
     change,
-    verdict,
+    verdict: verdictForTrend(keyName, latestValue, previousValue),
   };
 }
 
@@ -140,7 +154,7 @@ function addScaleGuide(chartBody: HTMLDivElement, max: number) {
   chartBody.append(guide);
 }
 
-function addSummary(chart: HTMLDivElement, rows: HistoryRow[], keyName: keyof HistoryRow) {
+function addSummary(chart: HTMLDivElement, rows: HistoryRow[], keyName: TrendKey) {
   const summary = trendSummary(rows, keyName);
 
   const wrapper = document.createElement("div");
@@ -171,7 +185,7 @@ function addSummary(chart: HTMLDivElement, rows: HistoryRow[], keyName: keyof Hi
   chart.append(wrapper);
 }
 
-function buildRichChart(rows: HistoryRow[], keyName: keyof HistoryRow) {
+function buildRichChart(rows: HistoryRow[], keyName: TrendKey) {
   const values = rows.map((row) => Math.abs(Number(row[keyName] ?? 0)));
   const max = Math.max(...values, 1);
   const latestYear = rows.at(-1)?.year;
@@ -247,7 +261,7 @@ function buildRichChart(rows: HistoryRow[], keyName: keyof HistoryRow) {
   return chart;
 }
 
-function replaceChart(card: Element, rows: HistoryRow[], keyName: keyof HistoryRow) {
+function replaceChart(card: Element, rows: HistoryRow[], keyName: TrendKey) {
   const oldInjected = card.querySelector("[data-trend-values='true']");
   oldInjected?.remove();
 
