@@ -1,15 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
-  getRankingsByCategory,
   rankingCategories,
   rankingDefinitions,
 } from "@/lib/rankings/definitions";
+import { rankCompanies } from "@/lib/rankings/engine";
+import type { RankingCategory, RankingCompany, RankingDefinition } from "@/lib/rankings/types";
+import { supabaseAdmin } from "@/lib/supabase";
 
 const canonical = "https://kessan-tantei.jp/ranking";
 const title = "決算ランキング一覧｜グロース企業の財務スコア・成長率・営業CFランキング";
 const description =
   "決算探偵のランキング一覧ページです。グロース企業を財務スコア、売上成長率、営業利益率、営業CF、自己資本比率、リスクシグナルなどで比較できます。";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title,
@@ -32,7 +36,34 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RankingsPage() {
+async function loadCompanies() {
+  const { data } = await supabaseAdmin
+    .from("company_analyses")
+    .select("ticker, company_name, score, danger_score, risk_level, financials, history, risk")
+    .neq("risk_level", "EXCLUDED")
+    .limit(1000);
+
+  return (data ?? []) as RankingCompany[];
+}
+
+function getVisibleRankings(companies: RankingCompany[]) {
+  return rankingDefinitions.filter((ranking) => rankCompanies(companies, ranking).length > 0);
+}
+
+function getVisibleRankingsByCategory(
+  rankings: RankingDefinition[],
+  categoryId: RankingCategory
+) {
+  return rankings.filter((ranking) => ranking.category === categoryId);
+}
+
+export default async function RankingsPage() {
+  const companies = await loadCompanies();
+  const visibleRankings = getVisibleRankings(companies);
+  const visibleCategories = rankingCategories.filter(
+    (category) => getVisibleRankingsByCategory(visibleRankings, category.id).length > 0
+  );
+
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
@@ -41,8 +72,8 @@ export default function RankingsPage() {
     url: canonical,
     mainEntity: {
       "@type": "ItemList",
-      numberOfItems: rankingDefinitions.length,
-      itemListElement: rankingDefinitions.map((ranking, index) => ({
+      numberOfItems: visibleRankings.length,
+      itemListElement: visibleRankings.map((ranking, index) => ({
         "@type": "ListItem",
         position: index + 1,
         name: ranking.title,
@@ -66,11 +97,14 @@ export default function RankingsPage() {
           <p className="mt-5 text-base leading-8 text-slate-300 sm:text-lg">
             グロース企業を、総合評価・成長性・収益性・キャッシュ創出力・安全性・リスクシグナル・業種・テーマから比較できます。気になる切り口から決算を読み解いてみましょう。
           </p>
-          <p className="mt-3 text-sm text-slate-500">公開中：{rankingDefinitions.length}ランキング</p>
+          <p className="mt-3 text-sm text-slate-500">
+            公開中：{visibleRankings.length}ランキング
+            <span className="ml-2 text-slate-600">対象企業があるランキングのみ表示しています。</span>
+          </p>
         </section>
 
         <nav className="mt-8 flex flex-wrap gap-2" aria-label="ランキングカテゴリー">
-          {rankingCategories.map((category) => (
+          {visibleCategories.map((category) => (
             <a
               key={category.id}
               href={`#${category.id}`}
@@ -82,8 +116,8 @@ export default function RankingsPage() {
         </nav>
 
         <div className="mt-10 space-y-8">
-          {rankingCategories.map((category) => {
-            const rankings = getRankingsByCategory(category.id);
+          {visibleCategories.map((category) => {
+            const rankings = getVisibleRankingsByCategory(visibleRankings, category.id);
             return (
               <section
                 key={category.id}
