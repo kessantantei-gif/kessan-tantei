@@ -20,27 +20,103 @@ const ALIASES: Record<string, string[]> = {
   "4493": ["サイバーセキュリティクラウド", "サイバー", "サイセキュ"],
 };
 
+const CORPORATE_WORDS = [
+  "株式会社",
+  "有限会社",
+  "合同会社",
+  "ホールディングス",
+  "グループ",
+  "incorporated",
+  "corporation",
+  "holdings",
+  "group",
+  "inc",
+  "corp",
+  "co",
+  "ltd",
+];
+
+function toKatakana(value: string) {
+  return value.replace(/[ぁ-ゖ]/g, (char) =>
+    String.fromCharCode(char.charCodeAt(0) + 0x60)
+  );
+}
+
 function normalize(value: string) {
-  return value
+  let normalized = toKatakana(value)
     .toLowerCase()
     .normalize("NFKC")
-    .replace(/\s+/g, "")
-    .replace(/[・　]/g, "");
+    .replace(/[＆]/g, "&")
+    .replace(/[‐‑‒–—―ーｰ]/g, "")
+    .replace(/[・,，.．/／()（）\[\]【】「」『』'’`´\s　]/g, "");
+
+  for (const word of CORPORATE_WORDS) {
+    normalized = normalized.replaceAll(normalizeCorporateWord(word), "");
+  }
+
+  return normalized;
+}
+
+function normalizeCorporateWord(value: string) {
+  return toKatakana(value)
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[‐‑‒–—―ーｰ]/g, "")
+    .replace(/[・,，.．/／()（）\[\]【】「」『』'’`´\s　]/g, "");
+}
+
+function compactTicker(value: string) {
+  return value.replace(/[^0-9]/g, "");
+}
+
+function isSubsequence(query: string, target: string) {
+  if (!query) return true;
+
+  let index = 0;
+  for (const char of target) {
+    if (char === query[index]) index += 1;
+    if (index === query.length) return true;
+  }
+
+  return false;
+}
+
+function getAliases(company: Company) {
+  const aliases = ALIASES[company.ticker] ?? [];
+  const name = company.company_name;
+
+  return [
+    company.ticker,
+    name,
+    name.replace(/^株式会社/, ""),
+    name.replace(/株式会社$/, ""),
+    name.replace(/ホールディングス/g, "HD"),
+    name.replace(/ホールディングス/g, ""),
+    name.replace(/[Ａ-Ｚａ-ｚ０-９]/g, (s) =>
+      String.fromCharCode(s.charCodeAt(0) - 0xfee0)
+    ),
+    ...aliases,
+  ].filter(Boolean);
 }
 
 function getSearchText(company: Company) {
-  const aliases = ALIASES[company.ticker] ?? [];
+  return getAliases(company).map(normalize).join(" ");
+}
 
-  return normalize(
-    [
-      company.ticker,
-      company.company_name,
-      company.company_name.replace(/[Ａ-Ｚａ-ｚ０-９]/g, (s) =>
-        String.fromCharCode(s.charCodeAt(0) - 0xfee0)
-      ),
-      ...aliases,
-    ].join(" ")
-  );
+function scoreMatch(company: Company, query: string) {
+  const normalizedTicker = normalize(company.ticker);
+  const tickerDigits = compactTicker(query);
+  const aliases = getAliases(company).map(normalize);
+  const searchText = aliases.join(" ");
+
+  if (!query) return 0;
+  if (tickerDigits && normalizedTicker.startsWith(tickerDigits)) return 1000;
+  if (aliases.some((alias) => alias === query)) return 900;
+  if (aliases.some((alias) => alias.startsWith(query))) return 800;
+  if (searchText.includes(query)) return 700;
+  if (query.length >= 2 && aliases.some((alias) => isSubsequence(query, alias))) return 500;
+
+  return 0;
 }
 
 export default function CompanySearch({ companies }: { companies: Company[] }) {
@@ -53,10 +129,12 @@ export default function CompanySearch({ companies }: { companies: Company[] }) {
     return companies
       .map((company) => ({
         company,
+        score: scoreMatch(company, q),
         searchText: getSearchText(company),
       }))
-      .filter(({ searchText }) => searchText.includes(q))
-      .slice(0, 10)
+      .filter(({ score, searchText }) => score > 0 || searchText.includes(q))
+      .sort((a, b) => b.score - a.score || b.company.score - a.company.score)
+      .slice(0, 12)
       .map(({ company }) => company);
   }, [keyword, companies]);
 
@@ -65,15 +143,15 @@ export default function CompanySearch({ companies }: { companies: Company[] }) {
       <input
         value={keyword}
         onChange={(e) => setKeyword(e.target.value)}
-        placeholder="銘柄名・コードで検索 例：プレイド / 4165 / freee"
+        placeholder="銘柄名・コードで検索 例：ベルトラ / 7048 / freee"
         className="w-full rounded-2xl border border-white/10 bg-black/40 px-5 py-4 text-white outline-none placeholder:text-slate-500 focus:border-green-400/60"
       />
 
       {keyword.trim() ? (
         <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-white/10 bg-[#07111f] shadow-2xl">
           {results.length === 0 ? (
-            <div className="px-5 py-4 text-sm text-slate-400">
-              該当する銘柄がありません。
+            <div className="px-5 py-4 text-sm leading-7 text-slate-400">
+              該当する銘柄がありません。会社名の一部・カタカナ・証券コードでも検索できます。
             </div>
           ) : (
             results.map((company) => (
