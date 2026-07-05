@@ -1,7 +1,34 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const FREE_VISIBLE_S_RANK_LIMIT = 3;
+
+function normalizeEmail(value?: string | null) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function adminEmails() {
+  return new Set(
+    (process.env.KESSAN_TANTEI_ADMIN_EMAILS ?? process.env.ADMIN_EMAILS ?? "")
+      .split(",")
+      .map(normalizeEmail)
+      .filter(Boolean)
+  );
+}
+
+export async function isAdminPreviewUser() {
+  const allowedEmails = adminEmails();
+  if (allowedEmails.size === 0) return false;
+
+  const user = await currentUser();
+  if (!user) return false;
+
+  const emails = user.emailAddresses
+    .map((email) => normalizeEmail(email.emailAddress))
+    .filter(Boolean);
+
+  return emails.some((email) => allowedEmails.has(email));
+}
 
 export function isSRankCompany(company: {
   score?: number | null;
@@ -37,22 +64,26 @@ export function profileIsPro(profile: any) {
 
 export async function isProUser() {
   const profile = await getCurrentProfile();
-  return profileIsPro(profile);
+  if (profileIsPro(profile)) return true;
+
+  return isAdminPreviewUser();
 }
 
 export async function canViewAiAnalysis() {
   const profile = await getCurrentProfile();
+  const adminPreview = await isAdminPreviewUser();
 
   if (!profile) {
     return {
-      allowed: false,
-      isPro: false,
+      allowed: adminPreview,
+      isPro: adminPreview,
       remaining: 0,
       profile: null,
+      adminPreview,
     };
   }
 
-  const isPro = profileIsPro(profile);
+  const isPro = profileIsPro(profile) || adminPreview;
   const freeUses = Number(profile.free_ai_uses ?? 0);
   const remaining = Math.max(0, 3 - freeUses);
 
@@ -61,6 +92,7 @@ export async function canViewAiAnalysis() {
     isPro,
     remaining,
     profile,
+    adminPreview,
   };
 }
 
@@ -69,6 +101,7 @@ export async function consumeFreeAiUseIfNeeded() {
 
   if (!profile) return;
   if (profileIsPro(profile)) return;
+  if (await isAdminPreviewUser()) return;
 
   const freeUses = Number(profile.free_ai_uses ?? 0);
 
