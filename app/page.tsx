@@ -37,7 +37,7 @@ function byNumber(getter: (company: RankingCompany) => number, desc = true) {
     desc ? getter(b) - getter(a) : getter(a) - getter(b);
 }
 
-function applySRankLock(companies: RankingCompany[], isPro: boolean) {
+function applyRankingLock(companies: RankingCompany[], isPro: boolean) {
   if (isPro) return companies;
 
   return companies.map((company, index) => {
@@ -84,26 +84,30 @@ export default async function HomePage() {
   }));
 
   const scoreTopRaw = [...companies].sort(byNumber((c) => c.score)).slice(0, 5);
-  const scoreTop = applySRankLock(scoreTopRaw, isPro);
+  const scoreTop = applyRankingLock(scoreTopRaw, isPro);
 
-  const revenueTop = [...companies]
+  const revenueTopRaw = [...companies]
     .filter((c) => (c.financials?.revenue ?? 0) > 0)
     .sort(byNumber((c) => c.financials?.revenue ?? 0))
     .slice(0, 5);
+  const revenueTop = applyRankingLock(revenueTopRaw, isPro);
 
-  const operatingIncomeTop = [...companies]
+  const operatingIncomeTopRaw = [...companies]
     .filter((c) => (c.financials?.operatingIncome ?? 0) !== 0)
     .sort(byNumber((c) => c.financials?.operatingIncome ?? 0))
     .slice(0, 5);
+  const operatingIncomeTop = applyRankingLock(operatingIncomeTopRaw, isPro);
 
-  const operatingCFTop = [...companies]
+  const operatingCFTopRaw = [...companies]
     .filter((c) => (c.financials?.operatingCF ?? 0) !== 0)
     .sort(byNumber((c) => c.financials?.operatingCF ?? 0))
     .slice(0, 5);
+  const operatingCFTop = applyRankingLock(operatingCFTopRaw, isPro);
 
-  const dangerTop = [...companies]
+  const dangerTopRaw = [...companies]
     .sort(byNumber((c) => c.danger_score))
     .slice(0, 5);
+  const dangerTop = applyRankingLock(dangerTopRaw, isPro);
 
   return (
     <main className="min-h-screen bg-[#050816] text-white">
@@ -153,7 +157,7 @@ export default async function HomePage() {
             </div>
             <div className="rounded-2xl border border-yellow-400/20 bg-yellow-500/10 p-5">
               <p className="text-sm text-yellow-300">Pro特典</p>
-              <p className="mt-2 text-2xl font-black">Sランク全件</p>
+              <p className="mt-2 text-2xl font-black">ランキング全件</p>
             </div>
             <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-5">
               <p className="text-sm text-cyan-300">自動更新</p>
@@ -194,21 +198,21 @@ export default async function HomePage() {
           />
           <RankingCard
             title="売上高ランキング"
-            description="グロース市場の中で売上規模が大きい企業。"
+            description="Freeは上位3社まで表示。4位以降はPro限定。"
             href="/ranking/revenue"
             companies={revenueTop}
             metric="revenue"
           />
           <RankingCard
             title="営業利益ランキング"
-            description="本業の利益水準が高い企業。"
+            description="Freeは上位3社まで表示。4位以降はPro限定。"
             href="/ranking/operating-income"
             companies={operatingIncomeTop}
             metric="operatingIncome"
           />
           <RankingCard
             title="営業CFランキング"
-            description="現金創出力が強い企業。"
+            description="Freeは上位3社まで表示。4位以降はPro限定。"
             href="/ranking/operating-cash-flow"
             companies={operatingCFTop}
             metric="operatingCF"
@@ -216,7 +220,7 @@ export default async function HomePage() {
           <div className="lg:col-span-2">
             <RankingCard
               title="リスクシグナルランキング"
-              description="財務リスクや注意シグナルが強い企業。内訳詳細はPro限定。"
+              description="Freeは上位3社まで表示。4位以降と内訳詳細はPro限定。"
               href="/ranking/risk-signal"
               companies={dangerTop}
               metric="danger"
@@ -229,7 +233,7 @@ export default async function HomePage() {
             Proで見えるもの
           </h2>
           <p className="mt-3 leading-8 text-slate-300">
-            Sランク全件、リスクシグナル内訳、AI詳細分析、決算変化速報を初月100円で確認できます。
+            各ランキングの4位以降、リスクシグナル内訳、AI詳細分析、決算変化速報を初月100円で確認できます。
           </p>
           <Link
             href="/pricing"
@@ -262,17 +266,9 @@ export default async function HomePage() {
                   rel="noreferrer"
                   className="rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:border-cyan-400/40 hover:bg-white/10"
                 >
-                  <p className="font-black leading-7">{item.title}</p>
-
-                  <div className="mt-2 text-xs text-slate-400">
-                    <p>
-                      {item.source || "Google News"}
-                      {item.ticker ? ` / ${item.ticker}` : ""}
-                    </p>
-                    <p className="mt-1 text-slate-500">
-                      発行日: {formatNewsDate(item.published_at)}
-                    </p>
-                  </div>
+                  <p className="font-bold leading-7">{item.title}</p>
+                  <p className="mt-3 text-sm text-slate-400">{item.source || "Google News"}</p>
+                  <p className="mt-1 text-xs text-slate-500">{formatNewsDate(item.published_at)}</p>
                 </a>
               ))
             )}
