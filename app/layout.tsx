@@ -73,6 +73,12 @@ export default function RootLayout({
                 >
                   ニュース
                 </Link>
+                <Link
+                  href="/pricing"
+                  className="rounded-full bg-yellow-400 px-3 py-2 font-black text-slate-950 transition hover:bg-yellow-300 sm:px-4"
+                >
+                  初月100円Pro
+                </Link>
               </div>
             </div>
           </nav>

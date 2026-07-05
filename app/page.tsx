@@ -109,35 +109,6 @@ export default async function HomePage() {
     <main className="min-h-screen bg-[#050816] text-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(34,197,94,0.16),transparent_32%),radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),transparent_28%),radial-gradient(circle_at_bottom,_rgba(168,85,247,0.12),transparent_35%)]" />
 
-      <header className="relative z-10 border-b border-white/10 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-8 sm:py-6">
-          <Link href="/" className="text-2xl font-black tracking-tight sm:text-3xl">
-            決算探偵
-          </Link>
-
-          <div className="flex items-center gap-2">
-            <Link
-              href="/ranking"
-              className="rounded-full border border-green-400/20 bg-green-500/10 px-4 py-2 text-sm font-bold text-green-300 hover:bg-green-500/20"
-            >
-              ランキング
-            </Link>
-            <Link
-              href="/news"
-              className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-sm font-bold text-cyan-300 hover:bg-cyan-500/20"
-            >
-              ニュース
-            </Link>
-            <Link
-              href="/pricing"
-              className="rounded-full bg-yellow-400 px-4 py-2 text-sm font-black text-slate-950 hover:bg-yellow-300"
-            >
-              初月100円Pro
-            </Link>
-          </div>
-        </div>
-      </header>
-
       <section className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
         <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-10">
           <p className="text-xs tracking-[0.3em] text-green-300 sm:text-sm">
