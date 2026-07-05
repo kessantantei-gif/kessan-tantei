@@ -7,6 +7,11 @@ type TrendKey = "revenue" | "operatingIncome" | "operatingCF";
 
 type HistoryRow = {
   year?: string | number;
+  fiscalYear?: string | number;
+  fiscal_year?: string | number;
+  fiscalPeriod?: string;
+  fiscal_period?: string;
+  period?: string;
   revenue?: number;
   operatingIncome?: number;
   operatingCF?: number;
@@ -15,6 +20,8 @@ type HistoryRow = {
 type Payload = {
   history: HistoryRow[];
 };
+
+const MAX_VISIBLE_PERIODS = 3;
 
 const PANELS: { title: string; key: TrendKey }[] = [
   { title: "売上推移", key: "revenue" },
@@ -53,6 +60,31 @@ function formatDiff(current?: number, previous?: number) {
   };
 }
 
+function displayPeriod(row?: HistoryRow) {
+  if (!row) return "最新";
+
+  const rawPeriod = row.fiscalPeriod ?? row.fiscal_period ?? row.period;
+  if (typeof rawPeriod === "string" && rawPeriod.trim()) return rawPeriod.trim();
+
+  const rawYear = row.fiscalYear ?? row.fiscal_year ?? row.year;
+  if (rawYear === undefined || rawYear === null || rawYear === "") return "年度不明";
+
+  return `${rawYear}年期`;
+}
+
+function sortKey(row: HistoryRow) {
+  const raw = row.fiscalYear ?? row.fiscal_year ?? row.year;
+  const numeric = Number(raw);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function normalizedRows(rows: HistoryRow[]) {
+  return rows
+    .filter((row) => row && (row.year !== undefined || row.fiscalYear !== undefined || row.fiscal_year !== undefined))
+    .sort((a, b) => sortKey(a) - sortKey(b))
+    .slice(-MAX_VISIBLE_PERIODS);
+}
+
 function findTrendCard(title: string) {
   const headings = Array.from(document.querySelectorAll("h2"));
   const heading = headings.find((node) => node.textContent?.trim() === title);
@@ -85,9 +117,7 @@ function trendVerdict(key: TrendKey, latest?: number, previous?: number) {
 }
 
 function buildChart(rows: HistoryRow[], key: TrendKey) {
-  const cleanRows = rows
-    .filter((row) => row && row.year !== undefined)
-    .sort((a, b) => Number(a.year ?? 0) - Number(b.year ?? 0));
+  const cleanRows = normalizedRows(rows);
 
   const values = cleanRows.map((row) => Math.abs(Number(row[key] ?? 0)));
   const max = Math.max(...values, 1);
@@ -106,7 +136,7 @@ function buildChart(rows: HistoryRow[], key: TrendKey) {
   summary.className = "grid gap-2 sm:grid-cols-3";
 
   const summaryItems = [
-    { label: `${latest?.year ?? "最新"} 最新値`, value: formatOku(latestValue, "億円"), tone: "border-cyan-300/20 bg-cyan-500/10 text-cyan-100" },
+    { label: `${displayPeriod(latest)} 最新値`, value: formatOku(latestValue, "億円"), tone: "border-cyan-300/20 bg-cyan-500/10 text-cyan-100" },
     { label: "前年差", value: `${latestDiff.amount} / ${latestDiff.rate}`, tone: latestDiff.up === false ? "border-red-300/20 bg-red-500/10 text-red-100" : "border-green-300/20 bg-green-500/10 text-green-100" },
     { label: "判定", value: verdict, tone: latestDiff.up === false ? "border-red-300/20 bg-red-500/10 text-red-100" : "border-green-300/20 bg-green-500/10 text-green-100" },
   ];
@@ -143,13 +173,13 @@ function buildChart(rows: HistoryRow[], key: TrendKey) {
     const prev = index > 0 ? Number(cleanRows[index - 1][key] ?? NaN) : undefined;
     const diff = formatDiff(value, prev);
     const height = Math.max(34, (Math.abs(value) / max) * 135);
-    const isLatest = row.year === latest?.year;
+    const isLatest = row === latest;
 
     const item = document.createElement("div");
     item.className = "flex min-w-0 flex-1 flex-col items-center gap-2";
 
     const barWrap = document.createElement("div");
-    barWrap.className = "relative flex h-34 w-full items-end justify-center sm:h-38";
+    barWrap.className = "relative flex w-full items-end justify-center";
     barWrap.style.height = "150px";
 
     const bar = document.createElement("div");
@@ -157,7 +187,7 @@ function buildChart(rows: HistoryRow[], key: TrendKey) {
       ? `relative w-full overflow-visible rounded-t-2xl border bg-gradient-to-t from-green-500/75 to-cyan-300/90 ${isLatest ? "border-yellow-200/70 ring-2 ring-yellow-300/40" : "border-green-300/20"}`
       : `relative w-full overflow-visible rounded-t-2xl border bg-gradient-to-t from-red-600/75 to-orange-300/90 ${isLatest ? "border-yellow-200/70 ring-2 ring-yellow-300/40" : "border-red-300/20"}`;
     bar.style.height = `${height}px`;
-    bar.title = `${row.year ?? "—"}: ${formatOku(value, "億円")} / 前年差 ${diff.amount} / ${diff.rate}`;
+    bar.title = `${displayPeriod(row)}: ${formatOku(value, "億円")} / 前年差 ${diff.amount} / ${diff.rate}`;
 
     const valueLabel = document.createElement("div");
     valueLabel.className = "absolute -top-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-xl bg-black/65 px-2 py-1 text-center text-[10px] font-black leading-tight text-white shadow-sm backdrop-blur sm:text-xs";
@@ -172,19 +202,19 @@ function buildChart(rows: HistoryRow[], key: TrendKey) {
       : "max-w-full rounded-full border border-green-300/30 bg-green-950/70 px-2 py-1 text-center text-[10px] font-black leading-tight text-green-100 sm:text-xs";
     diffBadge.textContent = index === 0 ? "前年差—" : diff.rate;
 
-    const year = document.createElement("div");
-    year.className = isLatest
+    const period = document.createElement("div");
+    period.className = isLatest
       ? "rounded-full border border-yellow-300/50 bg-yellow-300/15 px-2 py-1 text-[10px] font-black text-yellow-100 sm:text-xs"
       : "rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-black text-slate-300 sm:text-xs";
-    year.textContent = isLatest ? `${row.year ?? "—"} 最新` : String(row.year ?? "—");
+    period.textContent = isLatest ? `${displayPeriod(row)} 最新` : displayPeriod(row);
 
-    item.append(barWrap, diffBadge, year);
+    item.append(barWrap, diffBadge, period);
     graph.append(item);
   });
 
   const caption = document.createElement("p");
   caption.className = "mt-3 text-xs leading-6 text-slate-500";
-  caption.textContent = "棒の上に金額、棒の下に前年差率を表示しています。最新年度は黄色枠です。";
+  caption.textContent = "表示は直近最大3期です。棒の上に金額、棒の下に前年差率を表示しています。";
 
   root.append(summary, graph, caption);
   return root;
