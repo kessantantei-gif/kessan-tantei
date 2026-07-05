@@ -3,6 +3,9 @@ import type { RankedCompany, RankingCompany, RankingDefinition } from "./types";
 type GrowthKey = "revenue" | "grossProfit" | "operatingIncome" | "operatingCF" | "netIncome";
 
 const MIN_PRIOR_REVENUE_FOR_GROWTH_RANKING = 100_000_000;
+const MAX_REASONABLE_GROSS_MARGIN = 100;
+const MIN_REASONABLE_GROSS_MARGIN = -100;
+const GROSS_PROFIT_REVENUE_TOLERANCE = 1.02;
 
 function financialNumber(
   company: RankingCompany,
@@ -45,6 +48,24 @@ function ratio(numerator: number | null, denominator: number | null) {
   return (numerator / denominator) * 100;
 }
 
+function isReasonableGrossMargin(value: number | null) {
+  return (
+    value !== null &&
+    value >= MIN_REASONABLE_GROSS_MARGIN &&
+    value <= MAX_REASONABLE_GROSS_MARGIN
+  );
+}
+
+function hasReasonableGrossProfitAndRevenue(grossProfit: number | null, revenue: number | null) {
+  if (grossProfit === null || revenue === null) return false;
+  if (revenue <= 0) return false;
+
+  // 売上総利益が売上高を大きく超える場合は、EDINETタグの取り違え・期間不一致の可能性が高い。
+  if (grossProfit > revenue * GROSS_PROFIT_REVENUE_TOLERANCE) return false;
+
+  return true;
+}
+
 function hasMeaningfulPriorRevenue(company: RankingCompany) {
   const pair = latestHistoryPair(company, "revenue");
   return pair !== null && pair.previous >= MIN_PRIOR_REVENUE_FOR_GROWTH_RANKING;
@@ -64,13 +85,18 @@ function computedOperatingMargin(company: RankingCompany) {
 }
 
 function computedGrossMargin(company: RankingCompany) {
-  const storedGrossMargin = financialNumber(company, "grossMargin");
-  if (storedGrossMargin !== null) return storedGrossMargin;
+  const grossProfit = financialNumber(company, "grossProfit") ?? latestHistoryNumber(company, "grossProfit");
+  const revenue = financialNumber(company, "revenue") ?? latestHistoryNumber(company, "revenue");
+  const calculatedGrossMargin = hasReasonableGrossProfitAndRevenue(grossProfit, revenue)
+    ? ratio(grossProfit, revenue)
+    : null;
 
-  return ratio(
-    financialNumber(company, "grossProfit") ?? latestHistoryNumber(company, "grossProfit"),
-    financialNumber(company, "revenue") ?? latestHistoryNumber(company, "revenue")
-  );
+  if (isReasonableGrossMargin(calculatedGrossMargin)) return calculatedGrossMargin;
+
+  const storedGrossMargin = financialNumber(company, "grossMargin");
+  if (isReasonableGrossMargin(storedGrossMargin)) return storedGrossMargin;
+
+  return null;
 }
 
 function computedRankingValue(company: RankingCompany, definition: RankingDefinition) {
