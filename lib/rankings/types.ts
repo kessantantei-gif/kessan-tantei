@@ -84,6 +84,7 @@ export type RankingDefinition = {
   guide: string;
   caution: string;
   relatedSlugs: string[];
+  isPremium?: boolean;
 };
 
 export type RankedCompany = {
