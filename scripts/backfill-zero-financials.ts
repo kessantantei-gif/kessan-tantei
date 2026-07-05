@@ -6,7 +6,9 @@ import { scoreCompany } from "../lib/score";
 import { generateSignals } from "../lib/signals";
 import {
   extractFinancials,
+  extractFiscalPeriodsFromEdinetXbrlZip,
   extractRowsFromEdinetCsvZip,
+  type FiscalPeriodInfo,
 } from "../lib/edinet-financial-parser";
 import { calculateFinancialMetrics, type FinancialFacts } from "../lib/financial-metrics";
 
@@ -19,6 +21,10 @@ type EdinetDocument = {
 
 type HistoryRow = {
   year: number;
+  fiscalYear?: number;
+  fiscalMonth?: number;
+  fiscalPeriod?: string;
+  periodEnd?: string;
   revenue?: number;
   grossProfit?: number;
   netIncome?: number;
@@ -41,7 +47,8 @@ if (!supabaseUrl || !supabaseKey || !edinetKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 const documentCache = new Map<string, EdinetDocument[]>();
-const zipCache = new Map<string, Buffer>();
+const csvZipCache = new Map<string, Buffer>();
+const xbrlZipCache = new Map<string, Buffer>();
 
 function formatDate(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -58,11 +65,9 @@ function shouldProcessDoc(doc: EdinetDocument) {
 
   if (desc.includes("訂正")) return false;
 
-  return (
-    desc.includes("有価証券報告書") ||
-    desc.includes("半期報告書") ||
-    desc.includes("四半期報告書")
-  );
+  // 年次推移は有価証券報告書だけで作る。
+  // 半期・四半期を混ぜると年度重複や期ズレの原因になる。
+  return desc.includes("有価証券報告書");
 }
 
 function hasAnyFinancialValue(facts: Partial<FinancialFacts>) {
@@ -75,9 +80,27 @@ function hasAnyFinancialValue(facts: Partial<FinancialFacts>) {
   ].some((value) => typeof value === "number" && Number.isFinite(value));
 }
 
-function historyRowFromFacts(year: number, facts: Partial<FinancialFacts>) {
+function fallbackFiscalInfo(year: number): FiscalPeriodInfo {
   return {
-    year,
+    fiscalYear: year,
+    fiscalPeriod: `${year}年度`,
+  };
+}
+
+function historyRowFromFacts(
+  fallbackYear: number,
+  facts: Partial<FinancialFacts>,
+  fiscalInfo?: FiscalPeriodInfo | null
+) {
+  const fiscal = fiscalInfo ?? fallbackFiscalInfo(fallbackYear);
+  const fiscalYear = fiscal.fiscalYear ?? fallbackYear;
+
+  return {
+    year: fiscalYear,
+    ...(fiscal.fiscalYear === undefined ? {} : { fiscalYear: fiscal.fiscalYear }),
+    ...(fiscal.fiscalMonth === undefined ? {} : { fiscalMonth: fiscal.fiscalMonth }),
+    ...(fiscal.fiscalPeriod === undefined ? {} : { fiscalPeriod: fiscal.fiscalPeriod }),
+    ...(fiscal.periodEnd === undefined ? {} : { periodEnd: fiscal.periodEnd }),
     ...(facts.revenue === null || facts.revenue === undefined ? {} : { revenue: facts.revenue }),
     ...(facts.grossProfit === null || facts.grossProfit === undefined ? {} : { grossProfit: facts.grossProfit }),
     ...(facts.netIncome === null || facts.netIncome === undefined ? {} : { netIncome: facts.netIncome }),
@@ -150,7 +173,7 @@ async function findDocs(ticker: string) {
 }
 
 async function fetchCsvZip(docID: string) {
-  if (zipCache.has(docID)) return zipCache.get(docID)!;
+  if (csvZipCache.has(docID)) return csvZipCache.get(docID)!;
 
   const url = `${EDINET_BASE}/documents/${docID}?type=5&Subscription-Key=${edinetKey}`;
   const res = await fetch(url);
@@ -160,7 +183,22 @@ async function fetchCsvZip(docID: string) {
   }
 
   const buffer = Buffer.from(await res.arrayBuffer());
-  zipCache.set(docID, buffer);
+  csvZipCache.set(docID, buffer);
+  return buffer;
+}
+
+async function fetchXbrlZip(docID: string) {
+  if (xbrlZipCache.has(docID)) return xbrlZipCache.get(docID)!;
+
+  const url = `${EDINET_BASE}/documents/${docID}?type=1&Subscription-Key=${edinetKey}`;
+  const res = await fetch(url);
+
+  if (!res.ok) {
+    throw new Error(`EDINET XBRL fetch failed: ${docID} ${res.status}`);
+  }
+
+  const buffer = Buffer.from(await res.arrayBuffer());
+  xbrlZipCache.set(docID, buffer);
   return buffer;
 }
 
@@ -215,6 +253,8 @@ async function main() {
 
     return (
       history.length < 3 ||
+      history.length > 3 ||
+      history.some((item: any) => !item.fiscalPeriod || !item.fiscalMonth) ||
       isZero(f.revenue) ||
       isZero(f.operatingIncome) ||
       isZero(f.operatingCF) ||
@@ -239,7 +279,7 @@ async function main() {
       const docs = await findDocs(ticker);
 
       if (docs.length === 0) {
-        console.log("  EDINET書類なし");
+        console.log("  EDINET有価証券報告書なし");
         skipped += 1;
         continue;
       }
@@ -251,9 +291,11 @@ async function main() {
       let latestFinancials: ReturnType<typeof calculateFinancialMetrics> | null = null;
 
       for (const item of docs) {
-        const zipBuffer = await fetchCsvZip(item.doc.docID);
-        const rows = extractRowsFromEdinetCsvZip(zipBuffer);
+        const csvBuffer = await fetchCsvZip(item.doc.docID);
+        const xbrlBuffer = await fetchXbrlZip(item.doc.docID);
+        const rows = extractRowsFromEdinetCsvZip(csvBuffer);
         const extracted = extractFinancials(rows);
+        const fiscalPeriods = extractFiscalPeriodsFromEdinetXbrlZip(xbrlBuffer);
         const current = extracted.current;
         const prior = extracted.prior;
 
@@ -268,21 +310,23 @@ async function main() {
           continue;
         }
 
-        const filingYear = new Date(item.date).getFullYear();
+        const currentFallbackYear = new Date(item.date).getFullYear();
+        const currentFiscalYear = fiscalPeriods.current?.fiscalYear ?? currentFallbackYear;
+        const priorFiscalYear = fiscalPeriods.prior?.fiscalYear ?? currentFiscalYear - 1;
 
         if (hasAnyFinancialValue(prior)) {
-          const priorRow = historyRowFromFacts(filingYear - 1, prior);
+          const priorRow = historyRowFromFacts(priorFiscalYear, prior, fiscalPeriods.prior);
           historyByYear.set(
-            filingYear - 1,
-            mergeHistoryRows(historyByYear.get(filingYear - 1), priorRow)
+            priorRow.year,
+            mergeHistoryRows(historyByYear.get(priorRow.year), priorRow)
           );
         }
 
         if (hasAnyFinancialValue(current)) {
-          const currentRow = historyRowFromFacts(filingYear, current);
+          const currentRow = historyRowFromFacts(currentFiscalYear, current, fiscalPeriods.current);
           historyByYear.set(
-            filingYear,
-            mergeHistoryRows(historyByYear.get(filingYear), currentRow)
+            currentRow.year,
+            mergeHistoryRows(historyByYear.get(currentRow.year), currentRow)
           );
         }
 
@@ -294,7 +338,9 @@ async function main() {
         }
       }
 
-      const history = [...historyByYear.values()].sort((a, b) => a.year - b.year);
+      const history = [...historyByYear.values()]
+        .sort((a, b) => a.year - b.year)
+        .slice(-3);
 
       if (!latestCurrent || !latestFinancials || history.length === 0) {
         console.log("  財務履歴を取得できず");
@@ -390,7 +436,7 @@ async function main() {
 
       console.log("  updated", {
         doc_id: usedDocId,
-        historyYears: history.map((item) => item.year),
+        historyPeriods: history.map((item) => item.fiscalPeriod ?? `${item.year}年度`),
       });
       updated += 1;
     } catch (error) {
