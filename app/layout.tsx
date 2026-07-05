@@ -7,7 +7,6 @@ import "./globals.css";
 import AuthButton from "@/components/auth-button";
 import FeedbackButton from "@/components/feedback-button";
 import SiteNav from "@/components/site-nav";
-import CompanyTrendValueInjector from "@/components/company-trend-value-injector";
 
 export const metadata: Metadata = {
   title: "決算探偵 | グロース市場特化の財務分析ランキング",
@@ -55,7 +54,6 @@ export default function RootLayout({
         <body>
           <SiteNav />
           {children}
-          <CompanyTrendValueInjector />
           <FeedbackButton />
           <AuthButton />
           <Toaster richColors position="top-right" />
