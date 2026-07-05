@@ -126,7 +126,13 @@ function scoreMatch(company: Company, query: string) {
   return 0;
 }
 
-function SearchHintPanel({ examples }: { examples: Company[] }) {
+function SearchHintPanel({
+  examples,
+  onPick,
+}: {
+  examples: Company[];
+  onPick: (keyword: string) => void;
+}) {
   return (
     <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-7 text-slate-400">
       <div className="flex flex-wrap gap-2">
@@ -143,9 +149,8 @@ function SearchHintPanel({ examples }: { examples: Company[] }) {
             <button
               key={company.ticker}
               type="button"
-              className="rounded-full border border-green-400/20 bg-green-500/10 px-3 py-1 text-xs font-bold text-green-200 transition hover:bg-green-500/20"
-              onClick={() => undefined}
-              aria-hidden="true"
+              className="rounded-full border border-green-400/20 bg-green-500/10 px-3 py-1 text-xs font-bold text-green-200 transition hover:bg-green-500/20 active:scale-95"
+              onClick={() => onPick(company.company_name)}
             >
               {company.company_name}
             </button>
@@ -189,7 +194,9 @@ export default function CompanySearch({ companies }: { companies: Company[] }) {
         className="w-full rounded-2xl border border-white/10 bg-black/40 px-5 py-4 text-white outline-none placeholder:text-slate-500 focus:border-green-400/60"
       />
 
-      {!keyword.trim() ? <SearchHintPanel examples={exampleCompanies} /> : null}
+      {!keyword.trim() ? (
+        <SearchHintPanel examples={exampleCompanies} onPick={setKeyword} />
+      ) : null}
 
       {keyword.trim() ? (
         <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-white/10 bg-[#07111f] shadow-2xl">
