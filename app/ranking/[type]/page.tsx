@@ -2,13 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import CompanySearch from "@/components/company-search";
+import ProLock from "@/components/pro-lock";
 import RankingResults from "@/components/ranking-results";
 import { supabaseAdmin } from "@/lib/supabase";
+import { isProUser } from "@/lib/pro-engine";
 import {
   getRankingDefinition,
   getRelatedRankings,
 } from "@/lib/rankings/definitions";
 import { rankCompanies } from "@/lib/rankings/engine";
+import { isPremiumRanking, premiumRankingMessage } from "@/lib/rankings/premium";
 import type { RankingCompany } from "@/lib/rankings/types";
 
 type PageProps = {
@@ -83,6 +86,9 @@ export default async function RankingPage({ params }: PageProps) {
   const companies = await loadCompanies();
   const rankings = rankCompanies(companies, definition);
   const relatedRankings = getRelatedRankings(definition);
+  const isPro = await isProUser();
+  const premium = isPremiumRanking(definition);
+  const locked = premium && !isPro;
   const searchCompanies = companies.map((company) => ({
     ticker: company.ticker,
     company_name: company.company_name,
@@ -96,13 +102,15 @@ export default async function RankingPage({ params }: PageProps) {
     name: definition.title,
     description: definition.description,
     url: `${siteUrl}/ranking/${definition.slug}`,
-    numberOfItems: rankings.length,
-    itemListElement: rankings.slice(0, 100).map(({ company }, index) => ({
-      "@type": "ListItem",
-      position: index + 1,
-      name: company.company_name,
-      url: `${siteUrl}/company/${company.ticker}`,
-    })),
+    numberOfItems: locked ? 0 : rankings.length,
+    itemListElement: locked
+      ? []
+      : rankings.slice(0, 100).map(({ company }, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          name: company.company_name,
+          url: `${siteUrl}/company/${company.ticker}`,
+        })),
   };
 
   return (
@@ -124,17 +132,35 @@ export default async function RankingPage({ params }: PageProps) {
 
       <div className="relative z-10 mx-auto max-w-7xl px-4 py-8 sm:px-8 sm:py-12">
         <section className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl sm:p-8">
-          <p className="text-xs font-bold tracking-[0.3em] text-green-300">GROWTH MARKET RANKING</p>
-          <h1 className="mt-4 text-3xl font-black sm:text-5xl">{definition.title}</h1>
-          <p className="mt-4 max-w-3xl leading-8 text-slate-300">{definition.description}</p>
-          <p className="mt-3 text-sm text-slate-500">対象企業数：{rankings.length}社</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-bold tracking-[0.3em] text-green-300">GROWTH MARKET RANKING</p>
+              <h1 className="mt-4 text-3xl font-black sm:text-5xl">{definition.title}</h1>
+              <p className="mt-4 max-w-3xl leading-8 text-slate-300">{definition.description}</p>
+              <p className="mt-3 text-sm text-slate-500">
+                {locked ? "Pro限定ランキング" : `対象企業数：${rankings.length}社`}
+              </p>
+            </div>
+            {premium ? (
+              <span className="w-fit rounded-full bg-yellow-400 px-3 py-1 text-xs font-black text-slate-950">
+                Pro限定
+              </span>
+            ) : null}
+          </div>
           <div className="mt-6 max-w-3xl">
             <CompanySearch companies={searchCompanies} />
           </div>
         </section>
 
         <section className="mt-8" aria-label={definition.title}>
-          <RankingResults definition={definition} rankings={rankings} />
+          {locked ? (
+            <ProLock
+              title={`${definition.shortTitle}はPro限定です`}
+              message={`${premiumRankingMessage(definition)} 初月100円のProで、ランキングの全順位・評価コメント・関連ランキングを確認できます。`}
+            />
+          ) : (
+            <RankingResults definition={definition} rankings={rankings} />
+          )}
         </section>
 
         <div className="mt-10 grid gap-6 lg:grid-cols-2">
