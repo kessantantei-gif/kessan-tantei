@@ -8,7 +8,7 @@ import {
   extractFinancials,
   extractRowsFromEdinetCsvZip,
 } from "../lib/edinet-financial-parser";
-import { calculateFinancialMetrics } from "../lib/financial-metrics";
+import { calculateFinancialMetrics, type FinancialFacts } from "../lib/financial-metrics";
 
 type EdinetDocument = {
   docID: string;
@@ -52,6 +52,38 @@ function shouldProcessDoc(doc: EdinetDocument) {
     desc.includes("半期報告書") ||
     desc.includes("四半期報告書")
   );
+}
+
+function hasAnyFinancialValue(facts: Partial<FinancialFacts>) {
+  return [
+    facts.revenue,
+    facts.grossProfit,
+    facts.netIncome,
+    facts.operatingIncome,
+    facts.operatingCF,
+  ].some((value) => typeof value === "number" && Number.isFinite(value));
+}
+
+function historyRowFromFacts(year: number, facts: Partial<FinancialFacts>) {
+  return {
+    year,
+    ...(facts.revenue === null || facts.revenue === undefined ? {} : { revenue: facts.revenue }),
+    ...(facts.grossProfit === null || facts.grossProfit === undefined ? {} : { grossProfit: facts.grossProfit }),
+    ...(facts.netIncome === null || facts.netIncome === undefined ? {} : { netIncome: facts.netIncome }),
+    ...(facts.operatingIncome === null || facts.operatingIncome === undefined ? {} : { operatingIncome: facts.operatingIncome }),
+    ...(facts.operatingCF === null || facts.operatingCF === undefined ? {} : { operatingCF: facts.operatingCF }),
+  };
+}
+
+function buildHistory(currentYear: number, current: FinancialFacts, prior: FinancialFacts) {
+  const rows = [];
+
+  if (hasAnyFinancialValue(prior)) {
+    rows.push(historyRowFromFacts(currentYear - 1, prior));
+  }
+
+  rows.push(historyRowFromFacts(currentYear, current));
+  return rows;
 }
 
 async function fetchDocuments(date: string) {
@@ -138,7 +170,10 @@ async function main() {
 
   const targets = (data ?? []).filter((row: any) => {
     const f = row.financials ?? {};
+    const history = Array.isArray(row.history) ? row.history : [];
+
     return (
+      history.length < 2 ||
       isZero(f.revenue) ||
       isZero(f.operatingIncome) ||
       isZero(f.operatingCF) ||
@@ -157,23 +192,6 @@ async function main() {
   for (const row of targets) {
     try {
       const ticker = row.ticker;
-      const old = row.financials ?? {};
-
-      const financials = {
-        revenue: Number(old.revenue ?? 0),
-        grossProfit: Number(old.grossProfit ?? 0),
-        operatingIncome: Number(old.operatingIncome ?? 0),
-        operatingCF: Number(old.operatingCF ?? 0),
-        cash: Number(old.cash ?? 0),
-        currentLiabilities: Number(old.currentLiabilities ?? 0),
-        assets: Number(old.assets ?? 0),
-        netAssets: Number(old.netAssets ?? 0),
-        revenueGrowth: Number(old.revenueGrowth ?? 0),
-        grossProfitGrowth: Number(old.grossProfitGrowth ?? 0),
-        equityRatio: Number(old.equityRatio ?? 0),
-        operatingMargin: Number(old.operatingMargin ?? 0),
-        ocfMargin: Number(old.ocfMargin ?? 0),
-      };
 
       console.log(`\n${ticker} ${row.company_name}`);
 
@@ -186,6 +204,11 @@ async function main() {
       }
 
       let usedDocId = row.doc_id;
+      let selected: {
+        current: FinancialFacts;
+        prior: FinancialFacts;
+        financials: ReturnType<typeof calculateFinancialMetrics>;
+      } | null = null;
 
       for (const item of docs) {
         const zipBuffer = await fetchCsvZip(item.doc.docID);
@@ -194,94 +217,58 @@ async function main() {
         const nf = extracted.current;
         const calculated = calculateFinancialMetrics(nf, extracted.prior);
 
-        if (financials.revenue === 0 && nf.revenue !== null) {
-          financials.revenue = nf.revenue;
-          if (calculated.revenueGrowth !== undefined) {
-            financials.revenueGrowth = calculated.revenueGrowth;
-          }
-          usedDocId = item.doc.docID;
+        if (
+          nf.revenue === null &&
+          nf.operatingIncome === null &&
+          nf.operatingCF === null &&
+          nf.cash === null &&
+          nf.assets === null &&
+          nf.netAssets === null
+        ) {
+          continue;
         }
 
-        if (financials.grossProfit === 0 && nf.grossProfit !== null) {
-          financials.grossProfit = nf.grossProfit;
-          if (calculated.grossProfitGrowth !== undefined) {
-            financials.grossProfitGrowth = calculated.grossProfitGrowth;
-          }
-          usedDocId = item.doc.docID;
-        }
-
-        if (financials.operatingIncome === 0 && nf.operatingIncome !== null) {
-          financials.operatingIncome = nf.operatingIncome;
-          usedDocId = item.doc.docID;
-        }
-
-        if (financials.operatingCF === 0 && nf.operatingCF !== null) {
-          financials.operatingCF = nf.operatingCF;
-          usedDocId = item.doc.docID;
-        }
-
-        if (financials.cash === 0 && nf.cash !== null) {
-          financials.cash = nf.cash;
-          usedDocId = item.doc.docID;
-        }
-
-        if (financials.currentLiabilities === 0 && nf.currentLiabilities !== null) {
-          financials.currentLiabilities = nf.currentLiabilities;
-          usedDocId = item.doc.docID;
-        }
-
-        if (financials.assets === 0 && nf.assets !== null) {
-          financials.assets = nf.assets;
-          usedDocId = item.doc.docID;
-        }
-
-        if (financials.netAssets === 0 && nf.netAssets !== null) {
-          financials.netAssets = nf.netAssets;
-          usedDocId = item.doc.docID;
-        }
-
-        const allFilled =
-          financials.revenue !== 0 &&
-          financials.operatingIncome !== 0 &&
-          financials.operatingCF !== 0 &&
-          financials.cash !== 0 &&
-          financials.assets !== 0 &&
-          financials.netAssets !== 0;
-
-        if (allFilled) break;
+        selected = {
+          current: nf,
+          prior: extracted.prior,
+          financials: calculated,
+        };
+        usedDocId = item.doc.docID;
+        break;
       }
 
-      financials.equityRatio =
-        financials.assets > 0
-          ? Number(((financials.netAssets / financials.assets) * 100).toFixed(2))
-          : 0;
+      if (!selected) {
+        console.log("  財務数値を取得できず");
+        skipped += 1;
+        continue;
+      }
 
-      financials.operatingMargin =
-        financials.revenue > 0
-          ? Number(((financials.operatingIncome / financials.revenue) * 100).toFixed(2))
-          : 0;
-
-      financials.ocfMargin =
-        financials.revenue > 0
-          ? Number(((financials.operatingCF / financials.revenue) * 100).toFixed(2))
-          : 0;
+      const f = selected.current;
+      const calculated = selected.financials;
+      const financials = {
+        ...(row.financials ?? {}),
+        ...calculated,
+      };
 
       const monthlyCashBurn =
-        financials.operatingCF < 0 ? Math.abs(financials.operatingCF) / 12 : 0;
+        f.operatingCF !== null && f.operatingCF < 0 ? Math.abs(f.operatingCF) / 12 : 0;
 
       const score = scoreCompany({
-        revenueGrowth: financials.revenueGrowth,
-        grossProfitGrowth: financials.grossProfitGrowth,
-        operatingMargin: financials.operatingMargin,
-        ebitdaMargin: financials.operatingMargin,
-        ocfMargin: financials.ocfMargin,
-        ruleOf40: financials.revenueGrowth + financials.operatingMargin,
-        operatingCashFlows: [financials.operatingCF],
-        operatingIncomes: [financials.operatingIncome],
-        cash: financials.cash,
+        revenueGrowth: calculated.revenueGrowth,
+        grossProfitGrowth: calculated.grossProfitGrowth,
+        operatingMargin: calculated.operatingMargin,
+        ebitdaMargin: calculated.operatingMargin,
+        ocfMargin: calculated.operatingCFMargin,
+        ruleOf40:
+          calculated.revenueGrowth !== undefined && calculated.operatingMargin !== undefined
+            ? calculated.revenueGrowth + calculated.operatingMargin
+            : undefined,
+        operatingCashFlows: f.operatingCF === null ? [] : [f.operatingCF],
+        operatingIncomes: f.operatingIncome === null ? [] : [f.operatingIncome],
+        cash: f.cash ?? undefined,
         monthlyCashBurn,
-        currentLiabilities: financials.currentLiabilities,
-        equityRatio: financials.equityRatio,
+        currentLiabilities: f.currentLiabilities ?? undefined,
+        equityRatio: calculated.equityRatio,
         hasMsWarrant: false,
         equityFinancingCountLast3Years: 0,
         warrantTrend: "none",
@@ -289,9 +276,9 @@ async function main() {
       });
 
       const signals = generateSignals({
-        operatingCashFlows: [financials.operatingCF],
-        operatingIncomes: [financials.operatingIncome],
-        cash: financials.cash,
+        operatingCashFlows: f.operatingCF === null ? [] : [f.operatingCF],
+        operatingIncomes: f.operatingIncome === null ? [] : [f.operatingIncome],
+        cash: f.cash ?? undefined,
         monthlyCashBurn,
         hasMsWarrant: false,
         equityFinancingCountLast3Years: 0,
@@ -331,19 +318,15 @@ async function main() {
             riskLevel,
             dangerScore,
           },
-          history: [
-            {
-              year: new Date().getFullYear(),
-              revenue: financials.revenue,
-              operatingIncome: financials.operatingIncome,
-              operatingCF: financials.operatingCF,
-            },
-          ],
+          history: buildHistory(new Date().getFullYear(), selected.current, selected.prior),
           updated_at: new Date().toISOString(),
         })
         .eq("ticker", ticker);
 
-      console.log("  updated", financials);
+      console.log("  updated", {
+        doc_id: usedDocId,
+        history: buildHistory(new Date().getFullYear(), selected.current, selected.prior),
+      });
       updated += 1;
     } catch (error) {
       console.log("  failed", error);
