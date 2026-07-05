@@ -83,6 +83,35 @@ function findChartArea(card: Element) {
   );
 }
 
+function addScaleGuide(chartBody: HTMLDivElement, max: number) {
+  const guide = document.createElement("div");
+  guide.className = "pointer-events-none absolute inset-x-0 bottom-10 top-0 z-0";
+
+  const ticks = [
+    { label: shortYenOku(max), top: "0%" },
+    { label: shortYenOku(max / 2), top: "50%" },
+    { label: "0", top: "100%" },
+  ];
+
+  for (const tick of ticks) {
+    const row = document.createElement("div");
+    row.className = "absolute left-0 right-0 flex items-center gap-2";
+    row.style.top = tick.top;
+
+    const label = document.createElement("span");
+    label.className = "w-12 shrink-0 text-right text-[10px] font-bold text-slate-500";
+    label.textContent = tick.label;
+
+    const line = document.createElement("span");
+    line.className = "h-px flex-1 bg-white/10";
+
+    row.append(label, line);
+    guide.append(row);
+  }
+
+  chartBody.append(guide);
+}
+
 function buildRichChart(rows: HistoryRow[], keyName: keyof HistoryRow) {
   const values = rows.map((row) => Math.abs(Number(row[keyName] ?? 0)));
   const max = Math.max(...values, 1);
@@ -92,8 +121,13 @@ function buildRichChart(rows: HistoryRow[], keyName: keyof HistoryRow) {
   chart.dataset.trendValues = "true";
   chart.className = "mt-5 rounded-2xl border border-white/10 bg-black/20 p-4";
 
+  const chartBody = document.createElement("div");
+  chartBody.className = "relative";
+
+  addScaleGuide(chartBody, max);
+
   const bars = document.createElement("div");
-  bars.className = "flex h-60 items-end gap-3 sm:h-64 sm:gap-4";
+  bars.className = "relative z-10 ml-14 flex h-60 items-end gap-3 sm:h-64 sm:gap-4";
 
   rows.forEach((row, index) => {
     const rawValue = Number(row[keyName] ?? 0);
@@ -142,11 +176,13 @@ function buildRichChart(rows: HistoryRow[], keyName: keyof HistoryRow) {
     bars.append(item);
   });
 
+  chartBody.append(bars);
+
   const caption = document.createElement("p");
   caption.className = "mt-3 text-xs leading-6 text-slate-500";
-  caption.textContent = "棒グラフ内の上段は金額、中段は前年からの増減額、下段は前年差率です。最新年度は黄色枠で表示しています。";
+  caption.textContent = "左の目盛りは最大値・半分・0の目安です。棒グラフ内の上段は金額、中段は増減額、下段は前年差率です。";
 
-  chart.append(bars, caption);
+  chart.append(chartBody, caption);
   return chart;
 }
 
