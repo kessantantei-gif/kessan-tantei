@@ -158,7 +158,7 @@ function buildChart(rows: HistoryRow[], key: TrendKey) {
   }
 
   const graph = document.createElement("div");
-  graph.className = "mt-8 flex h-52 items-end gap-3 sm:h-56 sm:gap-4";
+  graph.className = "mt-8 flex items-end gap-3 sm:gap-4";
 
   if (cleanRows.length === 0) {
     const empty = document.createElement("p");
@@ -176,11 +176,10 @@ function buildChart(rows: HistoryRow[], key: TrendKey) {
     const isLatest = row === latest;
 
     const item = document.createElement("div");
-    item.className = "flex min-w-0 flex-1 flex-col items-center gap-2";
+    item.className = "flex min-w-0 flex-1 flex-col items-center";
 
     const barWrap = document.createElement("div");
-    barWrap.className = "relative flex w-full items-end justify-center";
-    barWrap.style.height = "150px";
+    barWrap.className = "relative flex h-[150px] w-full items-end justify-center";
 
     const bar = document.createElement("div");
     bar.className = value >= 0
@@ -196,25 +195,34 @@ function buildChart(rows: HistoryRow[], key: TrendKey) {
     bar.append(valueLabel);
     barWrap.append(bar);
 
+    const diffWrap = document.createElement("div");
+    diffWrap.className = "mt-3 flex h-8 w-full items-center justify-center";
+
     const diffBadge = document.createElement("div");
     diffBadge.className = diff.up === false
       ? "max-w-full rounded-full border border-red-300/30 bg-red-950/70 px-2 py-1 text-center text-[10px] font-black leading-tight text-red-100 sm:text-xs"
       : "max-w-full rounded-full border border-green-300/30 bg-green-950/70 px-2 py-1 text-center text-[10px] font-black leading-tight text-green-100 sm:text-xs";
     diffBadge.textContent = index === 0 ? "前年差—" : diff.rate;
+    diffWrap.append(diffBadge);
+
+    const periodWrap = document.createElement("div");
+    periodWrap.className = "mt-2 flex h-14 w-full items-start justify-center";
 
     const period = document.createElement("div");
     period.className = isLatest
-      ? "rounded-full border border-yellow-300/50 bg-yellow-300/15 px-2 py-1 text-[10px] font-black text-yellow-100 sm:text-xs"
-      : "rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-black text-slate-300 sm:text-xs";
-    period.textContent = isLatest ? `${displayPeriod(row)} 最新` : displayPeriod(row);
+      ? "flex min-h-10 max-w-full items-center justify-center rounded-2xl border border-yellow-300/50 bg-yellow-300/15 px-2 py-1 text-center text-[10px] font-black leading-tight text-yellow-100 sm:text-xs"
+      : "flex min-h-10 max-w-full items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-2 py-1 text-center text-[10px] font-black leading-tight text-slate-300 sm:text-xs";
+    period.textContent = isLatest ? `${displayPeriod(row)}\n最新` : displayPeriod(row);
+    period.style.whiteSpace = "pre-line";
+    periodWrap.append(period);
 
-    item.append(barWrap, diffBadge, period);
+    item.append(barWrap, diffWrap, periodWrap);
     graph.append(item);
   });
 
   const caption = document.createElement("p");
-  caption.className = "mt-3 text-xs leading-6 text-slate-500";
-  caption.textContent = "表示は直近最大3期です。棒の中に金額、棒の下に前年差率を表示しています。";
+  caption.className = "mt-2 text-xs leading-6 text-slate-500";
+  caption.textContent = "表示は直近最大3期です。棒の中に金額、棒の下に前年差率と決算期を固定表示しています。";
 
   root.append(summary, graph, caption);
   return root;
