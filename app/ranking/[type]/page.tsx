@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import CompanySearch from "@/components/company-search";
-import ProLock from "@/components/pro-lock";
 import RankingResults from "@/components/ranking-results";
 import { supabaseAdmin } from "@/lib/supabase";
 import { isProUser } from "@/lib/pro-engine";
@@ -11,7 +10,7 @@ import {
   getRelatedRankings,
 } from "@/lib/rankings/definitions";
 import { rankCompanies } from "@/lib/rankings/engine";
-import { isPremiumRanking, premiumRankingMessage } from "@/lib/rankings/premium";
+import { isPremiumRanking } from "@/lib/rankings/premium";
 import type { RankingCompany } from "@/lib/rankings/types";
 
 type PageProps = {
@@ -88,7 +87,6 @@ export default async function RankingPage({ params }: PageProps) {
   const relatedRankings = getRelatedRankings(definition);
   const isPro = await isProUser();
   const premium = isPremiumRanking(definition);
-  const locked = premium && !isPro;
   const searchCompanies = companies.map((company) => ({
     ticker: company.ticker,
     company_name: company.company_name,
@@ -102,15 +100,13 @@ export default async function RankingPage({ params }: PageProps) {
     name: definition.title,
     description: definition.description,
     url: `${siteUrl}/ranking/${definition.slug}`,
-    numberOfItems: locked ? 0 : rankings.length,
-    itemListElement: locked
-      ? []
-      : rankings.slice(0, 100).map(({ company }, index) => ({
-          "@type": "ListItem",
-          position: index + 1,
-          name: company.company_name,
-          url: `${siteUrl}/company/${company.ticker}`,
-        })),
+    numberOfItems: isPro ? rankings.length : Math.min(rankings.length, 3),
+    itemListElement: (isPro ? rankings : rankings.slice(0, 3)).map(({ company }, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: company.company_name,
+      url: `${siteUrl}/company/${company.ticker}`,
+    })),
   };
 
   return (
@@ -138,12 +134,12 @@ export default async function RankingPage({ params }: PageProps) {
               <h1 className="mt-4 text-3xl font-black sm:text-5xl">{definition.title}</h1>
               <p className="mt-4 max-w-3xl leading-8 text-slate-300">{definition.description}</p>
               <p className="mt-3 text-sm text-slate-500">
-                {locked ? "Pro限定ランキング" : `対象企業数：${rankings.length}社`}
+                {isPro ? `対象企業数：${rankings.length}社` : `TOP3無料 / 全${rankings.length}社`}
               </p>
             </div>
             {premium ? (
               <span className="w-fit rounded-full bg-yellow-400 px-3 py-1 text-xs font-black text-slate-950">
-                Pro限定
+                Pro詳細
               </span>
             ) : null}
           </div>
@@ -153,22 +149,15 @@ export default async function RankingPage({ params }: PageProps) {
         </section>
 
         <section className="mt-8" aria-label={definition.title}>
-          {locked ? (
-            <ProLock
-              title={`${definition.shortTitle}はPro限定です`}
-              message={`${premiumRankingMessage(definition)} 初月100円のProで、ランキングの全順位・評価コメント・関連ランキングを確認できます。`}
-            />
-          ) : (
-            <RankingResults definition={definition} rankings={rankings} />
-          )}
+          <RankingResults definition={definition} rankings={rankings} isPro={isPro} />
         </section>
 
         <div className="mt-10 grid gap-6 lg:grid-cols-2">
           <section className="rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-8">
-            <h2 className="text-2xl font-black">ランキングの見方</h2>
+            <h2 className="text-2xl font-black">このランキングで分かること</h2>
             <p className="mt-4 leading-8 text-slate-300">{definition.guide}</p>
             <p className="mt-3 leading-8 text-slate-300">
-              順位だけでなく数値の差を見て、企業名から個別ページを開き、成長性・収益性・キャッシュ・安全性を横断して確認してください。
+              無料ではTOP3を確認できます。4位以降や全順位を比較したい場合は、Proで詳細を確認してください。
             </p>
           </section>
 
@@ -184,15 +173,18 @@ export default async function RankingPage({ params }: PageProps) {
         <section className="mt-8 rounded-3xl border border-white/10 bg-[#07111f] p-6 sm:p-8">
           <h2 className="text-2xl font-black">関連ランキング</h2>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {relatedRankings.map((related) => (
-              <Link
-                key={related.slug}
-                href={`/ranking/${related.slug}`}
-                className="rounded-2xl border border-white/10 bg-white/5 p-4 font-bold transition hover:border-green-400/40 hover:bg-green-500/10"
-              >
-                {related.shortTitle}<span className="ml-2 text-green-300">→</span>
-              </Link>
-            ))}
+            {relatedRankings.map((related) => {
+              const relatedPremium = isPremiumRanking(related);
+              return (
+                <Link
+                  key={related.slug}
+                  href={`/ranking/${related.slug}`}
+                  className="rounded-2xl border border-white/10 bg-white/5 p-4 font-bold transition hover:border-green-400/40 hover:bg-green-500/10"
+                >
+                  {relatedPremium ? "🔒 " : ""}{related.shortTitle}<span className="ml-2 text-green-300">→</span>
+                </Link>
+              );
+            })}
           </div>
         </section>
 
