@@ -9,6 +9,7 @@ import FeedbackButton from "@/components/feedback-button";
 import SiteNav from "@/components/site-nav";
 import CompanyTrendChartEnhancer from "@/components/company-trend-chart-enhancer";
 import ScoreExplanationInjector from "@/components/score-explanation-injector";
+import CompanyCompareFloatingButton from "@/components/company-compare-floating-button";
 import CompareTray from "@/components/compare-tray";
 
 export const metadata: Metadata = {
@@ -59,6 +60,7 @@ export default function RootLayout({
           {children}
           <CompanyTrendChartEnhancer />
           <ScoreExplanationInjector />
+          <CompanyCompareFloatingButton />
           <CompareTray />
           <FeedbackButton />
           <AuthButton />
