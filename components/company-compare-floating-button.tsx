@@ -39,7 +39,7 @@ export default function CompanyCompareFloatingButton() {
   if (!ticker || !payload) return null;
 
   return (
-    <div className="fixed right-4 top-20 z-40 sm:right-6 sm:top-24">
+    <div className="fixed left-3 top-[calc(env(safe-area-inset-top)+88px)] z-40 sm:left-6 sm:top-24">
       <CompareButton ticker={payload.ticker} name={payload.companyName} />
     </div>
   );
