@@ -158,7 +158,7 @@ function buildChart(rows: HistoryRow[], key: TrendKey) {
   }
 
   const graph = document.createElement("div");
-  graph.className = "mt-5 flex h-48 items-end gap-3 sm:h-52 sm:gap-4";
+  graph.className = "mt-8 flex h-52 items-end gap-3 sm:h-56 sm:gap-4";
 
   if (cleanRows.length === 0) {
     const empty = document.createElement("p");
@@ -172,7 +172,7 @@ function buildChart(rows: HistoryRow[], key: TrendKey) {
     const value = Number(row[key] ?? 0);
     const prev = index > 0 ? Number(cleanRows[index - 1][key] ?? NaN) : undefined;
     const diff = formatDiff(value, prev);
-    const height = Math.max(34, (Math.abs(value) / max) * 135);
+    const height = Math.max(56, (Math.abs(value) / max) * 130);
     const isLatest = row === latest;
 
     const item = document.createElement("div");
@@ -184,13 +184,13 @@ function buildChart(rows: HistoryRow[], key: TrendKey) {
 
     const bar = document.createElement("div");
     bar.className = value >= 0
-      ? `relative w-full overflow-visible rounded-t-2xl border bg-gradient-to-t from-green-500/75 to-cyan-300/90 ${isLatest ? "border-yellow-200/70 ring-2 ring-yellow-300/40" : "border-green-300/20"}`
-      : `relative w-full overflow-visible rounded-t-2xl border bg-gradient-to-t from-red-600/75 to-orange-300/90 ${isLatest ? "border-yellow-200/70 ring-2 ring-yellow-300/40" : "border-red-300/20"}`;
+      ? `relative w-full overflow-hidden rounded-t-2xl border bg-gradient-to-t from-green-500/75 to-cyan-300/90 ${isLatest ? "border-yellow-200/70 ring-2 ring-yellow-300/40" : "border-green-300/20"}`
+      : `relative w-full overflow-hidden rounded-t-2xl border bg-gradient-to-t from-red-600/75 to-orange-300/90 ${isLatest ? "border-yellow-200/70 ring-2 ring-yellow-300/40" : "border-red-300/20"}`;
     bar.style.height = `${height}px`;
     bar.title = `${displayPeriod(row)}: ${formatOku(value, "億円")} / 前年差 ${diff.amount} / ${diff.rate}`;
 
     const valueLabel = document.createElement("div");
-    valueLabel.className = "absolute -top-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-xl bg-black/65 px-2 py-1 text-center text-[10px] font-black leading-tight text-white shadow-sm backdrop-blur sm:text-xs";
+    valueLabel.className = "absolute left-1/2 top-2 z-10 -translate-x-1/2 whitespace-nowrap rounded-xl bg-black/55 px-2 py-1 text-center text-[10px] font-black leading-tight text-white shadow-sm backdrop-blur sm:text-xs";
     valueLabel.textContent = formatOku(value);
 
     bar.append(valueLabel);
@@ -214,7 +214,7 @@ function buildChart(rows: HistoryRow[], key: TrendKey) {
 
   const caption = document.createElement("p");
   caption.className = "mt-3 text-xs leading-6 text-slate-500";
-  caption.textContent = "表示は直近最大3期です。決算月が取得できた会社は○年○月期、未取得の会社は年度で表示します。";
+  caption.textContent = "表示は直近最大3期です。棒の中に金額、棒の下に前年差率を表示しています。";
 
   root.append(summary, graph, caption);
   return root;
