@@ -42,6 +42,7 @@ export function addCompareItem(item: CompareItem) {
 
 export default function CompareTray() {
   const [items, setItems] = useState<CompareItem[]>([]);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     const sync = () => setItems(readItems());
@@ -62,13 +63,23 @@ export default function CompareTray() {
   if (items.length === 0) return null;
 
   return (
-    <div className="fixed bottom-5 left-4 right-4 z-50 mx-auto max-w-3xl rounded-3xl border border-cyan-300/20 bg-[#07111f]/95 p-3 text-white shadow-2xl shadow-black/40 backdrop-blur-xl sm:left-auto sm:right-6 sm:w-[460px]">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold tracking-[0.2em] text-cyan-200">
-            比較中 {items.length}/{MAX_COMPARE}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
+    <div className="fixed right-3 top-[calc(env(safe-area-inset-top)+88px)] z-50 text-white sm:right-6 sm:top-24">
+      {open ? (
+        <div className="w-[min(340px,calc(100vw-24px))] rounded-3xl border border-cyan-300/20 bg-[#07111f]/95 p-3 shadow-2xl shadow-black/40 backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-bold tracking-[0.2em] text-cyan-200">
+              比較中 {items.length}/{MAX_COMPARE}
+            </p>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="rounded-full border border-white/10 px-3 py-1 text-xs font-bold text-slate-300 hover:bg-white/10"
+            >
+              閉じる
+            </button>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
             {items.map((item) => (
               <button
                 key={item.ticker}
@@ -81,24 +92,32 @@ export default function CompareTray() {
               </button>
             ))}
           </div>
-        </div>
 
-        <div className="flex shrink-0 flex-col gap-2">
-          <Link
-            href={href}
-            className="rounded-full bg-cyan-300 px-4 py-2 text-center text-sm font-black text-slate-950 hover:bg-cyan-200"
-          >
-            比較する
-          </Link>
-          <button
-            type="button"
-            onClick={() => writeItems([])}
-            className="text-xs font-bold text-slate-400 hover:text-white"
-          >
-            クリア
-          </button>
+          <div className="mt-4 grid grid-cols-[1fr_auto] gap-2">
+            <Link
+              href={href}
+              className="rounded-full bg-cyan-300 px-4 py-3 text-center text-sm font-black text-slate-950 hover:bg-cyan-200"
+            >
+              比較する
+            </Link>
+            <button
+              type="button"
+              onClick={() => writeItems([])}
+              className="rounded-full border border-white/10 px-4 py-3 text-xs font-bold text-slate-400 hover:bg-white/10 hover:text-white"
+            >
+              クリア
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="rounded-full border border-cyan-300/30 bg-cyan-300/15 px-4 py-3 text-sm font-black text-cyan-100 shadow-xl shadow-black/30 backdrop-blur-xl hover:bg-cyan-300/25"
+        >
+          比較 {items.length}/{MAX_COMPARE}
+        </button>
+      )}
     </div>
   );
 }
