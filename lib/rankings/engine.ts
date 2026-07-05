@@ -1,6 +1,6 @@
 import type { RankedCompany, RankingCompany, RankingDefinition } from "./types";
 
-type GrowthKey = "revenue" | "operatingIncome" | "operatingCF" | "netIncome";
+type GrowthKey = "revenue" | "grossProfit" | "operatingIncome" | "operatingCF" | "netIncome";
 
 const MIN_PRIOR_REVENUE_FOR_GROWTH_RANKING = 100_000_000;
 
@@ -10,6 +10,11 @@ function financialNumber(
 ) {
   const value = company.financials?.[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function latestHistoryNumber(company: RankingCompany, key: GrowthKey) {
+  const values = historyValues(company, key);
+  return values.length > 0 ? values.at(-1)! : null;
 }
 
 function historyValues(company: RankingCompany, key: GrowthKey) {
@@ -35,6 +40,11 @@ function latestHistoryGrowth(company: RankingCompany, key: GrowthKey) {
   return ((pair.current - pair.previous) / Math.abs(pair.previous)) * 100;
 }
 
+function ratio(numerator: number | null, denominator: number | null) {
+  if (numerator === null || denominator === null || denominator === 0) return null;
+  return (numerator / denominator) * 100;
+}
+
 function hasMeaningfulPriorRevenue(company: RankingCompany) {
   const pair = latestHistoryPair(company, "revenue");
   return pair !== null && pair.previous >= MIN_PRIOR_REVENUE_FOR_GROWTH_RANKING;
@@ -53,6 +63,16 @@ function computedOperatingMargin(company: RankingCompany) {
   return financialNumber(company, "operatingMargin");
 }
 
+function computedGrossMargin(company: RankingCompany) {
+  const storedGrossMargin = financialNumber(company, "grossMargin");
+  if (storedGrossMargin !== null) return storedGrossMargin;
+
+  return ratio(
+    financialNumber(company, "grossProfit") ?? latestHistoryNumber(company, "grossProfit"),
+    financialNumber(company, "revenue") ?? latestHistoryNumber(company, "revenue")
+  );
+}
+
 function computedRankingValue(company: RankingCompany, definition: RankingDefinition) {
   const revenueGrowth = computedRevenueGrowth(company);
 
@@ -64,9 +84,12 @@ function computedRankingValue(company: RankingCompany, definition: RankingDefini
     return revenueGrowth;
   }
 
+  if (definition.slug === "gross-margin") {
+    return computedGrossMargin(company);
+  }
+
   if (definition.slug === "gross-profit-growth") {
-    // 現状の履歴データには粗利益の年度別履歴がないため、保存済みの異常値は使わない。
-    return null;
+    return latestHistoryGrowth(company, "grossProfit");
   }
 
   if (definition.slug === "operating-income-growth") {
