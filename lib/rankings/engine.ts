@@ -5,7 +5,6 @@ type GrowthKey = "revenue" | "grossProfit" | "operatingIncome" | "operatingCF" |
 const MIN_PRIOR_REVENUE_FOR_GROWTH_RANKING = 100_000_000;
 const MAX_REASONABLE_GROSS_MARGIN = 100;
 const MIN_REASONABLE_GROSS_MARGIN = -100;
-const GROSS_PROFIT_REVENUE_TOLERANCE = 1.02;
 
 function financialNumber(
   company: RankingCompany,
@@ -56,16 +55,6 @@ function isReasonableGrossMargin(value: number | null) {
   );
 }
 
-function hasReasonableGrossProfitAndRevenue(grossProfit: number | null, revenue: number | null) {
-  if (grossProfit === null || revenue === null) return false;
-  if (revenue <= 0) return false;
-
-  // 売上総利益が売上高を大きく超える場合は、EDINETタグの取り違え・期間不一致の可能性が高い。
-  if (grossProfit > revenue * GROSS_PROFIT_REVENUE_TOLERANCE) return false;
-
-  return true;
-}
-
 function hasMeaningfulPriorRevenue(company: RankingCompany) {
   const pair = latestHistoryPair(company, "revenue");
   return pair !== null && pair.previous >= MIN_PRIOR_REVENUE_FOR_GROWTH_RANKING;
@@ -85,17 +74,15 @@ function computedOperatingMargin(company: RankingCompany) {
 }
 
 function computedGrossMargin(company: RankingCompany) {
-  const grossProfit = financialNumber(company, "grossProfit") ?? latestHistoryNumber(company, "grossProfit");
-  const revenue = financialNumber(company, "revenue") ?? latestHistoryNumber(company, "revenue");
-  const calculatedGrossMargin = hasReasonableGrossProfitAndRevenue(grossProfit, revenue)
-    ? ratio(grossProfit, revenue)
-    : null;
-
-  if (isReasonableGrossMargin(calculatedGrossMargin)) return calculatedGrossMargin;
-
   const storedGrossMargin = financialNumber(company, "grossMargin");
   if (isReasonableGrossMargin(storedGrossMargin)) return storedGrossMargin;
 
+  const calculatedGrossMargin = ratio(
+    financialNumber(company, "grossProfit") ?? latestHistoryNumber(company, "grossProfit"),
+    financialNumber(company, "revenue") ?? latestHistoryNumber(company, "revenue")
+  );
+
+  if (isReasonableGrossMargin(calculatedGrossMargin)) return calculatedGrossMargin;
   return null;
 }
 
