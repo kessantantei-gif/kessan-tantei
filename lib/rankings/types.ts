@@ -43,6 +43,11 @@ export type Financials = {
 
 export type HistoryItem = {
   year?: string | number;
+  fiscalYear?: string | number;
+  fiscalMonth?: string | number;
+  fiscalPeriod?: string;
+  fiscal_period?: string;
+  period?: string;
   revenue?: number;
   grossProfit?: number;
   operatingIncome?: number;
