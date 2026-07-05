@@ -38,6 +38,14 @@ function shortYenOku(value?: number | null) {
   return `${oku.toLocaleString("ja-JP", { maximumFractionDigits: 2 })}億`;
 }
 
+function diffYenOku(current: number, previous?: number) {
+  if (typeof previous !== "number" || !Number.isFinite(previous)) return "差額 —";
+
+  const diff = current - previous;
+  const sign = diff >= 0 ? "+" : "";
+  return `${sign}${shortYenOku(diff)}`;
+}
+
 function yoyLabel(current: number, previous?: number) {
   if (typeof previous !== "number" || !Number.isFinite(previous) || previous === 0) {
     return { text: "前年差 —", tone: "neutral" as const };
@@ -85,13 +93,14 @@ function buildRichChart(rows: HistoryRow[], keyName: keyof HistoryRow) {
   chart.className = "mt-5 rounded-2xl border border-white/10 bg-black/20 p-4";
 
   const bars = document.createElement("div");
-  bars.className = "flex h-52 items-end gap-3 sm:h-56 sm:gap-4";
+  bars.className = "flex h-60 items-end gap-3 sm:h-64 sm:gap-4";
 
   rows.forEach((row, index) => {
     const rawValue = Number(row[keyName] ?? 0);
     const previousValue = index > 0 ? Number(rows[index - 1][keyName] ?? NaN) : undefined;
     const change = yoyLabel(rawValue, previousValue);
-    const height = Math.max(58, (Math.abs(rawValue) / max) * 170);
+    const diff = diffYenOku(rawValue, previousValue);
+    const height = Math.max(78, (Math.abs(rawValue) / max) * 190);
     const isLatest = row.year === latestYear;
 
     const item = document.createElement("div");
@@ -99,24 +108,28 @@ function buildRichChart(rows: HistoryRow[], keyName: keyof HistoryRow) {
 
     const barWrap = document.createElement("div");
     barWrap.className = "relative flex w-full items-end justify-center";
-    barWrap.style.height = "180px";
+    barWrap.style.height = "205px";
 
     const bar = document.createElement("div");
     bar.className = rawValue >= 0
       ? `relative flex w-full items-start justify-center overflow-hidden rounded-t-2xl border bg-gradient-to-t from-green-500/70 to-cyan-300/90 shadow-lg shadow-green-950/20 ${isLatest ? "border-yellow-200/70 ring-2 ring-yellow-300/50" : "border-green-300/20"}`
       : `relative flex w-full items-start justify-center overflow-hidden rounded-t-2xl border bg-gradient-to-t from-red-600/70 to-orange-300/90 shadow-lg shadow-red-950/20 ${isLatest ? "border-yellow-200/70 ring-2 ring-yellow-300/50" : "border-red-300/20"}`;
     bar.style.height = `${height}px`;
-    bar.title = `${row.year ?? "—"}: ${yenOku(rawValue)} / ${change.text}`;
+    bar.title = `${row.year ?? "—"}: ${yenOku(rawValue)} / 前年差 ${diff} / ${change.text}`;
 
     const valueLabel = document.createElement("div");
     valueLabel.className = "absolute left-1 right-1 top-2 rounded-xl bg-black/50 px-1.5 py-1 text-center text-[10px] font-black leading-tight text-white backdrop-blur sm:text-xs";
     valueLabel.textContent = shortYenOku(rawValue);
 
+    const diffLabel = document.createElement("div");
+    diffLabel.className = `absolute left-1 right-1 top-10 rounded-xl border px-1.5 py-1 text-center text-[10px] font-black leading-tight backdrop-blur sm:text-xs ${changeClass(change.tone)}`;
+    diffLabel.textContent = diff;
+
     const changeLabel = document.createElement("div");
     changeLabel.className = `absolute bottom-2 left-1 right-1 rounded-xl border px-1.5 py-1 text-center text-[10px] font-black leading-tight backdrop-blur sm:text-xs ${changeClass(change.tone)}`;
     changeLabel.textContent = change.text;
 
-    bar.append(valueLabel, changeLabel);
+    bar.append(valueLabel, diffLabel, changeLabel);
     barWrap.append(bar);
 
     const year = document.createElement("div");
@@ -131,7 +144,7 @@ function buildRichChart(rows: HistoryRow[], keyName: keyof HistoryRow) {
 
   const caption = document.createElement("p");
   caption.className = "mt-3 text-xs leading-6 text-slate-500";
-  caption.textContent = "棒グラフ内の上段は金額、下段は前年差です。最新年度は黄色枠で表示しています。";
+  caption.textContent = "棒グラフ内の上段は金額、中段は前年からの増減額、下段は前年差率です。最新年度は黄色枠で表示しています。";
 
   chart.append(bars, caption);
   return chart;
