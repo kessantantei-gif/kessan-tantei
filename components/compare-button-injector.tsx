@@ -15,8 +15,14 @@ function findActionArea() {
     node.textContent?.includes("ウォッチ") || node.textContent?.includes("Watch")
   );
 
-  const area = watchButton?.closest("div.flex") as HTMLElement | null;
-  return area;
+  const watchArea = watchButton?.closest("div.flex") as HTMLElement | null;
+  if (watchArea) return watchArea;
+
+  const h1 = document.querySelector("h1");
+  const cardHeader = h1?.closest("div.rounded-3xl")?.querySelector("div.flex") as HTMLElement | null;
+  if (cardHeader) return cardHeader;
+
+  return h1?.parentElement ?? null;
 }
 
 export default function CompareButtonInjector() {
@@ -26,6 +32,7 @@ export default function CompareButtonInjector() {
   useEffect(() => {
     if (!ticker) return;
     let cancelled = false;
+    let observer: MutationObserver | null = null;
 
     fetch(`/api/company/${ticker}/score-explanation`, { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
@@ -39,6 +46,7 @@ export default function CompareButtonInjector() {
 
           const mount = document.createElement("div");
           mount.dataset.compareButtonInjected = "true";
+          mount.className = "shrink-0";
           area.prepend(mount);
           createRoot(mount).render(
             <CompareButton ticker={payload.ticker} name={payload.companyName} />
@@ -48,11 +56,17 @@ export default function CompareButtonInjector() {
         run();
         requestAnimationFrame(run);
         window.setTimeout(run, 150);
+        window.setTimeout(run, 600);
+
+        observer = new MutationObserver(run);
+        observer.observe(document.body, { childList: true, subtree: true });
+        window.setTimeout(() => observer?.disconnect(), 2500);
       })
       .catch(() => undefined);
 
     return () => {
       cancelled = true;
+      observer?.disconnect();
     };
   }, [ticker]);
 
