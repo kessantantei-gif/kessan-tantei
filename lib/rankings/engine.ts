@@ -1,39 +1,5 @@
 import type { RankedCompany, RankingCompany, RankingDefinition } from "./types";
 
-const COMPARABLE_HISTORY_BY_SLUG: Record<string, Array<"revenue" | "operatingIncome" | "operatingCF" | "netIncome">> = {
-  "revenue-growth": ["revenue"],
-  "high-growth": ["revenue"],
-  "profitable-high-growth": ["revenue"],
-  "featured-companies": ["revenue"],
-  recommended: ["revenue"],
-  "rule-of-40": ["revenue"],
-  "rule40-excellent": ["revenue"],
-  "gross-profit-growth": ["revenue"],
-  "operating-income-growth": ["operatingIncome"],
-  "net-income-growth": ["netIncome"],
-  "ocf-growth": ["operatingCF"],
-};
-
-function hasComparableHistory(
-  company: RankingCompany,
-  keys: Array<"revenue" | "operatingIncome" | "operatingCF" | "netIncome">
-) {
-  return keys.every((key) => {
-    const values = (company.history ?? [])
-      .map((item) => item[key])
-      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
-
-    return values.length >= 2;
-  });
-}
-
-function canUseRankingValue(company: RankingCompany, definition: RankingDefinition) {
-  const requiredHistoryKeys = COMPARABLE_HISTORY_BY_SLUG[definition.slug];
-
-  if (!requiredHistoryKeys) return true;
-  return hasComparableHistory(company, requiredHistoryKeys);
-}
-
 export function rankCompanies(
   companies: RankingCompany[],
   definition: RankingDefinition
@@ -41,7 +7,6 @@ export function rankCompanies(
   return companies
     .filter((company) => company.risk_level !== "EXCLUDED")
     .filter((company) => definition.include?.(company) ?? true)
-    .filter((company) => canUseRankingValue(company, definition))
     .map((company) => ({ company, value: definition.getValue(company) }))
     .filter((item): item is { company: RankingCompany; value: number } =>
       item.value !== null && Number.isFinite(item.value)
