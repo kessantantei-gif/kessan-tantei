@@ -17,7 +17,18 @@ type EdinetDocument = {
   docDescription?: string;
 };
 
+type HistoryRow = {
+  year: number;
+  revenue?: number;
+  grossProfit?: number;
+  netIncome?: number;
+  operatingIncome?: number;
+  operatingCF?: number;
+};
+
 const EDINET_BASE = "https://api.edinet-fsa.go.jp/api/v2";
+const SEARCH_DAYS = 365 * 5;
+const MAX_DOCS_PER_COMPANY = 8;
 
 const supabaseUrl =
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -75,15 +86,29 @@ function historyRowFromFacts(year: number, facts: Partial<FinancialFacts>) {
   };
 }
 
-function buildHistory(currentYear: number, current: FinancialFacts, prior: FinancialFacts) {
-  const rows = [];
+function mergeHistoryRows(base: HistoryRow | undefined, incoming: HistoryRow) {
+  return {
+    ...(base ?? {}),
+    ...incoming,
+    year: incoming.year,
+  };
+}
 
-  if (hasAnyFinancialValue(prior)) {
-    rows.push(historyRowFromFacts(currentYear - 1, prior));
-  }
+function latestCompleteHistory(history: HistoryRow[]) {
+  return [...history]
+    .sort((a, b) => b.year - a.year)
+    .find(
+      (row) =>
+        typeof row.revenue === "number" ||
+        typeof row.operatingIncome === "number" ||
+        typeof row.operatingCF === "number"
+    );
+}
 
-  rows.push(historyRowFromFacts(currentYear, current));
-  return rows;
+function priorHistoryRow(history: HistoryRow[], latestYear: number) {
+  return [...history]
+    .filter((row) => row.year < latestYear)
+    .sort((a, b) => b.year - a.year)[0];
 }
 
 async function fetchDocuments(date: string) {
@@ -104,19 +129,21 @@ async function fetchDocuments(date: string) {
 
 async function findDocs(ticker: string) {
   const found: { date: string; doc: EdinetDocument }[] = [];
+  const seenDocIds = new Set<string>();
 
-  for (let i = 0; i < 730; i++) {
+  for (let i = 0; i < SEARCH_DAYS; i++) {
     const date = daysAgo(i);
     const docs = await fetchDocuments(date);
 
     for (const doc of docs) {
       const secCode = doc.secCode?.slice(0, 4);
-      if (secCode === ticker && shouldProcessDoc(doc)) {
+      if (secCode === ticker && shouldProcessDoc(doc) && !seenDocIds.has(doc.docID)) {
+        seenDocIds.add(doc.docID);
         found.push({ date, doc });
       }
     }
 
-    if (found.length >= 5) break;
+    if (found.length >= MAX_DOCS_PER_COMPANY) break;
   }
 
   return found;
@@ -160,6 +187,20 @@ function dangerScoreFromSignals(signals: { level: string }[]) {
   );
 }
 
+function factsFromHistory(row: HistoryRow | undefined): FinancialFacts {
+  return {
+    revenue: row?.revenue ?? null,
+    grossProfit: row?.grossProfit ?? null,
+    netIncome: row?.netIncome ?? null,
+    operatingIncome: row?.operatingIncome ?? null,
+    operatingCF: row?.operatingCF ?? null,
+    cash: null,
+    currentLiabilities: null,
+    assets: null,
+    netAssets: null,
+  };
+}
+
 async function main() {
   const { data, error } = await supabase
     .from("company_analyses")
@@ -173,7 +214,7 @@ async function main() {
     const history = Array.isArray(row.history) ? row.history : [];
 
     return (
-      history.length < 2 ||
+      history.length < 3 ||
       isZero(f.revenue) ||
       isZero(f.operatingIncome) ||
       isZero(f.operatingCF) ||
@@ -204,71 +245,95 @@ async function main() {
       }
 
       let usedDocId = row.doc_id;
-      let selected: {
-        current: FinancialFacts;
-        prior: FinancialFacts;
-        financials: ReturnType<typeof calculateFinancialMetrics>;
-      } | null = null;
+      const historyByYear = new Map<number, HistoryRow>();
+      let latestCurrent: FinancialFacts | null = null;
+      let latestPrior: FinancialFacts | null = null;
+      let latestFinancials: ReturnType<typeof calculateFinancialMetrics> | null = null;
 
       for (const item of docs) {
         const zipBuffer = await fetchCsvZip(item.doc.docID);
         const rows = extractRowsFromEdinetCsvZip(zipBuffer);
         const extracted = extractFinancials(rows);
-        const nf = extracted.current;
-        const calculated = calculateFinancialMetrics(nf, extracted.prior);
+        const current = extracted.current;
+        const prior = extracted.prior;
 
         if (
-          nf.revenue === null &&
-          nf.operatingIncome === null &&
-          nf.operatingCF === null &&
-          nf.cash === null &&
-          nf.assets === null &&
-          nf.netAssets === null
+          current.revenue === null &&
+          current.operatingIncome === null &&
+          current.operatingCF === null &&
+          current.cash === null &&
+          current.assets === null &&
+          current.netAssets === null
         ) {
           continue;
         }
 
-        selected = {
-          current: nf,
-          prior: extracted.prior,
-          financials: calculated,
-        };
-        usedDocId = item.doc.docID;
-        break;
+        const filingYear = new Date(item.date).getFullYear();
+
+        if (hasAnyFinancialValue(prior)) {
+          const priorRow = historyRowFromFacts(filingYear - 1, prior);
+          historyByYear.set(
+            filingYear - 1,
+            mergeHistoryRows(historyByYear.get(filingYear - 1), priorRow)
+          );
+        }
+
+        if (hasAnyFinancialValue(current)) {
+          const currentRow = historyRowFromFacts(filingYear, current);
+          historyByYear.set(
+            filingYear,
+            mergeHistoryRows(historyByYear.get(filingYear), currentRow)
+          );
+        }
+
+        if (!latestCurrent) {
+          latestCurrent = current;
+          latestPrior = prior;
+          latestFinancials = calculateFinancialMetrics(current, prior);
+          usedDocId = item.doc.docID;
+        }
       }
 
-      if (!selected) {
-        console.log("  財務数値を取得できず");
+      const history = [...historyByYear.values()].sort((a, b) => a.year - b.year);
+
+      if (!latestCurrent || !latestFinancials || history.length === 0) {
+        console.log("  財務履歴を取得できず");
         skipped += 1;
         continue;
       }
 
-      const f = selected.current;
-      const calculated = selected.financials;
+      const latestRow = latestCompleteHistory(history);
+      const priorRow = latestRow ? priorHistoryRow(history, latestRow.year) : undefined;
+      const recalculated = latestRow
+        ? calculateFinancialMetrics(factsFromHistory(latestRow), factsFromHistory(priorRow))
+        : latestFinancials;
+      const f = latestCurrent;
       const financials = {
         ...(row.financials ?? {}),
-        ...calculated,
+        ...latestFinancials,
+        ...recalculated,
       };
 
       const monthlyCashBurn =
         f.operatingCF !== null && f.operatingCF < 0 ? Math.abs(f.operatingCF) / 12 : 0;
 
       const score = scoreCompany({
-        revenueGrowth: calculated.revenueGrowth,
-        grossProfitGrowth: calculated.grossProfitGrowth,
-        operatingMargin: calculated.operatingMargin,
-        ebitdaMargin: calculated.operatingMargin,
-        ocfMargin: calculated.operatingCFMargin,
+        revenueGrowth: recalculated.revenueGrowth,
+        grossProfitGrowth: recalculated.grossProfitGrowth,
+        operatingMargin: recalculated.operatingMargin ?? latestFinancials.operatingMargin,
+        ebitdaMargin: recalculated.operatingMargin ?? latestFinancials.operatingMargin,
+        ocfMargin: recalculated.operatingCFMargin ?? latestFinancials.operatingCFMargin,
         ruleOf40:
-          calculated.revenueGrowth !== undefined && calculated.operatingMargin !== undefined
-            ? calculated.revenueGrowth + calculated.operatingMargin
+          recalculated.revenueGrowth !== undefined &&
+          (recalculated.operatingMargin ?? latestFinancials.operatingMargin) !== undefined
+            ? recalculated.revenueGrowth + (recalculated.operatingMargin ?? latestFinancials.operatingMargin ?? 0)
             : undefined,
         operatingCashFlows: f.operatingCF === null ? [] : [f.operatingCF],
         operatingIncomes: f.operatingIncome === null ? [] : [f.operatingIncome],
         cash: f.cash ?? undefined,
         monthlyCashBurn,
         currentLiabilities: f.currentLiabilities ?? undefined,
-        equityRatio: calculated.equityRatio,
+        equityRatio: latestFinancials.equityRatio,
         hasMsWarrant: false,
         equityFinancingCountLast3Years: 0,
         warrantTrend: "none",
@@ -318,14 +383,14 @@ async function main() {
             riskLevel,
             dangerScore,
           },
-          history: buildHistory(new Date().getFullYear(), selected.current, selected.prior),
+          history,
           updated_at: new Date().toISOString(),
         })
         .eq("ticker", ticker);
 
       console.log("  updated", {
         doc_id: usedDocId,
-        history: buildHistory(new Date().getFullYear(), selected.current, selected.prior),
+        historyYears: history.map((item) => item.year),
       });
       updated += 1;
     } catch (error) {
