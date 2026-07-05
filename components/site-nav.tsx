@@ -25,7 +25,7 @@ export default function SiteNav() {
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-2 sm:gap-4 sm:px-8 sm:py-3">
         <Link
           href="/"
-          className="flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full px-1 text-sm font-black tracking-tight text-white transition hover:text-green-300 active:scale-95 sm:px-0 sm:text-base"
+          className="flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full px-1 text-xl font-black tracking-tight text-white transition hover:text-green-300 active:scale-95 sm:px-0 sm:text-2xl"
           aria-label="決算探偵トップへ"
         >
           決算探偵
