@@ -1,5 +1,44 @@
 import type { RankedCompany, RankingCompany, RankingDefinition } from "./types";
 
+const GROWTH_RANKING_SLUGS = new Set([
+  "revenue-growth",
+  "high-growth",
+  "profitable-high-growth",
+  "featured-companies",
+  "recommended",
+  "rule-of-40",
+  "rule40-excellent",
+  "gross-profit-growth",
+  "operating-income-growth",
+  "net-income-growth",
+  "ocf-growth",
+]);
+
+const SUSPICIOUS_ONE_YEAR_GROWTH_THRESHOLD = 500;
+
+function comparableHistoryCount(
+  company: RankingCompany,
+  key: "revenue" | "operatingIncome" | "operatingCF" | "netIncome"
+) {
+  return (company.history ?? [])
+    .map((item) => item[key])
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value))
+    .length;
+}
+
+function isSuspiciousOneYearGrowth(
+  company: RankingCompany,
+  definition: RankingDefinition,
+  value: number
+) {
+  if (!GROWTH_RANKING_SLUGS.has(definition.slug)) return false;
+
+  const historyCount = comparableHistoryCount(company, "revenue");
+
+  if (historyCount >= 2) return false;
+  return Math.abs(value) >= SUSPICIOUS_ONE_YEAR_GROWTH_THRESHOLD;
+}
+
 export function rankCompanies(
   companies: RankingCompany[],
   definition: RankingDefinition
@@ -11,6 +50,7 @@ export function rankCompanies(
     .filter((item): item is { company: RankingCompany; value: number } =>
       item.value !== null && Number.isFinite(item.value)
     )
+    .filter((item) => !isSuspiciousOneYearGrowth(item.company, definition, item.value))
     .sort((a, b) =>
       definition.direction === "desc" ? b.value - a.value : a.value - b.value
     )
