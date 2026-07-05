@@ -61,10 +61,38 @@ function yoyLabel(current: number, previous?: number) {
   };
 }
 
+function trendSummary(rows: HistoryRow[], keyName: keyof HistoryRow) {
+  const latest = rows.at(-1);
+  const previous = rows.length >= 2 ? rows.at(-2) : undefined;
+  const latestValue = Number(latest?.[keyName] ?? NaN);
+  const previousValue = Number(previous?.[keyName] ?? NaN);
+  const change = yoyLabel(latestValue, previousValue);
+  const diff = diffYenOku(latestValue, previousValue);
+
+  let verdict = "横ばい";
+  if (change.tone === "up") verdict = "改善・拡大";
+  if (change.tone === "down") verdict = "悪化・縮小";
+  if (!Number.isFinite(latestValue)) verdict = "データ不足";
+
+  return {
+    latestYear: latest?.year ?? "最新",
+    latestValue,
+    diff,
+    change,
+    verdict,
+  };
+}
+
 function changeClass(tone: "up" | "down" | "neutral") {
   if (tone === "up") return "border-green-300/30 bg-green-950/70 text-green-200";
   if (tone === "down") return "border-red-300/30 bg-red-950/70 text-red-200";
   return "border-white/10 bg-black/55 text-slate-300";
+}
+
+function summaryToneClass(tone: "up" | "down" | "neutral") {
+  if (tone === "up") return "border-green-300/25 bg-green-500/10 text-green-200";
+  if (tone === "down") return "border-red-300/25 bg-red-500/10 text-red-200";
+  return "border-white/10 bg-white/5 text-slate-300";
 }
 
 function findTrendPanel(title: string) {
@@ -112,6 +140,37 @@ function addScaleGuide(chartBody: HTMLDivElement, max: number) {
   chartBody.append(guide);
 }
 
+function addSummary(chart: HTMLDivElement, rows: HistoryRow[], keyName: keyof HistoryRow) {
+  const summary = trendSummary(rows, keyName);
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "mb-4 grid gap-2 sm:grid-cols-3";
+
+  const cards = [
+    { label: `${summary.latestYear} 最新値`, value: yenOku(summary.latestValue), className: "border-cyan-300/20 bg-cyan-500/10 text-cyan-100" },
+    { label: "前年増減", value: `${summary.diff} / ${summary.change.text}`, className: summaryToneClass(summary.change.tone) },
+    { label: "トレンド判定", value: summary.verdict, className: summaryToneClass(summary.change.tone) },
+  ];
+
+  for (const card of cards) {
+    const node = document.createElement("div");
+    node.className = `rounded-2xl border p-3 ${card.className}`;
+
+    const label = document.createElement("p");
+    label.className = "text-[10px] font-bold tracking-[0.18em] opacity-70";
+    label.textContent = card.label;
+
+    const value = document.createElement("p");
+    value.className = "mt-1 text-sm font-black sm:text-base";
+    value.textContent = card.value;
+
+    node.append(label, value);
+    wrapper.append(node);
+  }
+
+  chart.append(wrapper);
+}
+
 function buildRichChart(rows: HistoryRow[], keyName: keyof HistoryRow) {
   const values = rows.map((row) => Math.abs(Number(row[keyName] ?? 0)));
   const max = Math.max(...values, 1);
@@ -120,6 +179,8 @@ function buildRichChart(rows: HistoryRow[], keyName: keyof HistoryRow) {
   const chart = document.createElement("div");
   chart.dataset.trendValues = "true";
   chart.className = "mt-5 rounded-2xl border border-white/10 bg-black/20 p-4";
+
+  addSummary(chart, rows, keyName);
 
   const chartBody = document.createElement("div");
   chartBody.className = "relative";
