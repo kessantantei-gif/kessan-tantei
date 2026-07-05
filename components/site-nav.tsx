@@ -4,8 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-  { href: "/ranking", label: "ランキング", shortLabel: "ランキング" },
+  { href: "/ranking", label: "ランキング", shortLabel: "順位" },
   { href: "/news", label: "ニュース", shortLabel: "ニュース" },
+  { href: "/data-quality", label: "データ品質", shortLabel: "品質" },
   { href: "/pricing", label: "初月100円Pro", shortLabel: "Pro", accent: true },
 ];
 
@@ -35,7 +36,7 @@ export default function SiteNav() {
           {navItems.map((item) => {
             const active = isActivePath(pathname, item.href);
             const baseClass =
-              "flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-2.5 py-2 transition duration-150 ease-out active:scale-95 sm:px-4";
+              "flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-2 py-2 transition duration-150 ease-out active:scale-95 sm:px-4";
             const normalClass = item.accent
               ? "border-yellow-300/70 bg-yellow-400 text-slate-950 shadow-sm shadow-yellow-400/20 hover:bg-yellow-300 active:bg-yellow-500"
               : "border-white/10 bg-white/5 text-slate-300 hover:border-green-400/40 hover:bg-white/10 hover:text-white active:bg-white/15";
