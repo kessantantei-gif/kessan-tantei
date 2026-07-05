@@ -1,7 +1,7 @@
 import Link from "next/link";
 import MetricBadge from "@/components/MetricBadge";
 import CompareButton from "@/components/compare-button";
-import type { RankedCompany, RankingDefinition } from "@/lib/rankings/types";
+import type { RankedCompany, RankingDefinition, RankingCompany } from "@/lib/rankings/types";
 
 const FREE_VISIBLE_RANKING_LIMIT = 3;
 const LOCKED_PREVIEW_LIMIT = 6;
@@ -34,6 +34,28 @@ function rankIcon(index: number) {
   if (index === 1) return "🥈";
   if (index === 2) return "🥉";
   return `#${index + 1}`;
+}
+
+function historyYear(row: unknown) {
+  if (!row || typeof row !== "object") return null;
+  const item = row as { fiscalYear?: string | number; year?: string | number };
+  const value = Number(item.fiscalYear ?? item.year);
+  return Number.isFinite(value) ? value : null;
+}
+
+function hasFiscalGap(company: RankingCompany) {
+  const years = (company.history ?? [])
+    .map(historyYear)
+    .filter((year): year is number => year !== null)
+    .sort((a, b) => a - b);
+
+  if (years.length < 2) return false;
+
+  for (let i = 1; i < years.length; i += 1) {
+    if (years[i] - years[i - 1] > 1) return true;
+  }
+
+  return false;
 }
 
 function EmptyRankingState({ definition }: { definition: RankingDefinition }) {
@@ -139,6 +161,7 @@ export default function RankingResults({ definition, rankings, isPro = false }: 
 
   const visibleRankings = isPro ? rankings : rankings.slice(0, FREE_VISIBLE_RANKING_LIMIT);
   const lockedRankings = isPro ? [] : rankings.slice(FREE_VISIBLE_RANKING_LIMIT);
+  const requiresComparison = COMPARISON_REQUIRED_SLUGS.has(definition.slug);
 
   return (
     <div>
@@ -158,35 +181,51 @@ export default function RankingResults({ definition, rankings, isPro = false }: 
       ) : null}
 
       <ol className="space-y-4">
-        {visibleRankings.map(({ company, value, comment }, index) => (
-          <li key={company.ticker}>
-            <div className="grid gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 transition hover:border-green-400/40 hover:bg-white/10 sm:p-5 lg:grid-cols-[72px_minmax(180px,1fr)_180px_minmax(220px,1.2fr)_150px] lg:items-center">
-              <Link href={`/company/${company.ticker}`} className="contents">
-                <div className="flex items-center gap-3 lg:block">
-                  <span className="text-xs font-bold text-slate-500 lg:hidden">順位</span>
-                  <span className="text-3xl font-black text-slate-300">{rankIcon(index)}</span>
+        {visibleRankings.map(({ company, value, comment }, index) => {
+          const showFiscalGapNotice = requiresComparison && hasFiscalGap(company);
+
+          return (
+            <li key={company.ticker}>
+              <div className="grid gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 transition hover:border-green-400/40 hover:bg-white/10 sm:p-5 lg:grid-cols-[72px_minmax(180px,1fr)_180px_minmax(220px,1.2fr)_150px] lg:items-center">
+                <Link href={`/company/${company.ticker}`} className="contents">
+                  <div className="flex items-center gap-3 lg:block">
+                    <span className="text-xs font-bold text-slate-500 lg:hidden">順位</span>
+                    <span className="text-3xl font-black text-slate-300">{rankIcon(index)}</span>
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-black sm:text-xl">{company.company_name}</p>
+                    <p className="mt-1 text-sm text-slate-500">証券コード {company.ticker}</p>
+                    {showFiscalGapNotice ? (
+                      <p className="mt-2 inline-flex rounded-full border border-yellow-300/25 bg-yellow-400/10 px-3 py-1 text-[11px] font-bold text-yellow-100">
+                        比較年度に飛びあり
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <MetricBadge
+                    label={definition.metricLabel}
+                    value={definition.formatValue(value)}
+                    tone={definition.metricTone}
+                  />
+
+                  <div className="text-sm leading-6 text-slate-300">
+                    <p>{comment}</p>
+                    {showFiscalGapNotice ? (
+                      <p className="mt-2 text-xs leading-5 text-yellow-100/90">
+                        ※ 比較年度が連続していない可能性があります。成長率を見る際は会社ページの推移表も確認してください。
+                      </p>
+                    ) : null}
+                  </div>
+                </Link>
+
+                <div className="flex justify-start lg:justify-end">
+                  <CompareButton ticker={company.ticker} name={company.company_name} />
                 </div>
-
-                <div className="min-w-0">
-                  <p className="truncate text-lg font-black sm:text-xl">{company.company_name}</p>
-                  <p className="mt-1 text-sm text-slate-500">証券コード {company.ticker}</p>
-                </div>
-
-                <MetricBadge
-                  label={definition.metricLabel}
-                  value={definition.formatValue(value)}
-                  tone={definition.metricTone}
-                />
-
-                <p className="text-sm leading-6 text-slate-300">{comment}</p>
-              </Link>
-
-              <div className="flex justify-start lg:justify-end">
-                <CompareButton ticker={company.ticker} name={company.company_name} />
               </div>
-            </div>
-          </li>
-        ))}
+            </li>
+          );
+        })}
 
         {lockedRankings.slice(0, LOCKED_PREVIEW_LIMIT).map((_item, index) => (
           <LockedRankingRow key={`locked-${index}`} index={index + FREE_VISIBLE_RANKING_LIMIT} />
