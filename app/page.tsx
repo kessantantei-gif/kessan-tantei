@@ -117,6 +117,12 @@ export default async function HomePage() {
 
           <div className="flex items-center gap-2">
             <Link
+              href="/ranking"
+              className="rounded-full border border-green-400/20 bg-green-500/10 px-4 py-2 text-sm font-bold text-green-300 hover:bg-green-500/20"
+            >
+              ランキング
+            </Link>
+            <Link
               href="/news"
               className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-sm font-bold text-cyan-300 hover:bg-cyan-500/20"
             >
@@ -150,6 +156,21 @@ export default async function HomePage() {
             「伸びている会社」と「注意すべき会社」を見える化します。
           </p>
 
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link
+              href="/ranking"
+              className="inline-flex items-center rounded-2xl bg-green-400 px-5 py-3 font-black text-slate-950 transition hover:bg-green-300"
+            >
+              決算ランキングを見る →
+            </Link>
+            <Link
+              href="/about-growth"
+              className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-5 py-3 font-bold text-slate-300 transition hover:border-white/20 hover:text-white"
+            >
+              ランキングの考え方
+            </Link>
+          </div>
+
           <div className="mt-6 max-w-3xl">
             <CompanySearch companies={searchCompanies} />
           </div>
@@ -169,6 +190,28 @@ export default async function HomePage() {
             </div>
           </div>
         </div>
+
+        <Link
+          href="/ranking"
+          className="group mt-6 block rounded-3xl border border-green-400/20 bg-gradient-to-br from-green-500/15 to-cyan-500/5 p-6 backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-green-300/50 sm:p-8"
+        >
+          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+            <div>
+              <p className="text-xs font-bold tracking-[0.25em] text-green-300">
+                RANKING PORTAL
+              </p>
+              <h2 className="mt-3 text-2xl font-black sm:text-3xl">
+                決算ランキングから企業を比べる
+              </h2>
+              <p className="mt-3 max-w-3xl leading-7 text-slate-300">
+                財務スコア、成長性、収益性、営業CF、安全性、リスクシグナルなど、気になる観点からグロース企業を比較できます。
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full bg-green-400 px-5 py-3 font-black text-slate-950 transition group-hover:bg-green-300">
+              一覧を見る →
+            </span>
+          </div>
+        </Link>
 
         <div className="mt-6 grid gap-5 lg:grid-cols-2">
           <RankingCard

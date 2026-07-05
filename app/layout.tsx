@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/react";
@@ -50,14 +51,38 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="ja">
-       <body>
-  {children}
-  <FeedbackButton />
-  <AuthButton />
-  <Toaster richColors position="top-right" />
-  <Analytics />
-  <SpeedInsights />
-</body>
+        <body>
+          <nav
+            aria-label="グローバルナビゲーション"
+            className="border-b border-white/10 bg-[#050816] text-white"
+          >
+            <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-8">
+              <Link href="/" className="font-black tracking-tight hover:text-green-300">
+                決算探偵
+              </Link>
+              <div className="flex items-center gap-2 text-sm font-bold">
+                <Link
+                  href="/ranking"
+                  className="rounded-full border border-green-400/30 bg-green-500/10 px-4 py-2 text-green-300 transition hover:bg-green-500/20 hover:text-green-200"
+                >
+                  ランキング
+                </Link>
+                <Link
+                  href="/news"
+                  className="rounded-full px-3 py-2 text-slate-300 transition hover:bg-white/5 hover:text-white"
+                >
+                  ニュース
+                </Link>
+              </div>
+            </div>
+          </nav>
+          {children}
+          <FeedbackButton />
+          <AuthButton />
+          <Toaster richColors position="top-right" />
+          <Analytics />
+          <SpeedInsights />
+        </body>
       </html>
     </ClerkProvider>
   );
