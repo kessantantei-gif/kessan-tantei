@@ -3,6 +3,7 @@ import MetricBadge from "@/components/MetricBadge";
 import type { RankedCompany, RankingDefinition } from "@/lib/rankings/types";
 
 const FREE_VISIBLE_RANKING_LIMIT = 3;
+const LOCKED_PREVIEW_LIMIT = 6;
 
 type Props = {
   definition: RankingDefinition;
@@ -10,30 +11,41 @@ type Props = {
   isPro?: boolean;
 };
 
+function rankIcon(index: number) {
+  if (index === 0) return "🥇";
+  if (index === 1) return "🥈";
+  if (index === 2) return "🥉";
+  return `#${index + 1}`;
+}
+
 function LockedRankingRow({ index }: { index: number }) {
   return (
     <li>
-      <div className="grid gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 opacity-90 sm:p-5 lg:grid-cols-[72px_minmax(180px,1fr)_180px_minmax(220px,1.2fr)_24px] lg:items-center">
-        <div className="flex items-center gap-3 lg:block">
-          <span className="text-xs font-bold text-slate-500 lg:hidden">順位</span>
-          <span className="text-3xl font-black text-slate-500">#{index + 1}</span>
-        </div>
+      <div className="relative overflow-hidden rounded-2xl border border-yellow-300/15 bg-white/[0.04] p-4 opacity-95 sm:p-5">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(110deg,transparent,rgba(250,204,21,0.08),transparent)]" />
+        <div className="relative grid gap-4 lg:grid-cols-[72px_minmax(180px,1fr)_180px_minmax(220px,1.2fr)_24px] lg:items-center">
+          <div className="flex items-center gap-3 lg:block">
+            <span className="text-xs font-bold text-slate-500 lg:hidden">順位</span>
+            <span className="text-3xl font-black text-yellow-200/80">#{index + 1}</span>
+          </div>
 
-        <div className="min-w-0 space-y-2">
-          <div className="h-5 w-36 rounded-full bg-white/15 blur-[1px]" />
-          <div className="h-3 w-24 rounded-full bg-white/10 blur-[1px]" />
-        </div>
+          <div className="min-w-0 space-y-2" aria-hidden="true">
+            <div className="h-5 w-40 rounded-full bg-white/15 blur-[1px]" />
+            <div className="h-3 w-28 rounded-full bg-white/10 blur-[1px]" />
+          </div>
 
-        <div className="rounded-2xl border border-yellow-400/20 bg-yellow-400/10 px-4 py-3 text-center text-xs font-black text-yellow-200">
-          🔒 Pro限定
-        </div>
+          <div className="rounded-2xl border border-yellow-400/25 bg-yellow-400/10 px-4 py-3 text-center text-xs font-black text-yellow-100 shadow-inner shadow-yellow-950/20">
+            🔒 Pro限定
+          </div>
 
-        <div className="space-y-2">
-          <div className="h-3 w-full rounded-full bg-white/10 blur-[1px]" />
-          <div className="h-3 w-3/4 rounded-full bg-white/10 blur-[1px]" />
-        </div>
+          <div className="space-y-2" aria-hidden="true">
+            <div className="h-3 w-full rounded-full bg-white/10 blur-[1px]" />
+            <div className="h-3 w-4/5 rounded-full bg-white/10 blur-[1px]" />
+            <div className="h-3 w-2/3 rounded-full bg-white/10 blur-[1px]" />
+          </div>
 
-        <span className="hidden text-yellow-300 lg:block" aria-hidden="true">🔒</span>
+          <span className="hidden text-yellow-300 lg:block" aria-hidden="true">🔒</span>
+        </div>
       </div>
     </li>
   );
@@ -43,26 +55,39 @@ function RankingUpgradeCard({ lockedCount }: { lockedCount: number }) {
   if (lockedCount <= 0) return null;
 
   return (
-    <div className="mt-6 rounded-3xl border border-yellow-300/30 bg-yellow-400/10 p-6 text-center shadow-2xl shadow-yellow-950/20 sm:p-8">
-      <p className="text-xs font-black tracking-[0.28em] text-yellow-200">PRO RANKING</p>
-      <h2 className="mt-3 text-2xl font-black text-white sm:text-3xl">
-        残り{lockedCount}社を見る
-      </h2>
-      <p className="mt-3 leading-7 text-slate-300">
-        決算探偵Proなら、全順位・詳細コメント・関連ランキング・財務分析・リスク分析をまとめて確認できます。
-      </p>
-      <div className="mt-5 flex flex-wrap justify-center gap-2 text-sm font-bold text-yellow-100">
-        <span className="rounded-full bg-white/10 px-3 py-1">全順位</span>
-        <span className="rounded-full bg-white/10 px-3 py-1">詳細コメント</span>
-        <span className="rounded-full bg-white/10 px-3 py-1">財務分析</span>
-        <span className="rounded-full bg-white/10 px-3 py-1">リスク分析</span>
+    <div className="mt-6 overflow-hidden rounded-3xl border border-yellow-300/35 bg-gradient-to-br from-yellow-400/18 via-yellow-400/10 to-white/[0.03] p-[1px] shadow-2xl shadow-yellow-950/20">
+      <div className="rounded-3xl bg-[#080b14]/90 p-6 text-center sm:p-8">
+        <p className="text-xs font-black tracking-[0.28em] text-yellow-200">PRO RANKING</p>
+        <h2 className="mt-3 text-2xl font-black text-white sm:text-4xl">
+          残り{lockedCount}社の順位を見る
+        </h2>
+        <p className="mx-auto mt-4 max-w-2xl leading-8 text-slate-300">
+          4位以降の会社名・数値・コメントはPro限定です。決算探偵Proなら、全順位を見ながら企業ページの財務分析・リスク分析まで一気に確認できます。
+        </p>
+
+        <div className="mx-auto mt-6 grid max-w-3xl gap-3 text-left sm:grid-cols-2">
+          {[
+            "全順位と全社コメント",
+            "企業ページの詳細財務分析",
+            "リスクシグナルの内訳",
+            "関連ランキングからの深掘り",
+          ].map((item) => (
+            <div key={item} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-yellow-50">
+              ✓ {item}
+            </div>
+          ))}
+        </div>
+
+        <Link
+          href="/pricing"
+          className="mt-7 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-yellow-400 px-6 py-3 text-sm font-black text-slate-950 transition hover:bg-yellow-300 active:scale-95 sm:w-auto sm:text-base"
+        >
+          初月100円で続きを見る
+        </Link>
+        <p className="mt-3 text-xs leading-6 text-slate-500">
+          本サービスは投資助言ではありません。決算情報の理解を補助する分析ツールです。
+        </p>
       </div>
-      <Link
-        href="/pricing"
-        className="mt-6 inline-flex min-h-11 items-center justify-center rounded-full bg-yellow-400 px-6 py-3 text-sm font-black text-slate-950 transition hover:bg-yellow-300 active:scale-95"
-      >
-        初月100円でProを始める
-      </Link>
     </div>
   );
 }
@@ -85,9 +110,17 @@ export default function RankingResults({ definition, rankings, isPro = false }: 
   return (
     <div>
       {!isPro ? (
-        <div className="mb-5 rounded-2xl border border-green-400/20 bg-green-500/10 px-5 py-4 text-sm leading-7 text-slate-300">
-          <strong className="text-green-200">TOP3無料。</strong>
-          4位以降の会社名・数値・コメントはPro限定です。
+        <div className="mb-5 rounded-3xl border border-green-400/25 bg-green-500/10 p-5 text-sm leading-7 text-slate-300 sm:flex sm:items-center sm:justify-between sm:gap-4">
+          <div>
+            <strong className="text-green-200">TOP3無料。</strong>
+            4位以降の会社名・数値・コメントはPro限定です。
+          </div>
+          <Link
+            href="/pricing"
+            className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full border border-green-300/40 px-4 py-2 text-xs font-black text-green-100 transition hover:bg-green-400/10 active:scale-95 sm:mt-0"
+          >
+            Proを見る
+          </Link>
         </div>
       ) : null}
 
@@ -100,7 +133,7 @@ export default function RankingResults({ definition, rankings, isPro = false }: 
             >
               <div className="flex items-center gap-3 lg:block">
                 <span className="text-xs font-bold text-slate-500 lg:hidden">順位</span>
-                <span className="text-3xl font-black text-slate-400">#{index + 1}</span>
+                <span className="text-3xl font-black text-slate-300">{rankIcon(index)}</span>
               </div>
 
               <div className="min-w-0">
@@ -120,7 +153,7 @@ export default function RankingResults({ definition, rankings, isPro = false }: 
           </li>
         ))}
 
-        {lockedRankings.slice(0, 6).map((_item, index) => (
+        {lockedRankings.slice(0, LOCKED_PREVIEW_LIMIT).map((_item, index) => (
           <LockedRankingRow key={`locked-${index}`} index={index + FREE_VISIBLE_RANKING_LIMIT} />
         ))}
       </ol>
