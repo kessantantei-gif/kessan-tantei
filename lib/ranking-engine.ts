@@ -13,7 +13,24 @@ export type RankingCompany = {
   revenue: number;
   operatingIncome: number;
   operatingCF: number;
+  financials?: CalculatedFinancialMetrics;
 };
+
+export function rankByFinancialMetric(
+  companies: RankingCompany[],
+  metric: keyof CalculatedFinancialMetrics,
+  direction: "asc" | "desc" = "desc"
+) {
+  return companies
+    .map((company) => ({ company, value: company.financials?.[metric] }))
+    .filter(
+      (item): item is { company: RankingCompany; value: number } =>
+        typeof item.value === "number" && Number.isFinite(item.value)
+    )
+    .sort((a, b) =>
+      direction === "desc" ? b.value - a.value : a.value - b.value
+    );
+}
 
 export function rankingModeLabel(mode: RankingMode) {
   if (mode === "safe_growth") return "安全成長ランキング";
@@ -64,3 +81,4 @@ export function applyRankingMode(
     return a.dangerScore - b.dangerScore;
   });
 }
+import type { CalculatedFinancialMetrics } from "./financial-metrics";

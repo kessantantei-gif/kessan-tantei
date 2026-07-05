@@ -34,8 +34,33 @@ export function classifyAuditor(name?: string | null): AuditFirmType {
   return "unknown";
 }
 
+export function hasAuditorChanged(signals: DisclosureSignals) {
+  const previous = normalize(signals.previousAuditorName);
+  const current = normalize(signals.currentAuditorName);
+  return Boolean(previous && current && previous !== current);
+}
+
 export function parseDisclosureSignals(docID: string): DisclosureSignals {
   const rawText = readEdinetText(docID);
+  return parseDisclosureSignalsFromText(rawText, docID);
+}
+
+export function parseDisclosureSignalsFromBuffer(buffer: Buffer): DisclosureSignals {
+  const zip = new AdmZip(buffer);
+  const rawText = zip
+    .getEntries()
+    .filter(
+      (entry) =>
+        !entry.entryName.includes("/fuzoku/") &&
+        /\.(xbrl|html?|xml)$/i.test(entry.entryName)
+    )
+    .map((entry) => entry.getData().toString("utf8"))
+    .join("\n");
+
+  return parseDisclosureSignalsFromText(rawText, "buffer");
+}
+
+function parseDisclosureSignalsFromText(rawText: string, source: string): DisclosureSignals {
   const text = normalize(rawText);
 
   const goingConcern = detectGoingConcern(text);
@@ -45,7 +70,7 @@ export function parseDisclosureSignals(docID: string): DisclosureSignals {
 
   if (process.env.DEBUG_DISCLOSURE === "1") {
     console.log("===== Disclosure Debug =====");
-    console.log("docID:", docID);
+    console.log("source:", source);
     console.log("goingConcern:", goingConcern);
     console.log("msWarrant:", msWarrant);
     console.log("convertibleBond:", convertibleBond);

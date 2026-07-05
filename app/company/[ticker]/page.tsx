@@ -378,6 +378,32 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
               <Metric label="営業利益" value={yenOku(financials.operatingIncome ?? 0)} />
               <Metric label="営業CF" value={yenOku(financials.operatingCF ?? 0)} />
             </div>
+
+            {[
+              financials.revenueGrowth,
+              financials.operatingMargin,
+              financials.operatingCFMargin,
+              financials.equityRatio,
+              financials.totalAssetTurnover,
+            ].some((value) => typeof value === "number") ? (
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                {typeof financials.revenueGrowth === "number" ? (
+                  <Metric label="売上成長率" value={`${financials.revenueGrowth.toFixed(1)}%`} />
+                ) : null}
+                {typeof financials.operatingMargin === "number" ? (
+                  <Metric label="営業利益率" value={`${financials.operatingMargin.toFixed(1)}%`} />
+                ) : null}
+                {typeof financials.operatingCFMargin === "number" ? (
+                  <Metric label="営業CF率" value={`${financials.operatingCFMargin.toFixed(1)}%`} />
+                ) : null}
+                {typeof financials.equityRatio === "number" ? (
+                  <Metric label="自己資本比率" value={`${financials.equityRatio.toFixed(1)}%`} />
+                ) : null}
+                {typeof financials.totalAssetTurnover === "number" ? (
+                  <Metric label="総資産回転率" value={`${financials.totalAssetTurnover.toFixed(2)}倍`} />
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className={`rounded-3xl bg-gradient-to-br ${riskColor(data.risk_level)} p-[1px] shadow-2xl`}>

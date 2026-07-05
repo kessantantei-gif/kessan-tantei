@@ -8,6 +8,7 @@ import {
   extractFinancials,
   extractRowsFromEdinetCsvZip,
 } from "../lib/edinet-financial-parser";
+import { calculateFinancialMetrics } from "../lib/financial-metrics";
 
 type EdinetDocument = {
   docID: string;
@@ -191,45 +192,50 @@ async function main() {
         const rows = extractRowsFromEdinetCsvZip(zipBuffer);
         const extracted = extractFinancials(rows);
         const nf = extracted.current;
+        const calculated = calculateFinancialMetrics(nf, extracted.prior);
 
-        if (financials.revenue === 0 && nf.revenue !== 0) {
+        if (financials.revenue === 0 && nf.revenue !== null) {
           financials.revenue = nf.revenue;
-          financials.revenueGrowth = Number(extracted.revenueGrowth.toFixed(2));
+          if (calculated.revenueGrowth !== undefined) {
+            financials.revenueGrowth = calculated.revenueGrowth;
+          }
           usedDocId = item.doc.docID;
         }
 
-        if (financials.grossProfit === 0 && nf.grossProfit !== 0) {
+        if (financials.grossProfit === 0 && nf.grossProfit !== null) {
           financials.grossProfit = nf.grossProfit;
-          financials.grossProfitGrowth = Number(extracted.grossProfitGrowth.toFixed(2));
+          if (calculated.grossProfitGrowth !== undefined) {
+            financials.grossProfitGrowth = calculated.grossProfitGrowth;
+          }
           usedDocId = item.doc.docID;
         }
 
-        if (financials.operatingIncome === 0 && nf.operatingIncome !== 0) {
+        if (financials.operatingIncome === 0 && nf.operatingIncome !== null) {
           financials.operatingIncome = nf.operatingIncome;
           usedDocId = item.doc.docID;
         }
 
-        if (financials.operatingCF === 0 && nf.operatingCF !== 0) {
+        if (financials.operatingCF === 0 && nf.operatingCF !== null) {
           financials.operatingCF = nf.operatingCF;
           usedDocId = item.doc.docID;
         }
 
-        if (financials.cash === 0 && nf.cash !== 0) {
+        if (financials.cash === 0 && nf.cash !== null) {
           financials.cash = nf.cash;
           usedDocId = item.doc.docID;
         }
 
-        if (financials.currentLiabilities === 0 && nf.currentLiabilities !== 0) {
+        if (financials.currentLiabilities === 0 && nf.currentLiabilities !== null) {
           financials.currentLiabilities = nf.currentLiabilities;
           usedDocId = item.doc.docID;
         }
 
-        if (financials.assets === 0 && nf.assets !== 0) {
+        if (financials.assets === 0 && nf.assets !== null) {
           financials.assets = nf.assets;
           usedDocId = item.doc.docID;
         }
 
-        if (financials.netAssets === 0 && nf.netAssets !== 0) {
+        if (financials.netAssets === 0 && nf.netAssets !== null) {
           financials.netAssets = nf.netAssets;
           usedDocId = item.doc.docID;
         }

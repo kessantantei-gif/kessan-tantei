@@ -8,6 +8,11 @@ import {
   extractFinancials,
   extractRowsFromEdinetCsvZip,
 } from "@/lib/edinet-financial-parser";
+import { calculateFinancialMetrics } from "@/lib/financial-metrics";
+import {
+  hasAuditorChanged,
+  parseDisclosureSignalsFromBuffer,
+} from "@/lib/disclosure-parser";
 
 type GrowthCompany = {
   ticker: string;
@@ -89,6 +94,18 @@ async function fetchCsvZip(docID: string) {
   return Buffer.from(await res.arrayBuffer());
 }
 
+async function fetchXbrlZip(docID: string) {
+  const apiKey = process.env.EDINET_API_KEY;
+  const url = `${EDINET_BASE}/documents/${docID}?type=1&Subscription-Key=${apiKey}`;
+  const res = await fetch(url, { cache: "no-store" });
+
+  if (!res.ok) {
+    throw new Error(`EDINET XBRL fetch failed: ${docID} ${res.status}`);
+  }
+
+  return Buffer.from(await res.arrayBuffer());
+}
+
 async function fetchNewsCron(origin: string) {
   try {
     await fetch(`${origin}/api/cron/fetch-news`, {
@@ -153,51 +170,68 @@ export async function GET(req: Request) {
 
       const company = growthByTicker.get(ticker)!;
       const zipBuffer = await fetchCsvZip(doc.docID);
+      const xbrlBuffer = await fetchXbrlZip(doc.docID);
       const rows = extractRowsFromEdinetCsvZip(zipBuffer);
       const extracted = extractFinancials(rows);
       const f = extracted.current;
+      const disclosure = parseDisclosureSignalsFromBuffer(xbrlBuffer);
+      const auditorChanged = hasAuditorChanged(disclosure);
+      const financials = calculateFinancialMetrics(f, extracted.prior, {
+        goingConcern: disclosure.goingConcern,
+        msWarrant: disclosure.msWarrant,
+        auditorChanged,
+      });
 
-      if (!f.revenue && !f.assets && !f.operatingIncome && !f.cash && !f.netAssets) {
+      if (
+        f.revenue === null &&
+        f.assets === null &&
+        f.operatingIncome === null &&
+        f.cash === null &&
+        f.netAssets === null
+      ) {
         failed += 1;
         continue;
       }
 
-      const operatingMargin =
-        f.revenue > 0 ? (f.operatingIncome / f.revenue) * 100 : 0;
-
-      const ocfMargin =
-        f.revenue > 0 ? (f.operatingCF / f.revenue) * 100 : 0;
-
-      const monthlyCashBurn = f.operatingCF < 0 ? Math.abs(f.operatingCF) / 12 : 0;
+      const monthlyCashBurn =
+        f.operatingCF !== null && f.operatingCF < 0
+          ? Math.abs(f.operatingCF) / 12
+          : f.operatingCF === null
+            ? undefined
+            : 0;
 
       const score = scoreCompany({
-        revenueGrowth: extracted.revenueGrowth,
-        grossProfitGrowth: extracted.grossProfitGrowth,
-        operatingMargin,
-        ebitdaMargin: operatingMargin,
-        ocfMargin,
-        ruleOf40: extracted.revenueGrowth + operatingMargin,
-        operatingCashFlows: [f.operatingCF],
-        operatingIncomes: [f.operatingIncome],
-        cash: f.cash,
+        revenueGrowth: financials.revenueGrowth,
+        grossProfitGrowth: financials.grossProfitGrowth,
+        operatingMargin: financials.operatingMargin,
+        ebitdaMargin: financials.operatingMargin,
+        ocfMargin: financials.operatingCFMargin,
+        ruleOf40:
+          financials.revenueGrowth !== undefined &&
+          financials.operatingMargin !== undefined
+            ? financials.revenueGrowth + financials.operatingMargin
+            : undefined,
+        operatingCashFlows: f.operatingCF === null ? [] : [f.operatingCF],
+        operatingIncomes: f.operatingIncome === null ? [] : [f.operatingIncome],
+        cash: f.cash ?? undefined,
         monthlyCashBurn,
-        currentLiabilities: f.currentLiabilities,
-        equityRatio: f.equityRatio,
-        hasMsWarrant: false,
+        currentLiabilities: f.currentLiabilities ?? undefined,
+        equityRatio: financials.equityRatio,
+        hasMsWarrant: disclosure.msWarrant,
         equityFinancingCountLast3Years: 0,
         warrantTrend: "none",
         cbTrend: "none",
       });
 
       const signals = generateSignals({
-        operatingCashFlows: [f.operatingCF],
-        operatingIncomes: [f.operatingIncome],
-        cash: f.cash,
+        operatingCashFlows: f.operatingCF === null ? [] : [f.operatingCF],
+        operatingIncomes: f.operatingIncome === null ? [] : [f.operatingIncome],
+        cash: f.cash ?? undefined,
         monthlyCashBurn,
-        hasMsWarrant: false,
+        hasMsWarrant: disclosure.msWarrant,
         equityFinancingCountLast3Years: 0,
-        auditorChanged: false,
-        goingConcernNote: false,
+        auditorChanged,
+        goingConcernNote: disclosure.goingConcern,
         currentRatioTrend: "stable",
       });
 
@@ -212,21 +246,7 @@ export async function GET(req: Request) {
           score: score.totalScore,
           danger_score: dangerScore,
           risk_level: riskLevel,
-          financials: {
-            revenue: f.revenue,
-            grossProfit: f.grossProfit,
-            operatingIncome: f.operatingIncome,
-            operatingCF: f.operatingCF,
-            cash: f.cash,
-            currentLiabilities: f.currentLiabilities,
-            assets: f.assets,
-            netAssets: f.netAssets,
-            equityRatio: Number(f.equityRatio.toFixed(2)),
-            revenueGrowth: Number(extracted.revenueGrowth.toFixed(2)),
-            grossProfitGrowth: Number(extracted.grossProfitGrowth.toFixed(2)),
-            operatingMargin: Number(operatingMargin.toFixed(2)),
-            ocfMargin: Number(ocfMargin.toFixed(2)),
-          },
+          financials,
           score_breakdown: {
             growth: Math.round(score.growthScore * 0.4),
             quality: Math.round(score.safetyScore * 0.3),
@@ -250,9 +270,10 @@ export async function GET(req: Request) {
           history: [
             {
               year: new Date().getFullYear(),
-              revenue: f.revenue,
-              operatingIncome: f.operatingIncome,
-              operatingCF: f.operatingCF,
+              ...(f.revenue === null ? {} : { revenue: f.revenue }),
+              ...(f.operatingIncome === null ? {} : { operatingIncome: f.operatingIncome }),
+              ...(f.operatingCF === null ? {} : { operatingCF: f.operatingCF }),
+              ...(f.netIncome === null ? {} : { netIncome: f.netIncome }),
             },
           ],
           updated_at: new Date().toISOString(),

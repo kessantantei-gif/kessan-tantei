@@ -1,30 +1,18 @@
 import AdmZip from "adm-zip";
+import type { FinancialFacts } from "./financial-metrics";
 
 export type ExtractedFinancials = {
-  current: {
-    revenue: number;
-    grossProfit: number;
-    operatingIncome: number;
-    operatingCF: number;
-    cash: number;
-    currentLiabilities: number;
-    assets: number;
-    netAssets: number;
-    equityRatio: number;
-  };
-  priorRevenue: number;
-  priorGrossProfit: number;
-  revenueGrowth: number;
-  grossProfitGrowth: number;
+  current: FinancialFacts;
+  prior: FinancialFacts;
 };
 
 type Row = Record<string, string>;
 
 function parseNumber(value: string | undefined) {
-  if (!value) return 0;
+  if (!value) return null;
 
   const raw = String(value).trim();
-  if (!raw || raw === "-" || raw === "－") return 0;
+  if (!raw || raw === "-" || raw === "－") return null;
 
   let normalized = raw
     .replace(/,/g, "")
@@ -39,7 +27,7 @@ function parseNumber(value: string | undefined) {
   }
 
   const num = Number(normalized);
-  return Number.isFinite(num) ? num : 0;
+  return Number.isFinite(num) ? num : null;
 }
 
 function parseLine(line: string) {
@@ -125,6 +113,7 @@ function value(row: Row) {
 
 function amount(row: Row) {
   let v = parseNumber(value(row));
+  if (v === null) return null;
   const u = unit(row);
   const all = Object.values(row).join(" ");
 
@@ -229,10 +218,10 @@ function pickFact({
     return exactElement(row, elementNames) || nameIncludes(row, nameNames);
   });
 
-  if (pool.length === 0) return 0;
+  if (pool.length === 0) return null;
 
   pool = pool.filter((row) => (kind === "duration" ? isDuration(row) : isInstant(row)));
-  if (pool.length === 0) return 0;
+  if (pool.length === 0) return null;
 
   if (period === "current") {
     const currentRows = pool.filter(isCurrent);
@@ -251,7 +240,7 @@ function pickFact({
 
       if (period === "current" && isCurrent(row)) s += 100;
       if (period === "prior" && isPrior(row)) s += 100;
-      if (amount(row) !== 0) s += 30;
+      if (amount(row) !== null) s += 30;
       if (!hasSegmentContext(row)) s += 30;
       if (!c.includes("NonConsolidatedMember")) s += 10;
       if (local.includes("SummaryOfBusinessResults")) s += 10;
@@ -357,6 +346,51 @@ export function extractFinancials(rows: Row[]): ExtractedFinancials {
     exclude: isPerShareOrRatio,
   });
 
+  const priorOperatingIncome = pickFact({
+    rows,
+    elementNames: [
+      "OperatingIncome",
+      "OperatingProfit",
+      "OperatingLoss",
+      "OperatingIncomeLoss",
+      "ProfitLossFromOperatingActivities",
+    ],
+    nameNames: ["営業利益又は営業損失", "営業利益", "営業損失"],
+    kind: "duration",
+    period: "prior",
+    exclude: isPerShareOrRatio,
+  });
+
+  const netIncomeNames = [
+    "ProfitLoss",
+    "ProfitLossAttributableToOwnersOfParent",
+    "NetIncome",
+    "NetIncomeLoss",
+    "ProfitAttributableToOwnersOfParent",
+  ];
+  const netIncomeLabels = [
+    "親会社株主に帰属する当期純利益",
+    "親会社株主に帰属する当期純損失",
+    "当期純利益",
+    "当期純損失",
+  ];
+  const netIncome = pickFact({
+    rows,
+    elementNames: netIncomeNames,
+    nameNames: netIncomeLabels,
+    kind: "duration",
+    period: "current",
+    exclude: isPerShareOrRatio,
+  });
+  const priorNetIncome = pickFact({
+    rows,
+    elementNames: netIncomeNames,
+    nameNames: netIncomeLabels,
+    kind: "duration",
+    period: "prior",
+    exclude: isPerShareOrRatio,
+  });
+
   const operatingCF = pickFact({
     rows,
     elementNames: [
@@ -368,6 +402,20 @@ export function extractFinancials(rows: Row[]): ExtractedFinancials {
     nameNames: ["営業活動によるキャッシュ・フロー、経営指標等", "営業活動によるキャッシュ・フロー"],
     kind: "duration",
     period: "current",
+    exclude: (row) => isPerShareOrRatio(row) || localElement(row).includes("Depreciation") || localElement(row).includes("Interest"),
+  });
+
+  const priorOperatingCF = pickFact({
+    rows,
+    elementNames: [
+      "NetCashProvidedByUsedInOperatingActivitiesSummaryOfBusinessResults",
+      "NetCashProvidedByUsedInOperatingActivities",
+      "CashFlowsFromUsedInOperatingActivities",
+      "NetCashProvidedByOperatingActivities",
+    ],
+    nameNames: ["営業活動によるキャッシュ・フロー、経営指標等", "営業活動によるキャッシュ・フロー"],
+    kind: "duration",
+    period: "prior",
     exclude: (row) => isPerShareOrRatio(row) || localElement(row).includes("Depreciation") || localElement(row).includes("Interest"),
   });
 
@@ -422,24 +470,28 @@ export function extractFinancials(rows: Row[]): ExtractedFinancials {
     exclude: isPerShareOrRatio,
   });
 
-  const equityRatio = assets > 0 ? (netAssets / assets) * 100 : 0;
-
   return {
     current: {
       revenue,
       grossProfit,
+      netIncome,
       operatingIncome,
       operatingCF,
       cash,
       currentLiabilities,
       assets,
       netAssets,
-      equityRatio,
     },
-    priorRevenue,
-    priorGrossProfit,
-    revenueGrowth: priorRevenue > 0 ? ((revenue - priorRevenue) / priorRevenue) * 100 : 0,
-    grossProfitGrowth:
-      priorGrossProfit > 0 ? ((grossProfit - priorGrossProfit) / priorGrossProfit) * 100 : 0,
+    prior: {
+      revenue: priorRevenue,
+      grossProfit: priorGrossProfit,
+      netIncome: priorNetIncome,
+      operatingIncome: priorOperatingIncome,
+      operatingCF: priorOperatingCF,
+      cash: null,
+      currentLiabilities: null,
+      assets: null,
+      netAssets: null,
+    },
   };
 }

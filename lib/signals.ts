@@ -9,8 +9,8 @@ export type DetectiveSignal = {
 type SignalMetrics = {
   operatingCashFlows: number[];
   operatingIncomes: number[];
-  cash: number;
-  monthlyCashBurn: number;
+  cash?: number;
+  monthlyCashBurn?: number;
   hasMsWarrant: boolean;
   equityFinancingCountLast3Years: number;
   auditorChanged: boolean;
@@ -19,7 +19,7 @@ type SignalMetrics = {
 };
 
 function isThreeConsecutiveNegative(values: number[]) {
-  return values.slice(-3).every((value) => value < 0);
+  return values.length >= 3 && values.slice(-3).every((value) => value < 0);
 }
 
 export function generateSignals(metrics: SignalMetrics): DetectiveSignal[] {
@@ -33,7 +33,11 @@ export function generateSignals(metrics: SignalMetrics): DetectiveSignal[] {
     });
   }
 
-  if (metrics.monthlyCashBurn > 0) {
+  if (
+    metrics.monthlyCashBurn !== undefined &&
+    metrics.monthlyCashBurn > 0 &&
+    metrics.cash !== undefined
+  ) {
     const runwayMonths = metrics.cash / metrics.monthlyCashBurn;
 
     if (runwayMonths < 12) {

@@ -11,6 +11,7 @@ export type RankingCategory =
 export type Financials = {
   revenue?: number;
   grossProfit?: number;
+  netIncome?: number;
   operatingIncome?: number;
   operatingCF?: number;
   cash?: number;
@@ -22,6 +23,22 @@ export type Financials = {
   grossProfitGrowth?: number;
   operatingMargin?: number;
   ocfMargin?: number;
+  operatingCFMargin?: number;
+  grossMargin?: number;
+  netMargin?: number;
+  operatingIncomeGrowth?: number;
+  netIncomeGrowth?: number;
+  operatingCFGrowth?: number;
+  cashRatio?: number;
+  equityAmount?: number;
+  cashAndDeposits?: number;
+  totalAssetTurnover?: number;
+  operatingCFNegative?: boolean;
+  operatingLoss?: boolean;
+  consecutiveOperatingLoss?: boolean;
+  goingConcern?: boolean;
+  msWarrant?: boolean;
+  auditorChanged?: boolean;
 };
 
 export type HistoryItem = {
@@ -29,6 +46,7 @@ export type HistoryItem = {
   revenue?: number;
   operatingIncome?: number;
   operatingCF?: number;
+  netIncome?: number;
 };
 
 export type RiskFlag = {

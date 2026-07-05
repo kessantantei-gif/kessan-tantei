@@ -1,20 +1,23 @@
+import type { CalculatedFinancialMetrics } from "./financial-metrics";
+
 export type CompanyMetrics = {
-  revenueGrowth: number;
-  grossProfitGrowth: number;
-  operatingMargin: number;
-  ebitdaMargin: number;
-  ocfMargin: number;
-  ruleOf40: number;
+  revenueGrowth?: number;
+  grossProfitGrowth?: number;
+  operatingMargin?: number;
+  ebitdaMargin?: number;
+  ocfMargin?: number;
+  ruleOf40?: number;
   operatingCashFlows: number[];
   operatingIncomes: number[];
-  cash: number;
-  monthlyCashBurn: number;
-  currentLiabilities: number;
-  equityRatio: number;
+  cash?: number;
+  monthlyCashBurn?: number;
+  currentLiabilities?: number;
+  equityRatio?: number;
   hasMsWarrant: boolean;
   equityFinancingCountLast3Years: number;
   warrantTrend: "none" | "stable" | "increasing";
   cbTrend: "none" | "stable" | "increasing";
+  calculatedFinancials?: CalculatedFinancialMetrics;
 };
 
 export type CompanyScore = {
@@ -25,7 +28,8 @@ export type CompanyScore = {
   rank: "S" | "A" | "B" | "C" | "D";
 };
 
-function scoreGrowth(value: number) {
+function scoreGrowth(value?: number) {
+  if (value === undefined) return 50;
   if (value >= 50) return 100;
   if (value >= 30) return 85;
   if (value >= 20) return 70;
@@ -34,7 +38,8 @@ function scoreGrowth(value: number) {
   return 10;
 }
 
-function scoreMargin(value: number) {
+function scoreMargin(value?: number) {
+  if (value === undefined) return 50;
   if (value >= 20) return 100;
   if (value >= 10) return 85;
   if (value >= 0) return 70;
@@ -43,7 +48,8 @@ function scoreMargin(value: number) {
   return 10;
 }
 
-function scoreRunway(cash: number, monthlyCashBurn: number) {
+function scoreRunway(cash?: number, monthlyCashBurn?: number) {
+  if (cash === undefined || monthlyCashBurn === undefined) return 50;
   if (monthlyCashBurn <= 0) return 100;
   const months = cash / monthlyCashBurn;
   if (months >= 36) return 100;
@@ -53,7 +59,8 @@ function scoreRunway(cash: number, monthlyCashBurn: number) {
   return 10;
 }
 
-function scoreCashCoverage(cash: number, currentLiabilities: number) {
+function scoreCashCoverage(cash?: number, currentLiabilities?: number) {
+  if (cash === undefined || currentLiabilities === undefined) return 50;
   if (currentLiabilities <= 0) return 100;
   const ratio = cash / currentLiabilities;
   if (ratio >= 2) return 100;
@@ -62,7 +69,8 @@ function scoreCashCoverage(cash: number, currentLiabilities: number) {
   return 15;
 }
 
-function scoreEquityRatio(value: number) {
+function scoreEquityRatio(value?: number) {
+  if (value === undefined) return 50;
   if (value >= 70) return 100;
   if (value >= 50) return 80;
   if (value >= 30) return 55;

@@ -1,3 +1,5 @@
+import { calculateFinancialMetrics, type FinancialFacts } from "./financial-metrics";
+
 type HistoryItem = {
   year?: string;
   revenue?: number;
@@ -5,15 +7,16 @@ type HistoryItem = {
   operatingCF?: number;
 };
 
-type Financials = {
-  revenue: number;
-  operatingIncome: number;
-  operatingCF: number;
-  cash: number;
-  currentLiabilities: number;
-  assets: number;
-  netAssets: number;
-};
+type Financials = Omit<FinancialFacts, "grossProfit" | "netIncome"> &
+  Partial<Pick<FinancialFacts, "grossProfit" | "netIncome">>;
+
+function completeFacts(financials: Financials): FinancialFacts {
+  return {
+    ...financials,
+    grossProfit: financials.grossProfit ?? null,
+    netIncome: financials.netIncome ?? null,
+  };
+}
 
 function clamp(value: number, min = 0, max = 100) {
   return Math.max(min, Math.min(max, value));
@@ -61,20 +64,15 @@ function calculateRevenueGrowthScore(financials: Financials, history: HistoryIte
   }
 
   // 履歴がない場合は、売上があるだけでは満点にしない
-  if (financials.revenue > 0) return 45;
+  if (financials.revenue !== null && financials.revenue > 0) return 45;
   return 10;
 }
 
-function calculateProfitabilityScore(financials: Financials) {
-  const operatingMargin =
-    financials.revenue > 0
-      ? (financials.operatingIncome / financials.revenue) * 100
-      : -50;
-
-  const ocfMargin =
-    financials.revenue > 0
-      ? (financials.operatingCF / financials.revenue) * 100
-      : -50;
+function calculateProfitabilityScore(
+  metrics: ReturnType<typeof calculateFinancialMetrics>
+) {
+  const operatingMargin = metrics.operatingMargin ?? -50;
+  const ocfMargin = metrics.operatingCFMargin ?? -50;
 
   const operatingMarginScore = scoreRange(operatingMargin, -30, 30);
   const ocfMarginScore = scoreRange(ocfMargin, -30, 30);
@@ -86,16 +84,12 @@ function calculateProfitabilityScore(financials: Financials) {
   };
 }
 
-function calculateStabilityScore(financials: Financials, history: HistoryItem[]) {
-  const equityRatio =
-    financials.assets > 0
-      ? (financials.netAssets / financials.assets) * 100
-      : 0;
-
-  const cashCoverage =
-    financials.currentLiabilities > 0
-      ? financials.cash / financials.currentLiabilities
-      : 2;
+function calculateStabilityScore(
+  metrics: ReturnType<typeof calculateFinancialMetrics>,
+  history: HistoryItem[]
+) {
+  const equityRatio = metrics.equityRatio ?? 0;
+  const cashCoverage = metrics.cashRatio !== undefined ? metrics.cashRatio / 100 : 2;
 
   const equityScore = scoreRange(equityRatio, 10, 80);
   const cashCoverageScore = scoreRange(cashCoverage, 0.2, 2.5);
@@ -125,9 +119,10 @@ function calculateStabilityScore(financials: Financials, history: HistoryItem[])
 }
 
 export function calculateScores(financials: Financials, history: HistoryItem[] = []) {
+  const financialMetrics = calculateFinancialMetrics(completeFacts(financials));
   const revenueGrowthScore = calculateRevenueGrowthScore(financials, history);
-  const profitability = calculateProfitabilityScore(financials);
-  const stability = calculateStabilityScore(financials, history);
+  const profitability = calculateProfitabilityScore(financialMetrics);
+  const stability = calculateStabilityScore(financialMetrics, history);
 
   const growthScore = round1(revenueGrowthScore * 0.4);
   const qualityScore = round1(profitability.score * 0.3);
@@ -153,5 +148,6 @@ export function calculateScores(financials: Financials, history: HistoryItem[] =
     operatingMargin: round1(profitability.operatingMargin),
     ocfMargin: round1(profitability.ocfMargin),
     equityRatio: round1(stability.equityRatio),
+    financialMetrics,
   };
 }

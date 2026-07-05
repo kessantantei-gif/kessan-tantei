@@ -1,5 +1,5 @@
 import { classifyIndustryThemes, type IndustryTheme } from "@/lib/industry-classifier";
-import { hasRiskFlag, latestChange, latestGrowthRate, revenueCagr3 } from "./engine";
+import { hasRiskFlag, latestChange, revenueCagr3 } from "./engine";
 import type {
   MetricTone,
   RankingCategory,
@@ -87,27 +87,22 @@ function metricDefinition(input: {
 }
 
 const operatingMargin = (company: RankingCompany) =>
-  f(company, "operatingMargin") ?? ratio(f(company, "operatingIncome"), f(company, "revenue"));
+  f(company, "operatingMargin");
 const ocfMargin = (company: RankingCompany) =>
-  f(company, "ocfMargin") ?? ratio(f(company, "operatingCF"), f(company, "revenue"));
+  f(company, "operatingCFMargin") ?? f(company, "ocfMargin");
 const equityRatio = (company: RankingCompany) =>
-  f(company, "equityRatio") ?? ratio(f(company, "netAssets"), f(company, "assets"));
+  f(company, "equityRatio");
 const cashCoverage = (company: RankingCompany) => {
-  const cash = f(company, "cash");
-  const liabilities = f(company, "currentLiabilities");
-  return cash !== null && liabilities !== null && liabilities > 0 ? cash / liabilities : null;
+  const cashRatio = f(company, "cashRatio");
+  return cashRatio === null ? null : cashRatio / 100;
 };
 const rule40 = (company: RankingCompany) => {
   const growth = f(company, "revenueGrowth");
   const margin = operatingMargin(company);
   return growth !== null && margin !== null ? growth + margin : null;
 };
-const grossMargin = (company: RankingCompany) => ratio(f(company, "grossProfit"), f(company, "revenue"));
-const assetTurnover = (company: RankingCompany) => {
-  const revenue = f(company, "revenue");
-  const assets = f(company, "assets");
-  return revenue !== null && assets !== null && assets > 0 ? revenue / assets : null;
-};
+const grossMargin = (company: RankingCompany) => f(company, "grossMargin");
+const assetTurnover = (company: RankingCompany) => f(company, "totalAssetTurnover");
 const safetyScore = (company: RankingCompany) => {
   const equity = equityRatio(company);
   const coverage = cashCoverage(company);
@@ -131,7 +126,8 @@ const definitions: RankingDefinition[] = [
   metricDefinition({ slug: "revenue", category: "growth", title: "売上高ランキング", description: "直近決算の売上規模を比較します。", metricLabel: "売上高", getValue: (c) => f(c, "revenue"), formatValue: yenOku, relatedSlugs: ["revenue-growth", "asset-turnover"] }),
   metricDefinition({ slug: "revenue-cagr-3y", category: "growth", title: "売上3年CAGRランキング", description: "売上高の年平均成長率を最大3期間の履歴から比較します。", metricLabel: "売上CAGR", getValue: revenueCagr3, caution: "3期以上の売上履歴が取得できた企業のみを対象とします。", relatedSlugs: ["revenue-growth", "high-growth"] }),
   metricDefinition({ slug: "gross-profit-growth", category: "growth", title: "売上総利益成長率ランキング", description: "商品・サービスから得た粗利益の伸び率を比較します。", metricLabel: "粗利益成長率", getValue: (c) => f(c, "grossProfitGrowth"), relatedSlugs: ["gross-margin", "revenue-growth"] }),
-  metricDefinition({ slug: "operating-income-growth", category: "growth", title: "営業利益成長率ランキング", description: "本業の利益が前期からどれだけ伸びたかを比較します。", metricLabel: "営業利益成長率", getValue: (c) => latestGrowthRate(c, "operatingIncome"), caution: "2期以上の営業利益履歴があり、前期がゼロでない企業のみを対象とします。", relatedSlugs: ["operating-margin", "profit-turnaround"] }),
+  metricDefinition({ slug: "operating-income-growth", category: "growth", title: "営業利益成長率ランキング", description: "本業の利益が前期からどれだけ伸びたかを比較します。", metricLabel: "営業利益成長率", getValue: (c) => f(c, "operatingIncomeGrowth"), caution: "当期と前期の営業利益を取得できた企業のみを対象とします。", relatedSlugs: ["operating-margin", "profit-turnaround"] }),
+  metricDefinition({ slug: "net-income-growth", category: "growth", title: "純利益成長率ランキング", description: "最終的な利益が前期からどれだけ伸びたかを比較します。", metricLabel: "純利益成長率", getValue: (c) => f(c, "netIncomeGrowth"), caution: "当期と前期の純利益を取得できた企業のみを対象とします。", relatedSlugs: ["net-margin", "operating-income-growth"] }),
   metricDefinition({ slug: "rule-of-40", category: "growth", title: "Rule of 40ランキング", description: "売上成長率と営業利益率の合計で、成長と収益のバランスを比較します。", metricLabel: "Rule of 40", getValue: rule40, formatValue: points, comment: (_c, v) => `${points(v)}で、成長率と利益率を合計した水準です。`, relatedSlugs: ["revenue-growth", "operating-margin", "rule40-excellent"] }),
   metricDefinition({ slug: "high-growth", category: "growth", title: "高成長企業ランキング", description: "売上成長率20%以上の企業を成長率順に比較します。", metricLabel: "売上成長率", getValue: (c) => f(c, "revenueGrowth"), include: isHighGrowth, relatedSlugs: ["revenue-growth", "profitable-high-growth"] }),
   metricDefinition({ slug: "profitable-high-growth", category: "growth", title: "黒字高成長企業ランキング", description: "売上成長率20%以上かつ営業黒字の企業を比較します。", metricLabel: "売上成長率", getValue: (c) => f(c, "revenueGrowth"), include: (c) => isHighGrowth(c) && isProfitable(c), comment: () => "売上が高成長で、本業も黒字です。", relatedSlugs: ["high-growth", "operating-margin"] }),
@@ -139,11 +135,12 @@ const definitions: RankingDefinition[] = [
   metricDefinition({ slug: "operating-margin", category: "profitability", title: "営業利益率ランキング", description: "売上高に対して本業の利益をどれだけ残せたかを比較します。", metricLabel: "営業利益率", getValue: operatingMargin, relatedSlugs: ["gross-margin", "ocf-margin", "rule-of-40"] }),
   metricDefinition({ slug: "operating-income", category: "profitability", title: "営業利益ランキング", description: "直近決算における本業の利益額を比較します。", metricLabel: "営業利益", getValue: (c) => f(c, "operatingIncome"), formatValue: yenOku, relatedSlugs: ["operating-margin", "operating-income-growth"] }),
   metricDefinition({ slug: "gross-margin", category: "profitability", title: "売上総利益率ランキング", description: "売上高から原価を引いた粗利益の割合を比較します。", metricLabel: "売上総利益率", getValue: grossMargin, relatedSlugs: ["gross-profit-growth", "operating-margin"] }),
+  metricDefinition({ slug: "net-margin", category: "profitability", title: "純利益率ランキング", description: "売上高に対して最終的な利益をどれだけ残せたかを比較します。", metricLabel: "純利益率", getValue: (c) => f(c, "netMargin"), relatedSlugs: ["operating-margin", "net-income-growth"] }),
   metricDefinition({ slug: "asset-turnover", category: "profitability", title: "資産回転率ランキング", description: "保有する資産をどれだけ効率よく売上につなげたかを比較します。", metricLabel: "資産回転率", getValue: assetTurnover, formatValue: multiple, relatedSlugs: ["operating-margin", "safety-score"] }),
   metricDefinition({ slug: "margin-improvement", category: "profitability", title: "利益率改善企業ランキング", description: "直近2期の営業利益率がどれだけ改善したかを比較します。", metricLabel: "利益率改善幅", getValue: (c) => { const h = c.history ?? []; if (h.length < 2) return null; const a = h.at(-2)!; const b = h.at(-1)!; const before = ratio(a.operatingIncome ?? null, a.revenue ?? null); const after = ratio(b.operatingIncome ?? null, b.revenue ?? null); return before !== null && after !== null ? after - before : null; }, include: (c) => (latestChange(c, "operatingIncome") ?? 0) > 0, formatValue: (v) => `${percent(v)}pt`, relatedSlugs: ["operating-income-growth", "profit-turnaround"] }),
 
   metricDefinition({ slug: "operating-cash-flow", category: "cash", title: "営業CFランキング", description: "本業の活動から生み出した現金の金額を比較します。", metricLabel: "営業CF", getValue: (c) => f(c, "operatingCF"), formatValue: yenOku, metricTone: "cyan", relatedSlugs: ["ocf-growth", "ocf-margin", "positive-ocf"] }),
-  metricDefinition({ slug: "ocf-growth", category: "cash", title: "営業CF成長率ランキング", description: "営業CFが前期からどれだけ増えたかを比較します。", metricLabel: "営業CF成長率", getValue: (c) => latestGrowthRate(c, "operatingCF"), metricTone: "cyan", relatedSlugs: ["operating-cash-flow", "ocf-improvement"] }),
+  metricDefinition({ slug: "ocf-growth", category: "cash", title: "営業CF成長率ランキング", description: "営業CFが前期からどれだけ増えたかを比較します。", metricLabel: "営業CF成長率", getValue: (c) => f(c, "operatingCFGrowth"), metricTone: "cyan", relatedSlugs: ["operating-cash-flow", "ocf-improvement"] }),
   metricDefinition({ slug: "ocf-margin", category: "cash", title: "営業CFマージンランキング", description: "売上高に対して営業CFをどれだけ生み出したかを比較します。", metricLabel: "営業CFマージン", getValue: ocfMargin, metricTone: "cyan", relatedSlugs: ["operating-margin", "operating-cash-flow"] }),
   metricDefinition({ slug: "positive-ocf", category: "cash", title: "営業CF黒字企業ランキング", description: "営業CFがプラスの企業を金額順に比較します。", metricLabel: "営業CF", getValue: (c) => f(c, "operatingCF"), include: (c) => positive(f(c, "operatingCF")), formatValue: yenOku, metricTone: "cyan", comment: () => "本業の活動による現金収支がプラスです。", relatedSlugs: ["operating-cash-flow", "ocf-margin"] }),
   metricDefinition({ slug: "ocf-improvement", category: "cash", title: "営業CF改善企業ランキング", description: "営業CFの前期からの改善額を比較します。", metricLabel: "営業CF改善額", getValue: (c) => latestChange(c, "operatingCF"), include: (c) => (latestChange(c, "operatingCF") ?? 0) > 0, formatValue: yenOku, metricTone: "cyan", relatedSlugs: ["ocf-growth", "profit-turnaround"] }),
@@ -156,12 +153,12 @@ const definitions: RankingDefinition[] = [
 
   metricDefinition({ slug: "risk-signal", category: "risk", title: "リスクシグナルランキング", description: "決算データから注意して確認したい財務シグナルの強さを比較します。", metricLabel: "リスクスコア", getValue: (c) => c.danger_score, formatValue: points, metricTone: "red", comment: (_c, v) => `注意シグナルの合計スコアは${points(v)}です。`, caution: "リスクスコアが高いことだけで企業価値や将来性を判断するものではありません。", relatedSlugs: ["financial-deterioration", "operating-loss", "ocf-deterioration"] }),
   metricDefinition({ slug: "ocf-deterioration", category: "risk", title: "営業CF悪化ランキング", description: "営業CFが前期から減少した企業を悪化額で比較します。", metricLabel: "営業CF減少額", getValue: (c) => { const v = latestChange(c, "operatingCF"); return v !== null && v < 0 ? Math.abs(v) : null; }, formatValue: yenOku, metricTone: "red", relatedSlugs: ["risk-signal", "ocf-improvement"] }),
-  metricDefinition({ slug: "operating-loss", category: "risk", title: "営業赤字企業ランキング", description: "本業の営業損益が赤字の企業を赤字額で比較します。", metricLabel: "営業赤字額", getValue: (c) => { const v = f(c, "operatingIncome"); return v !== null && v < 0 ? Math.abs(v) : null; }, formatValue: yenOku, metricTone: "red", comment: () => "直近決算では本業の営業損益が赤字です。", relatedSlugs: ["continuing-loss", "loss-high-growth"] }),
-  metricDefinition({ slug: "continuing-loss", category: "risk", title: "継続赤字企業ランキング", description: "営業赤字が2期以上続く企業を赤字額で比較します。", metricLabel: "営業赤字額", getValue: (c) => { const values = historyValues(c, "operatingIncome"); return values.length >= 2 && values.at(-1)! < 0 && values.at(-2)! < 0 ? Math.abs(values.at(-1)!) : null; }, formatValue: yenOku, metricTone: "red", relatedSlugs: ["operating-loss", "risk-signal"] }),
+  metricDefinition({ slug: "operating-loss", category: "risk", title: "営業赤字企業ランキング", description: "本業の営業損益が赤字の企業を赤字額で比較します。", metricLabel: "営業赤字額", getValue: (c) => c.financials?.operatingLoss ? Math.abs(c.financials.operatingIncome ?? 0) : null, formatValue: yenOku, metricTone: "red", comment: () => "直近決算では本業の営業損益が赤字です。", relatedSlugs: ["continuing-loss", "loss-high-growth"] }),
+  metricDefinition({ slug: "continuing-loss", category: "risk", title: "継続赤字企業ランキング", description: "営業赤字が2期以上続く企業を赤字額で比較します。", metricLabel: "営業赤字額", getValue: (c) => c.financials?.consecutiveOperatingLoss ? Math.abs(c.financials.operatingIncome ?? 0) : null, formatValue: yenOku, metricTone: "red", relatedSlugs: ["operating-loss", "risk-signal"] }),
   metricDefinition({ slug: "capital-increase-risk", category: "risk", title: "増資リスクランキング", description: "増資・希薄化に関するリスクシグナルが検出された企業を比較します。", metricLabel: "リスクスコア", getValue: (c) => hasRiskFlag(c, ["増資", "希薄化", "資金調達"]) ? c.danger_score : null, formatValue: points, metricTone: "red", relatedSlugs: ["ms-warrant", "risk-signal"] }),
-  metricDefinition({ slug: "ms-warrant", category: "risk", title: "MSワラント注意企業ランキング", description: "MSワラントに関するシグナルが検出された企業を比較します。", metricLabel: "リスクスコア", getValue: (c) => hasRiskFlag(c, ["MSワラント", "ＭＳワラント"]) ? c.danger_score : null, formatValue: points, metricTone: "red", relatedSlugs: ["capital-increase-risk", "risk-signal"] }),
-  metricDefinition({ slug: "auditor-change", category: "risk", title: "監査法人変更企業ランキング", description: "監査法人変更に関するシグナルが検出された企業を比較します。", metricLabel: "リスクスコア", getValue: (c) => hasRiskFlag(c, ["監査法人", "会計監査人"]) ? c.danger_score : null, formatValue: points, metricTone: "red", relatedSlugs: ["going-concern", "risk-signal"] }),
-  metricDefinition({ slug: "going-concern", category: "risk", title: "継続企業注記ランキング", description: "継続企業の前提に関する注記シグナルが検出された企業を比較します。", metricLabel: "リスクスコア", getValue: (c) => hasRiskFlag(c, ["継続企業", "ゴーイングコンサーン"]) ? c.danger_score : null, formatValue: points, metricTone: "red", relatedSlugs: ["auditor-change", "risk-signal"] }),
+  metricDefinition({ slug: "ms-warrant", category: "risk", title: "MSワラント注意企業ランキング", description: "MSワラントに関するシグナルが検出された企業を比較します。", metricLabel: "リスクスコア", getValue: (c) => c.financials?.msWarrant ? c.danger_score : null, formatValue: points, metricTone: "red", relatedSlugs: ["capital-increase-risk", "risk-signal"] }),
+  metricDefinition({ slug: "auditor-change", category: "risk", title: "監査法人変更企業ランキング", description: "監査法人変更に関するシグナルが検出された企業を比較します。", metricLabel: "リスクスコア", getValue: (c) => c.financials?.auditorChanged ? c.danger_score : null, formatValue: points, metricTone: "red", relatedSlugs: ["going-concern", "risk-signal"] }),
+  metricDefinition({ slug: "going-concern", category: "risk", title: "継続企業注記ランキング", description: "継続企業の前提に関する注記シグナルが検出された企業を比較します。", metricLabel: "リスクスコア", getValue: (c) => c.financials?.goingConcern ? c.danger_score : null, formatValue: points, metricTone: "red", relatedSlugs: ["auditor-change", "risk-signal"] }),
   metricDefinition({ slug: "financial-deterioration", category: "risk", title: "財務悪化企業ランキング", description: "営業赤字・営業CFマイナス・低い自己資本比率が重なる企業を比較します。", metricLabel: "悪化ポイント", getValue: (c) => { let v = 0; if ((f(c, "operatingIncome") ?? 0) < 0) v += 1; if ((f(c, "operatingCF") ?? 0) < 0) v += 1; if ((equityRatio(c) ?? 100) < 30) v += 1; return v >= 2 ? v : null; }, formatValue: (v) => `${v}項目`, metricTone: "red", comment: (_c, v) => `主要な注意項目が${v}つ重なっています。`, relatedSlugs: ["risk-signal", "operating-loss", "ocf-deterioration"] }),
 
   metricDefinition({ slug: "profit-turnaround", category: "theme", title: "黒字転換企業ランキング", description: "前期の営業赤字から直近で営業黒字へ転換した企業を比較します。", metricLabel: "営業利益", getValue: (c) => { const values = historyValues(c, "operatingIncome"); return values.length >= 2 && values.at(-2)! < 0 && values.at(-1)! > 0 ? values.at(-1)! : null; }, formatValue: yenOku, metricTone: "yellow", comment: () => "前期の営業赤字から直近で営業黒字へ転換しています。", relatedSlugs: ["operating-income-growth", "margin-improvement"] }),
