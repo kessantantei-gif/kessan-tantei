@@ -93,10 +93,10 @@ export default function RankingCard({
                   {company.locked ? (
                     <>
                       <p className="truncate font-black text-yellow-300">
-                        Pro限定 Sランク銘柄
+                        Pro限定ランキング銘柄
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
-                        初月100円で全Sランクを表示
+                        初月100円で4位以降を表示
                       </p>
                     </>
                   ) : (
