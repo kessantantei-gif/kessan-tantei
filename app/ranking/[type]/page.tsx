@@ -26,8 +26,22 @@ const legacyAliases: Record<string, string> = {
   "risk-signals": "risk-signal",
 };
 
+const REVENUE_GROWTH_BASIS_SLUGS = new Set([
+  "revenue-growth",
+  "high-growth",
+  "profitable-high-growth",
+  "featured-companies",
+  "recommended",
+  "rule-of-40",
+  "rule40-excellent",
+]);
+
 function resolveSlug(slug: string) {
   return legacyAliases[slug] ?? slug;
+}
+
+function usesRevenueGrowthBasis(slug: string) {
+  return REVENUE_GROWTH_BASIS_SLUGS.has(slug);
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -87,6 +101,7 @@ export default async function RankingPage({ params }: PageProps) {
   const relatedRankings = getRelatedRankings(definition);
   const isPro = await isProUser();
   const premium = isPremiumRanking(definition);
+  const showRevenueGrowthBasis = usesRevenueGrowthBasis(definition.slug);
   const searchCompanies = companies.map((company) => ({
     ticker: company.ticker,
     company_name: company.company_name,
@@ -143,6 +158,16 @@ export default async function RankingPage({ params }: PageProps) {
               </span>
             ) : null}
           </div>
+
+          {showRevenueGrowthBasis ? (
+            <div className="mt-6 rounded-2xl border border-yellow-400/25 bg-yellow-400/10 p-4 text-sm leading-7 text-yellow-50">
+              <p className="font-black text-yellow-200">売上成長率ランキングの集計基準</p>
+              <p className="mt-2 text-yellow-50/90">
+                売上成長率は、会社ページの履歴データにある直近2期の売上高から再計算しています。前期売上が1億円未満の場合、母数が小さすぎて数千%の成長率になりやすいため、通常の売上成長率ランキング・高成長判定・Rule of 40からは除外しています。
+              </p>
+            </div>
+          ) : null}
+
           <div className="mt-6 max-w-3xl">
             <CompanySearch companies={searchCompanies} />
           </div>
@@ -164,6 +189,11 @@ export default async function RankingPage({ params }: PageProps) {
           <section className="rounded-3xl border border-yellow-400/20 bg-yellow-500/10 p-6 sm:p-8">
             <h2 className="text-2xl font-black">注意点</h2>
             <p className="mt-4 leading-8 text-slate-300">{definition.caution}</p>
+            {showRevenueGrowthBasis ? (
+              <p className="mt-3 leading-8 text-slate-300">
+                前期売上が小さい会社は、成長率の数字が極端に大きくなりやすいため、このランキングでは前期売上1億円以上の会社を通常比較の対象にしています。売上が立ち上がった会社は、別途「急増・立ち上がり」系の切り口で確認するのが適しています。
+              </p>
+            ) : null}
             <p className="mt-3 text-sm leading-7 text-slate-400">
               データの更新時点や会計基準、企業ごとの決算期の違いにより、単純比較が適さない場合があります。
             </p>
