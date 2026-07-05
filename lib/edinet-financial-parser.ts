@@ -6,6 +6,18 @@ export type ExtractedFinancials = {
   prior: FinancialFacts;
 };
 
+export type FiscalPeriodInfo = {
+  fiscalYear?: number;
+  fiscalMonth?: number;
+  fiscalPeriod?: string;
+  periodEnd?: string;
+};
+
+export type ExtractedFiscalPeriods = {
+  current: FiscalPeriodInfo | null;
+  prior: FiscalPeriodInfo | null;
+};
+
 type Row = Record<string, string>;
 
 function parseNumber(value: string | undefined) {
@@ -253,6 +265,82 @@ function pickFact({
   return amount(pool[0]);
 }
 
+function decodeZipEntry(entry: AdmZip.IZipEntry) {
+  const buf = entry.getData();
+  let text = buf.toString("utf8");
+  if (text.includes("�")) {
+    text = buf.toString("utf16le");
+  }
+  return text;
+}
+
+function fiscalInfoFromDate(dateText: string | null): FiscalPeriodInfo | null {
+  if (!dateText) return null;
+
+  const match = dateText.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+
+  const fiscalYear = Number(match[1]);
+  const fiscalMonth = Number(match[2]);
+
+  if (!Number.isFinite(fiscalYear) || !Number.isFinite(fiscalMonth)) return null;
+
+  return {
+    fiscalYear,
+    fiscalMonth,
+    fiscalPeriod: `${fiscalYear}年${fiscalMonth}月期`,
+    periodEnd: `${match[1]}-${match[2]}-${match[3]}`,
+  };
+}
+
+function extractContextDate(xml: string, contextPattern: RegExp) {
+  const contexts = [...xml.matchAll(/<xbrli:context\b[\s\S]*?<\/xbrli:context>/g)];
+
+  for (const contextXml of contexts.map((match) => match[0])) {
+    const id = contextXml.match(/id="([^"]+)"/)?.[1] ?? "";
+    if (!contextPattern.test(id)) continue;
+    if (id.includes("Member") || contextXml.includes("<xbrli:segment")) continue;
+
+    const endDate = contextXml.match(/<xbrli:endDate>([^<]+)<\/xbrli:endDate>/)?.[1] ?? null;
+    const instant = contextXml.match(/<xbrli:instant>([^<]+)<\/xbrli:instant>/)?.[1] ?? null;
+
+    return endDate ?? instant;
+  }
+
+  return null;
+}
+
+export function extractFiscalPeriodsFromEdinetXbrlZip(buffer: Buffer): ExtractedFiscalPeriods {
+  const zip = new AdmZip(buffer);
+  const xbrl = zip
+    .getEntries()
+    .find((entry) =>
+      entry.entryName.toLowerCase().endsWith(".xbrl") &&
+      entry.entryName.includes("jpcrp030000")
+    ) ?? zip.getEntries().find((entry) => entry.entryName.toLowerCase().endsWith(".xbrl"));
+
+  if (!xbrl) {
+    return { current: null, prior: null };
+  }
+
+  const xml = decodeZipEntry(xbrl);
+
+  const currentDate =
+    extractContextDate(xml, /CurrentYear.*Duration/i) ??
+    extractContextDate(xml, /CurrentYear.*Instant/i) ??
+    extractContextDate(xml, /CurrentPeriod.*Duration/i) ??
+    extractContextDate(xml, /CurrentPeriod.*Instant/i);
+
+  const priorDate =
+    extractContextDate(xml, /Prior.*Duration/i) ??
+    extractContextDate(xml, /Prior.*Instant/i);
+
+  return {
+    current: fiscalInfoFromDate(currentDate),
+    prior: fiscalInfoFromDate(priorDate),
+  };
+}
+
 export function extractRowsFromEdinetCsvZip(buffer: Buffer) {
   const zip = new AdmZip(buffer);
   const entries = zip.getEntries();
@@ -263,14 +351,7 @@ export function extractRowsFromEdinetCsvZip(buffer: Buffer) {
 
   if (!mainCsv) return [];
 
-  const buf = mainCsv.getData();
-
-  let text = buf.toString("utf8");
-  if (text.includes("�")) {
-    text = buf.toString("utf16le");
-  }
-
-  return parseTable(text);
+  return parseTable(decodeZipEntry(mainCsv));
 }
 
 export function extractFinancials(rows: Row[]): ExtractedFinancials {
