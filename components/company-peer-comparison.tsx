@@ -98,9 +98,9 @@ export default function CompanyPeerComparison({ ticker }: Props) {
   if (payload.companies.length <= 1) return null;
 
   return (
-    <section className="mt-6 rounded-3xl border border-green-300/20 bg-gradient-to-br from-green-500/10 via-white/[0.04] to-cyan-500/10 p-5 shadow-2xl shadow-black/20 sm:p-6">
+    <section className="mt-6 rounded-3xl border border-green-300/20 bg-gradient-to-br from-green-500/10 via-white/[0.04] to-cyan-500/10 p-4 shadow-2xl shadow-black/20 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-bold tracking-[0.24em] text-green-200">PEER COMPARISON</p>
           <h2 className="mt-2 text-2xl font-black text-white">同業比較</h2>
           <p className="mt-2 text-sm leading-7 text-slate-400">{payload.note}</p>
@@ -117,17 +117,17 @@ export default function CompanyPeerComparison({ ticker }: Props) {
             href={`/company/${company.ticker}`}
             className={
               company.isTarget
-                ? "rounded-2xl border border-cyan-300/30 bg-cyan-500/10 p-4"
-                : "rounded-2xl border border-white/10 bg-black/20 p-4 hover:bg-white/10"
+                ? "min-w-0 rounded-2xl border border-cyan-300/30 bg-cyan-500/10 p-4"
+                : "min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4 hover:bg-white/10"
             }
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="truncate text-lg font-black text-white">{company.companyName}</p>
+                <p className="break-words text-lg font-black leading-snug text-white">{company.companyName}</p>
                 <p className="mt-1 text-xs font-bold text-slate-500">{company.ticker}</p>
               </div>
               {company.isTarget ? (
-                <span className="rounded-full bg-cyan-300 px-2 py-1 text-[10px] font-black text-slate-950">対象</span>
+                <span className="shrink-0 rounded-full bg-cyan-300 px-2 py-1 text-[10px] font-black text-slate-950">対象</span>
               ) : null}
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
@@ -144,7 +144,7 @@ export default function CompanyPeerComparison({ ticker }: Props) {
         ))}
       </div>
 
-      <div className="mt-5 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+      <div className="mt-5 hidden overflow-hidden rounded-2xl border border-white/10 bg-black/20 md:block">
         <div className="overflow-x-auto">
           <table className="min-w-[760px] w-full border-collapse text-left">
             <thead>
