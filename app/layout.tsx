@@ -17,11 +17,16 @@ import CompanyEarningsFlashInjector from "@/components/company-earnings-flash-in
 import CompanyWatchlistInjector from "@/components/company-watchlist-injector";
 import CompanyProAnalysisInjector from "@/components/company-pro-analysis-injector";
 import CompareTray from "@/components/compare-tray";
+import SeoJsonLd, { organizationJsonLd, websiteJsonLd } from "@/components/seo-json-ld";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://kessan-tantei.jp"),
   title: "決算探偵 | グロース市場特化の財務分析ランキング",
   description:
     "決算探偵は、グロース市場に特化した財務分析ランキングです。EDINET決算データを自動解析し、成長性・収益品質・安全性・リスクシグナルから企業の特徴を可視化します。",
+  alternates: {
+    canonical: "/",
+  },
   verification: {
     google: "GprsF0U3m9SZj2MJ5AUo9FK-Ame_DGhpPLv5LKiIyqA",
   },
@@ -62,6 +67,7 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="ja">
         <body>
+          <SeoJsonLd data={[websiteJsonLd(), organizationJsonLd()]} />
           <SiteNav />
           {children}
           <CompanyTrendChartEnhancer />
