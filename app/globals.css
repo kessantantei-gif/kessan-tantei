@@ -74,134 +74,41 @@ main > header {
   display: none;
 }
 
-[data-company-watchlist-button="true"],
-[data-company-compare-button="true"],
-[data-compare-tray="true"] {
+[data-company-watchlist-button="true"] {
   display: none !important;
-}
-
-@media (min-width: 1024px) {
-  main > section[class*="py-16"],
-  main > section[class*="py-12"],
-  main > div[class*="py-16"],
-  main > div[class*="py-12"] {
-    padding-top: 2.75rem;
-    padding-bottom: 2.75rem;
-  }
-
-  main [class*="gap-8"] {
-    gap: 1.25rem;
-  }
-
-  main [class*="gap-10"] {
-    gap: 1.5rem;
-  }
-
-  main [class*="p-8"] {
-    padding: 1.5rem;
-  }
 }
 
 @media (max-width: 640px) {
   html,
-  body,
-  #__next,
-  main {
-    min-width: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    overflow-x: hidden !important;
-    overscroll-behavior-x: none !important;
-    touch-action: pan-y !important;
+  body {
+    overflow-x: hidden;
   }
 
-  body * {
-    min-width: 0 !important;
-    max-width: 100% !important;
+  main[data-company-page="true"] {
+    width: 100%;
+    max-width: 100dvw;
+    overflow-x: hidden;
+  }
+
+  main[data-company-page="true"] * {
+    min-width: 0;
     overflow-wrap: anywhere;
   }
 
-  main,
-  main > section,
-  main > div,
-  main > article,
-  main section,
-  main article {
-    width: 100% !important;
+  main[data-company-page="true"] > section,
+  main[data-company-page="true"] section,
+  main[data-company-page="true"] article,
+  main[data-company-page="true"] [class*="max-w-"] {
     max-width: 100% !important;
   }
 
-  main > section,
-  main > div,
-  main > article {
-    padding-left: 0.75rem !important;
-    padding-right: 0.75rem !important;
-  }
-
-  main [class*="max-w-"] {
-    max-width: 100% !important;
-  }
-
-  main [class*="grid"] {
+  main[data-company-page="true"] [class*="grid"] {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
-  main [class*="flex"] {
-    min-width: 0 !important;
-  }
-
-  main [class*="p-8"],
-  main [class*="p-7"],
-  main [class*="p-6"],
-  main [class*="p-5"] {
-    padding: 0.875rem !important;
-  }
-
-  main [class*="px-8"],
-  main [class*="px-6"],
-  main [class*="px-5"],
-  main [class*="px-4"] {
-    padding-left: 0.75rem !important;
-    padding-right: 0.75rem !important;
-  }
-
-  main [class*="py-16"],
-  main [class*="py-12"],
-  main [class*="py-10"],
-  main [class*="py-8"] {
-    padding-top: 1.25rem !important;
-    padding-bottom: 1.25rem !important;
-  }
-
-  main [class*="gap-10"],
-  main [class*="gap-8"],
-  main [class*="gap-6"],
-  main [class*="gap-5"] {
-    gap: 0.75rem !important;
-  }
-
-  main [class*="text-6xl"],
-  main [class*="text-5xl"] {
-    font-size: 2rem !important;
-    line-height: 1.15 !important;
-  }
-
-  main [class*="text-4xl"] {
-    font-size: 1.75rem !important;
-    line-height: 1.2 !important;
-  }
-
-  main [class*="rounded-3xl"] {
-    border-radius: 1.125rem !important;
-  }
-
-  main table,
-  main pre {
+  main[data-company-page="true"] table,
+  main[data-company-page="true"] pre {
     display: block;
     overflow-x: auto;
-  }
-
-  body [class*="fixed"] {
-    max-width: calc(100vw - 1.5rem) !important;
   }
 }
