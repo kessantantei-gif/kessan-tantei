@@ -1,45 +1,49 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { addWatchlistItem, isWatchlisted, removeWatchlistItem } from "@/lib/watchlist";
 
 type Props = {
   ticker: string;
+  name?: string;
 };
 
-export default function WatchButton({ ticker }: Props) {
+export default function WatchButton({ ticker, name }: Props) {
   const [watched, setWatched] = useState(false);
 
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem("watchlist") || "[]");
-    setWatched(stored.includes(ticker));
+    const sync = () => setWatched(isWatchlisted(ticker));
+    sync();
+    window.addEventListener("storage", sync);
+    window.addEventListener("kessan-watchlist-updated", sync);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("kessan-watchlist-updated", sync);
+    };
   }, [ticker]);
 
   function toggleWatch() {
-    const stored = JSON.parse(localStorage.getItem("watchlist") || "[]");
-
-    let next: string[];
-
-    if (stored.includes(ticker)) {
-      next = stored.filter((x: string) => x !== ticker);
+    if (watched) {
+      removeWatchlistItem(ticker);
       setWatched(false);
-    } else {
-      next = [...stored, ticker];
-      setWatched(true);
+      return;
     }
 
-    localStorage.setItem("watchlist", JSON.stringify(next));
+    addWatchlistItem(ticker, name || ticker);
+    setWatched(true);
   }
 
   return (
     <button
+      type="button"
       onClick={toggleWatch}
-      className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+      className={
         watched
-          ? "bg-yellow-400 text-black"
-          : "bg-white/10 text-white hover:bg-white/20"
-      }`}
+          ? "inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-full bg-yellow-400 px-4 py-2 text-xs font-black text-slate-950 transition active:scale-95 sm:text-sm"
+          : "inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-black text-white transition hover:bg-white/20 active:scale-95 sm:text-sm"
+      }
     >
-      {watched ? "⭐ ウォッチ中" : "☆ ウォッチ追加"}
+      {watched ? "★ ウォッチ中" : "☆ ウォッチ"}
     </button>
   );
 }
