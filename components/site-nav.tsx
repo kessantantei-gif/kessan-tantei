@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { href: "/ranking", label: "ランキング", shortLabel: "順位" },
-  { href: "/watchlist", label: "ウォッチ", shortLabel: "ウォッチ" },
+  { href: "/watchlist", label: "ウォッチ", shortLabel: "保存" },
+  { href: "/alerts", label: "アラート", shortLabel: "通知" },
   { href: "/news", label: "ニュース", shortLabel: "ニュース" },
   { href: "/data-quality", label: "データ品質", shortLabel: "品質" },
   { href: "/pricing", label: "初月100円Pro", shortLabel: "Pro", accent: true },
@@ -33,7 +34,7 @@ export default function SiteNav() {
           決算探偵
         </Link>
 
-        <div className="flex min-w-0 shrink-0 items-center gap-1 text-xs font-bold sm:gap-2 sm:text-sm">
+        <div className="flex min-w-0 shrink-0 items-center gap-1 overflow-x-auto text-xs font-bold sm:gap-2 sm:text-sm">
           {navItems.map((item) => {
             const active = isActivePath(pathname, item.href);
             const baseClass =
