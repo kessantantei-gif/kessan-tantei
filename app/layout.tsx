@@ -14,6 +14,7 @@ import CompanyAiSummaryInjector from "@/components/company-ai-summary-injector";
 import CompanyFinancialSignalsInjector from "@/components/company-financial-signals-injector";
 import CompanyPeerComparisonInjector from "@/components/company-peer-comparison-injector";
 import CompanyEarningsFlashInjector from "@/components/company-earnings-flash-injector";
+import CompanyWatchlistInjector from "@/components/company-watchlist-injector";
 import CompareTray from "@/components/compare-tray";
 
 export const metadata: Metadata = {
@@ -68,6 +69,7 @@ export default function RootLayout({
           <CompanyFinancialSignalsInjector />
           <CompanyPeerComparisonInjector />
           <CompanyEarningsFlashInjector />
+          <CompanyWatchlistInjector />
           <CompanyCompareFloatingButton />
           <CompareTray />
           <FeedbackButton />
