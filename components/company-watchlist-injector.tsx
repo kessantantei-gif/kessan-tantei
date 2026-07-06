@@ -42,6 +42,11 @@ function findHeroActionArea() {
   return h1?.parentElement as HTMLElement | null;
 }
 
+function markCompanyPage() {
+  const main = document.querySelector("main") as HTMLElement | null;
+  if (main) main.dataset.companyPage = "true";
+}
+
 export default function CompanyWatchlistInjector() {
   const pathname = usePathname();
   const ticker = useMemo(() => findTickerFromPath(pathname), [pathname]);
@@ -51,6 +56,7 @@ export default function CompanyWatchlistInjector() {
     let observer: MutationObserver | null = null;
 
     const run = () => {
+      markCompanyPage();
       removeLegacyWatchButtons();
       if (document.querySelector("[data-company-watch-button='true']")) return;
       if (alreadyHasOfficialWatchButton()) return;
