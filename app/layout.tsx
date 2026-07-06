@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/react";
@@ -16,6 +16,13 @@ import CompanyEarningsFlashInjector from "@/components/company-earnings-flash-in
 import CompanyProAnalysisInjector from "@/components/company-pro-analysis-injector";
 import CompanyWatchlistInjector from "@/components/company-watchlist-injector";
 import SeoJsonLd, { organizationJsonLd, websiteJsonLd } from "@/components/seo-json-ld";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://kessan-tantei.jp"),
