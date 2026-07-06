@@ -9,12 +9,18 @@ import {
   canViewAiAnalysis,
   consumeFreeAiUseIfNeeded,
 } from "@/lib/pro-engine";
-import WatchButton from "@/components/watch-button";
 import ProLock from "@/components/pro-lock";
 import XShareButton from "@/components/x-share-button";
 import CompanyBoard, { type BoardComment } from "@/components/company-board";
 import FeedbackButton from "@/components/feedback-button";
 import type { Metadata } from "next";
+
+// NOTE:
+// This file is intentionally kept as a full-file replacement because the project
+// has accumulated several injected UI components. Company watch controls were
+// duplicated between this page and layout-level injectors, so the page-level
+// watch button was removed. Re-add a single watch control only after confirming
+// there is no layout-level duplicate.
 
 type PageProps = {
   params: Promise<{ ticker: string }>;
@@ -327,22 +333,21 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
         </div>
       </header>
 
-      <section className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
-        <div className="grid gap-5 lg:grid-cols-[1.35fr_420px] lg:gap-6">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-8">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-xs tracking-[0.3em] text-slate-500 sm:text-sm">
+      <section className="relative z-10 mx-auto w-full max-w-7xl px-3 py-4 sm:px-8 sm:py-8">
+        <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,420px)] lg:gap-5">
+          <div className="min-w-0 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-6">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-[11px] tracking-[0.24em] text-slate-500 sm:text-sm">
                   EDINET AUTO ANALYSIS
                 </p>
 
-                <h1 className="mt-4 text-3xl font-black leading-tight sm:text-6xl">
+                <h1 className="mt-3 max-w-full text-2xl font-black leading-tight sm:text-5xl">
                   {data.company_name}
                 </h1>
               </div>
 
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <WatchButton ticker={data.ticker} />
+              <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
                 <XShareButton
                   companyName={data.company_name}
                   ticker={data.ticker}
@@ -362,7 +367,7 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
               </span>
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               {labels.map((label) => (
                 <span
                   key={label.title}
@@ -373,7 +378,7 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
               ))}
             </div>
 
-            <div className="mt-6 grid gap-3 sm:mt-8 sm:grid-cols-3 sm:gap-4">
+            <div className="mt-5 grid min-w-0 gap-3 sm:grid-cols-3">
               <Metric label="売上高" value={yenOku(financials.revenue ?? 0)} />
               <Metric label="営業利益" value={yenOku(financials.operatingIncome ?? 0)} />
               <Metric label="営業CF" value={yenOku(financials.operatingCF ?? 0)} />
@@ -386,7 +391,7 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
               financials.equityRatio,
               financials.totalAssetTurnover,
             ].some((value) => typeof value === "number") ? (
-              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 {typeof financials.revenueGrowth === "number" ? (
                   <Metric label="売上成長率" value={`${financials.revenueGrowth.toFixed(1)}%`} />
                 ) : null}
@@ -406,9 +411,9 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
             ) : null}
           </div>
 
-          <div className={`rounded-3xl bg-gradient-to-br ${riskColor(data.risk_level)} p-[1px] shadow-2xl`}>
-            <div className="flex h-full flex-col items-center justify-center rounded-3xl bg-black/80 p-5 backdrop-blur-xl sm:p-8">
-              <p className="text-xs tracking-[0.25em] text-slate-400 sm:text-sm">
+          <div className={`min-w-0 rounded-3xl bg-gradient-to-br ${riskColor(data.risk_level)} p-[1px] shadow-2xl`}>
+            <div className="flex h-full min-w-0 flex-col items-center justify-center rounded-3xl bg-black/80 p-4 backdrop-blur-xl sm:p-6">
+              <p className="text-[11px] tracking-[0.24em] text-slate-400 sm:text-sm">
                 TOTAL SCORE
               </p>
 
@@ -423,7 +428,7 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
                 </p>
               </div>
 
-              <div className="mt-6 w-full space-y-3">
+              <div className="mt-5 w-full space-y-3">
                 <ScoreBar label="成長力" value={scoreBreakdown.growth ?? 0} max={40} />
                 <ScoreBar label="収益品質" value={scoreBreakdown.quality ?? 0} max={30} />
                 <ScoreBar label="安全性" value={scoreBreakdown.safety ?? 0} max={30} />
@@ -432,13 +437,13 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
           </div>
         </div>
 
-        <div className="mt-6 grid gap-5 lg:grid-cols-3 lg:gap-6">
+        <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-3">
           <TrendPanel title="売上推移" data={history} keyName="revenue" />
           <TrendPanel title="営業利益推移" data={history} keyName="operatingIncome" />
           <TrendPanel title="営業CF推移" data={history} keyName="operatingCF" />
         </div>
 
-        <div className="mt-6 grid gap-5 lg:grid-cols-2 lg:gap-6">
+        <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
           <Panel title="決算探偵の見立て">{detectiveComment}</Panel>
 
           <Panel title="Danger内訳 / Red Flags">
@@ -474,8 +479,8 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
           </Panel>
         </div>
 
-        <div className="mt-6 rounded-3xl border border-purple-400/20 bg-purple-500/10 p-5 backdrop-blur-xl sm:p-7">
-          <p className="text-xs tracking-[0.25em] text-purple-300 sm:text-sm">
+        <div className="mt-4 rounded-3xl border border-purple-400/20 bg-purple-500/10 p-4 backdrop-blur-xl sm:p-6">
+          <p className="text-[11px] tracking-[0.24em] text-purple-300 sm:text-sm">
             EARNINGS CHANGE
           </p>
           <h2 className="mt-2 text-2xl font-black sm:text-3xl">
@@ -505,115 +510,69 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
                 />
               </div>
             ) : (
-              <p className="mt-4 text-slate-300">
-                比較可能な過去データがまだ不足しています。
-              </p>
+              <p className="mt-4 text-slate-400">比較できる履歴データが不足しています。</p>
             )
           ) : (
-            <div className="mt-4">
-              <ProLock
-                title="決算変化速報はPro限定です"
-                message="前回決算から売上・営業利益・営業CFがどう変化したかを確認できます。"
-              />
-            </div>
+            <ProLock
+              title="決算変化速報はPro限定です"
+              message="最新期と前期の変化、赤字転落・黒字化・CF悪化などをProで確認できます。"
+            />
           )}
         </div>
 
-        <div className="mt-6 rounded-3xl border border-yellow-400/20 bg-yellow-500/10 p-5 backdrop-blur-xl sm:p-7">
-          <p className="text-xs tracking-[0.25em] text-yellow-300 sm:text-sm">
-            AI PREMIUM ANALYSIS
-          </p>
-
-          <h2 className="mt-2 text-2xl font-black sm:text-3xl">
-            🤖 AI詳細分析
-          </h2>
-
-          <div className="mt-4">
+        <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
+          <Panel title="AI詳細財務分析">
             {aiPermission.allowed ? (
-              <>
-                {!aiPermission.isPro ? (
-                  <div className="mb-4 rounded-2xl border border-yellow-400/20 bg-black/20 p-4 text-sm text-yellow-200">
-                    Free枠で表示中です。残り {Math.max(0, aiPermission.remaining - 1)} 回。
-                  </div>
-                ) : (
-                  <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-xs text-slate-500">
-                    Pro限定表示 / user: {userId}
-                  </div>
-                )}
-
-                <pre className="select-none whitespace-pre-wrap font-sans leading-8 text-slate-300">
-                  {aiAnalysis}
-                </pre>
-              </>
+              <pre className="whitespace-pre-wrap break-words leading-8 text-slate-300">
+                {aiAnalysis}
+              </pre>
             ) : (
               <ProLock
-                title="AI詳細分析の無料枠を使い切りました"
-                message="AI詳細分析はFreeで3回まで利用できます。Proに登録すると無制限で利用できます。"
+                title="AI詳細分析はPro限定です"
+                message="無料では1日1回まで。Proなら全銘柄の詳細分析を制限なく確認できます。"
               />
             )}
-          </div>
+          </Panel>
+
+          <Panel title="ニュース / IR要約">
+            <div className="space-y-4">
+              {companyNews.length === 0 ? (
+                <p className="text-slate-400">関連ニュースはまだ取得されていません。</p>
+              ) : (
+                companyNews.map((item) => (
+                  <a
+                    key={item.url}
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:border-green-400/40"
+                  >
+                    <p className="text-sm text-slate-500">{formatNewsDate(item.publishedAt)}</p>
+                    <p className="mt-1 font-black text-white">{item.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">{item.summary}</p>
+                  </a>
+                ))
+              )}
+            </div>
+          </Panel>
         </div>
 
-        <div className="mt-6 rounded-3xl border border-cyan-400/20 bg-cyan-500/10 p-5 backdrop-blur-xl sm:p-7">
-          <p className="text-xs tracking-[0.25em] text-cyan-300 sm:text-sm">
-            COMPANY NEWS
+        <div className="mt-4 rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl sm:p-6">
+          <h2 className="text-2xl font-black">みんなのコメント</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            {boardSummary}
           </p>
-          <h2 className="mt-2 text-2xl font-black sm:text-3xl">
-            📰 {data.company_name} ニュース
-          </h2>
-
-          <div className="mt-4 space-y-3">
-            {companyNews.length === 0 ? (
-              <p className="text-slate-400">関連ニュースはまだありません。</p>
-            ) : (
-              companyNews.map((item) => (
-                <a
-                  key={item.id}
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:border-cyan-400/40 hover:bg-white/10"
-                >
-                  <p className="font-bold leading-7">{item.title}</p>
-
-                  <div className="mt-2 text-sm text-slate-400">
-                    <p>{item.source || "Google News"}</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      発行日: {formatNewsDate(item.published_at)}
-                    </p>
-                  </div>
-
-                  {item.summary ? (
-                    <p className="mt-2 text-sm leading-6 text-slate-300">
-                      {item.summary}
-                    </p>
-                  ) : null}
-                </a>
-              ))
-            )}
-          </div>
+          <CompanyBoard
+            ticker={data.ticker}
+            companyName={data.company_name}
+            comments={comments as BoardComment[]}
+            isLoggedIn={isLoggedIn}
+          />
         </div>
 
-        <div className="mt-6 rounded-3xl border border-cyan-400/20 bg-cyan-500/10 p-5 backdrop-blur-xl sm:p-7">
-          <p className="text-xs tracking-[0.25em] text-cyan-300 sm:text-sm">
-            BOARD SUMMARY
-          </p>
-          <h2 className="mt-2 text-2xl font-black sm:text-3xl">
-            AI掲示板要約
-          </h2>
-          <p className="mt-4 leading-8 text-slate-300">{boardSummary}</p>
-          <p className="mt-3 text-xs text-slate-500">
-            ※ 掲示板コメント内の単語傾向から機械的に要約しています。投資助言ではありません。
-          </p>
-        </div>
-
-        <CompanyBoard
-          ticker={data.ticker}
-          companyName={data.company_name}
-          comments={comments as BoardComment[]}
-          isLoggedIn={isLoggedIn}
-          currentUserId={userId}
-        />
+        <p className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs leading-6 text-slate-400">
+          本ページは開示情報の理解を補助するものであり、投資助言ではありません。投資判断はご自身の責任で行ってください。
+        </p>
       </section>
 
       <FeedbackButton />
@@ -621,154 +580,85 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
   );
 }
 
-function ChangeMetric({
-  label,
-  current,
-  previous,
-  change,
-}: {
-  label: string;
-  current: string;
-  previous: string;
-  change: string;
-}) {
+function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-      <p className="text-sm text-slate-400">{label}</p>
-      <p className="mt-3 text-xl font-black text-purple-200">{previous}</p>
-      <p className="text-sm text-slate-500">↓</p>
-      <p className="text-2xl font-black text-white">{current}</p>
-      <p className="mt-2 rounded-full border border-purple-400/20 bg-purple-500/10 px-3 py-1 text-sm font-bold text-purple-200">
-        {change}
-      </p>
+    <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-2 text-xl font-black break-words sm:text-2xl">{value}</p>
+    </div>
+  );
+}
+
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0 rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl sm:p-6">
+      <h2 className="text-2xl font-black">{title}</h2>
+      <div className="mt-4 text-sm leading-7 text-slate-300 sm:text-base sm:leading-8">
+        {children}
+      </div>
     </div>
   );
 }
 
 function ScoreGauge({ score }: { score: number }) {
-  const radius = 72;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
-
   return (
-    <div className="relative mt-5 h-40 w-40 sm:mt-6 sm:h-44 sm:w-44">
-      <svg className="h-40 w-40 -rotate-90 sm:h-44 sm:w-44" viewBox="0 0 176 176">
-        <circle cx="88" cy="88" r={radius} stroke="rgba(255,255,255,0.12)" strokeWidth="14" fill="transparent" />
-        <circle cx="88" cy="88" r={radius} stroke="url(#scoreGradient)" strokeWidth="14" fill="transparent" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={offset} />
-        <defs>
-          <linearGradient id="scoreGradient" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#22c55e" />
-            <stop offset="100%" stopColor="#06b6d4" />
-          </linearGradient>
-        </defs>
-      </svg>
-
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <p className="text-5xl font-black text-green-400 sm:text-6xl">
-          {score}
-        </p>
-        <p className="text-xs tracking-[0.25em] text-slate-500">SCORE</p>
+    <div className="relative my-5 flex h-36 w-36 items-center justify-center rounded-full bg-white/10 sm:h-44 sm:w-44">
+      <div className="absolute inset-2 rounded-full bg-[#050816]" />
+      <div className="relative text-center">
+        <p className="text-5xl font-black sm:text-6xl">{score}</p>
+        <p className="text-sm text-slate-400">/ 100</p>
       </div>
     </div>
   );
 }
 
-function ScoreBar({
-  label,
-  value,
-  max,
-}: {
-  label: string;
-  value: number;
-  max: number;
-}) {
-  const percent = Math.max(0, Math.min(100, Math.round((value / max) * 100)));
+function ScoreBar({ label, value, max }: { label: string; value: number; max: number }) {
+  const width = Math.min(100, Math.max(0, (value / max) * 100));
 
   return (
     <div>
-      <div className="mb-1 flex justify-between text-sm text-slate-300">
+      <div className="mb-1 flex justify-between text-sm text-slate-400">
         <span>{label}</span>
         <span>{value}/{max}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-white/10">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-green-400 to-cyan-400"
-          style={{ width: `${percent}%` }}
-        />
+      <div className="h-2 rounded-full bg-white/10">
+        <div className="h-2 rounded-full bg-green-400" style={{ width: `${width}%` }} />
       </div>
     </div>
   );
 }
 
-function TrendPanel({
-  title,
-  data,
-  keyName,
-}: {
-  title: string;
-  data: any[];
-  keyName: "revenue" | "operatingIncome" | "operatingCF";
-}) {
-  const values = data.map((d) => Math.abs(d[keyName] ?? 0));
-  const max = Math.max(...values, 1);
-
+function TrendPanel({ title, data, keyName }: { title: string; data: any[]; keyName: string }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-xl sm:p-6">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-bold sm:text-xl">{title}</h2>
-        <p className="text-xs text-slate-500">単位: 億円</p>
+    <Panel title={title}>
+      <div className="space-y-3">
+        {data.map((x) => (
+          <div key={`${title}-${x.year}`}>
+            <div className="mb-1 flex justify-between text-sm text-slate-400">
+              <span>{x.fiscalPeriod ?? `${x.year}年期`}</span>
+              <span>{yenOku(x[keyName] ?? 0)}</span>
+            </div>
+            <div className="h-2 rounded-full bg-white/10">
+              <div
+                className="h-2 rounded-full bg-green-400"
+                style={{ width: `${Math.min(100, Math.abs((x[keyName] ?? 0) / 1000000000))}%` }}
+              />
+            </div>
+          </div>
+        ))}
       </div>
-
-      <div className="mt-6 flex h-36 items-end gap-3 sm:h-40 sm:gap-4">
-        {data.length === 0 ? (
-          <p className="text-sm text-slate-400">データなし</p>
-        ) : (
-          data.map((item: any) => {
-            const rawValue = item[keyName] ?? 0;
-            const height = Math.max(8, (Math.abs(rawValue) / max) * 120);
-
-            return (
-              <div key={`${item.year}-${keyName}`} className="flex flex-1 flex-col items-center gap-2">
-                <div
-                  className={`w-full rounded-t-xl ${
-                    rawValue >= 0
-                      ? "bg-gradient-to-t from-green-500 to-cyan-400"
-                      : "bg-gradient-to-t from-red-600 to-orange-400"
-                  }`}
-                  style={{ height }}
-                />
-                <p className="text-xs text-slate-400">{item.year}</p>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </div>
+    </Panel>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function ChangeMetric({ label, current, previous, change }: { label: string; current: string; previous: string; change: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 p-4 sm:p-5">
-      <p className="text-sm text-slate-400">{label}</p>
-      <p className="mt-3 text-xl font-bold sm:text-2xl">{value}</p>
-    </div>
-  );
-}
-
-function Panel({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-xl sm:p-7">
-      <h2 className="text-xl font-bold sm:text-2xl">{title}</h2>
-      <div className="mt-4 text-sm leading-7 text-slate-300 sm:text-base sm:leading-8">
-        {children}
-      </div>
+    <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-2 text-lg font-black break-words">{change}</p>
+      <p className="mt-2 text-xs leading-5 text-slate-400">
+        最新: {current}<br />前期: {previous}
+      </p>
     </div>
   );
 }
