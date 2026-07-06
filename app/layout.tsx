@@ -11,6 +11,7 @@ import CompanyTrendChartEnhancer from "@/components/company-trend-chart-enhancer
 import ScoreExplanationInjector from "@/components/score-explanation-injector";
 import CompanyCompareFloatingButton from "@/components/company-compare-floating-button";
 import CompanyAiSummaryInjector from "@/components/company-ai-summary-injector";
+import CompanyPeerComparisonInjector from "@/components/company-peer-comparison-injector";
 import CompareTray from "@/components/compare-tray";
 
 export const metadata: Metadata = {
@@ -62,6 +63,7 @@ export default function RootLayout({
           <CompanyTrendChartEnhancer />
           <ScoreExplanationInjector />
           <CompanyAiSummaryInjector />
+          <CompanyPeerComparisonInjector />
           <CompanyCompareFloatingButton />
           <CompareTray />
           <FeedbackButton />
