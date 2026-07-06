@@ -44,6 +44,15 @@ const requiredApiRoutes = [
   "app/api/company/[ticker]/peer-comparison/route.ts",
   "app/api/company/[ticker]/earnings-flash/route.ts",
   "app/api/company/[ticker]/pro-analysis/route.ts",
+  "app/api/stripe/webhook/route.ts",
+];
+
+const requiredBillingFiles = [
+  "app/pricing/actions.ts",
+  "app/profile/billing-actions.ts",
+  "components/billing-portal-button.tsx",
+  "lib/stripe.ts",
+  "lib/pro.ts",
 ];
 
 const requiredSeoFiles = [
@@ -132,6 +141,10 @@ function auditFiles(items: AuditItem[]) {
 
   for (const route of requiredApiRoutes) {
     if (!exists(route)) add(items, "API", "ERROR", `${route} is missing`);
+  }
+
+  for (const billingFile of requiredBillingFiles) {
+    if (!exists(billingFile)) add(items, "SECURITY", "ERROR", `${billingFile} is missing`);
   }
 
   for (const seoFile of requiredSeoFiles) {
