@@ -13,6 +13,7 @@
     "audit:release": "tsx scripts/audit-release.ts",
     "audit:stripe": "tsx scripts/audit-stripe.ts",
     "audit:seo": "tsx scripts/audit-seo.ts",
+    "audit:final": "tsx scripts/audit-final.ts",
     "inspect:duplicate-tickers": "tsx scripts/inspect-duplicate-tickers.ts",
     "cleanup:duplicate-tickers": "tsx scripts/cleanup-duplicate-tickers.ts",
     "normalize:history-periods": "tsx scripts/normalize-history-periods.ts",
