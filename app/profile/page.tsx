@@ -2,6 +2,8 @@ import Link from "next/link";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getProStatus } from "@/lib/pro";
+import ProStatusCard from "@/components/pro-status-card";
 import FormSubmitButton from "@/components/form-submit-button";
 import { updateProfile } from "./actions";
 
@@ -9,6 +11,7 @@ type PageProps = {
   searchParams?: Promise<{
     saved?: string;
     error?: string;
+    checkout?: string;
   }>;
 };
 
@@ -21,11 +24,16 @@ export default async function ProfilePage({ searchParams }: PageProps) {
     redirect("/");
   }
 
-  const { data: profile } = await supabaseAdmin
-    .from("profiles")
-    .select("display_name, plan")
-    .eq("clerk_user_id", userId)
-    .maybeSingle();
+  const [proStatus, profileResult] = await Promise.all([
+    getProStatus(),
+    supabaseAdmin
+      .from("profiles")
+      .select("display_name, plan")
+      .eq("clerk_user_id", userId)
+      .maybeSingle(),
+  ]);
+
+  const profile = profileResult.data;
 
   const defaultName =
     profile?.display_name ||
@@ -41,7 +49,7 @@ export default async function ProfilePage({ searchParams }: PageProps) {
           <Link href="/" className="text-2xl font-black">
             決算探偵
           </Link>
-          <Link href="/" className="text-sm text-slate-400 hover:text-white">
+          <Link href="/ranking" className="text-sm text-slate-400 hover:text-white">
             ← ランキングへ
           </Link>
         </div>
@@ -49,6 +57,12 @@ export default async function ProfilePage({ searchParams }: PageProps) {
         <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl sm:p-8">
           <p className="text-xs tracking-[0.25em] text-slate-500">PROFILE</p>
           <h1 className="mt-3 text-4xl font-black">プロフィール</h1>
+
+          {params?.checkout === "success" ? (
+            <div className="mt-5 rounded-2xl border border-yellow-400/20 bg-yellow-500/10 p-4 text-yellow-100">
+              ✅ Pro登録処理を受け付けました。反映まで少し時間がかかる場合があります。
+            </div>
+          ) : null}
 
           {params?.saved === "1" ? (
             <div className="mt-5 rounded-2xl border border-green-400/20 bg-green-500/10 p-4 text-green-300">
@@ -62,11 +76,8 @@ export default async function ProfilePage({ searchParams }: PageProps) {
             </div>
           ) : null}
 
-          <div className="mt-6 rounded-2xl border border-white/10 bg-black/20 p-5">
-            <p className="text-sm text-slate-400">現在のプラン</p>
-            <p className="mt-2 text-2xl font-black text-green-300">
-              {profile?.plan === "pro" ? "Pro" : "Free"}
-            </p>
+          <div className="mt-6">
+            <ProStatusCard status={proStatus} />
           </div>
 
           <form action={updateProfile} className="mt-6 grid gap-4">
