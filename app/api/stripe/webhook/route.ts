@@ -14,11 +14,20 @@ type ProfileUpdate = {
   updated_at: string;
 };
 
+type InvoiceWithSubscription = Stripe.Invoice & {
+  subscription?: string | Stripe.Subscription | null;
+};
+
 function isProStatus(status: string | null | undefined) {
   return status === "active" || status === "trialing";
 }
 
 function customerId(value: string | Stripe.Customer | Stripe.DeletedCustomer | null) {
+  if (!value) return null;
+  return typeof value === "string" ? value : value.id;
+}
+
+function subscriptionId(value: string | Stripe.Subscription | null | undefined) {
   if (!value) return null;
   return typeof value === "string" ? value : value.id;
 }
@@ -40,18 +49,18 @@ async function upsertProfile(update: ProfileUpdate) {
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const clerkUserId = session.metadata?.clerk_user_id;
   const stripeCustomerId = customerId(session.customer as string | Stripe.Customer | Stripe.DeletedCustomer | null);
-  const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id ?? null;
+  const currentSubscriptionId = subscriptionId(session.subscription as string | Stripe.Subscription | null | undefined);
 
   let status: string | null = null;
-  if (subscriptionId) {
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  if (currentSubscriptionId) {
+    const subscription = await stripe.subscriptions.retrieve(currentSubscriptionId);
     status = subscription.status;
   }
 
   await upsertProfile({
     clerk_user_id: clerkUserId,
     stripe_customer_id: stripeCustomerId,
-    stripe_subscription_id: subscriptionId,
+    stripe_subscription_id: currentSubscriptionId,
     subscription_status: status,
     plan: isProStatus(status) ? "pro" : "free",
     updated_at: new Date().toISOString(),
@@ -102,11 +111,11 @@ export async function POST(req: Request) {
         await handleSubscription(event.data.object as Stripe.Subscription);
         break;
       case "invoice.payment_failed": {
-        const invoice = event.data.object as Stripe.Invoice;
-        const subscriptionId = typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id ?? null;
+        const invoice = event.data.object as InvoiceWithSubscription;
+        const currentSubscriptionId = subscriptionId(invoice.subscription);
         const stripeCustomerId = customerId(invoice.customer as string | Stripe.Customer | Stripe.DeletedCustomer | null);
-        if (subscriptionId) {
-          const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        if (currentSubscriptionId) {
+          const subscription = await stripe.subscriptions.retrieve(currentSubscriptionId);
           await handleSubscription(subscription);
         } else if (stripeCustomerId) {
           await upsertProfile({
