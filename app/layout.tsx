@@ -11,6 +11,7 @@ import CompanyTrendChartEnhancer from "@/components/company-trend-chart-enhancer
 import ScoreExplanationInjector from "@/components/score-explanation-injector";
 import CompanyCompareFloatingButton from "@/components/company-compare-floating-button";
 import CompanyAiSummaryInjector from "@/components/company-ai-summary-injector";
+import CompanyFinancialSignalsInjector from "@/components/company-financial-signals-injector";
 import CompanyPeerComparisonInjector from "@/components/company-peer-comparison-injector";
 import CompanyEarningsFlashInjector from "@/components/company-earnings-flash-injector";
 import CompareTray from "@/components/compare-tray";
@@ -64,6 +65,7 @@ export default function RootLayout({
           <CompanyTrendChartEnhancer />
           <ScoreExplanationInjector />
           <CompanyAiSummaryInjector />
+          <CompanyFinancialSignalsInjector />
           <CompanyPeerComparisonInjector />
           <CompanyEarningsFlashInjector />
           <CompanyCompareFloatingButton />
