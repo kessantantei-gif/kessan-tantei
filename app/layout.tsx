@@ -14,6 +14,7 @@ import CompanyFinancialSignalsInjector from "@/components/company-financial-sign
 import CompanyPeerComparisonInjector from "@/components/company-peer-comparison-injector";
 import CompanyEarningsFlashInjector from "@/components/company-earnings-flash-injector";
 import CompanyProAnalysisInjector from "@/components/company-pro-analysis-injector";
+import CompanyWatchlistInjector from "@/components/company-watchlist-injector";
 import SeoJsonLd, { organizationJsonLd, websiteJsonLd } from "@/components/seo-json-ld";
 
 export const metadata: Metadata = {
@@ -74,6 +75,7 @@ export default function RootLayout({
           <CompanyPeerComparisonInjector />
           <CompanyEarningsFlashInjector />
           <CompanyProAnalysisInjector />
+          <CompanyWatchlistInjector />
           <FeedbackButton />
           <AuthButton />
           <Toaster richColors position="top-right" />
