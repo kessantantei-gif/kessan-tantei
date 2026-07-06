@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getProStatus } from "@/lib/pro";
 import ProStatusCard from "@/components/pro-status-card";
+import BillingPortalButton from "@/components/billing-portal-button";
 import FormSubmitButton from "@/components/form-submit-button";
 import { updateProfile } from "./actions";
 
@@ -79,6 +80,18 @@ export default async function ProfilePage({ searchParams }: PageProps) {
           <div className="mt-6">
             <ProStatusCard status={proStatus} />
           </div>
+
+          {proStatus.stripeCustomerId ? (
+            <div className="mt-4 rounded-3xl border border-white/10 bg-black/20 p-5">
+              <p className="text-sm font-black text-white">課金管理</p>
+              <p className="mt-2 text-sm leading-7 text-slate-400">
+                支払い方法の変更、請求履歴の確認、解約はStripeの管理画面から行えます。
+              </p>
+              <div className="mt-4">
+                <BillingPortalButton />
+              </div>
+            </div>
+          ) : null}
 
           <form action={updateProfile} className="mt-6 grid gap-4">
             <div>
