@@ -39,7 +39,7 @@ type AuditIssue = {
   ticker: string;
   companyName: string;
   feature: "ai-summary" | "score" | "peer" | "earnings";
-  severity: "ERROR" | "WARNING";
+  severity: "ERROR" | "WARNING" | "INFO";
   message: string;
 };
 
@@ -110,7 +110,7 @@ function auditAiSummary(company: Company) {
   const issues: AuditIssue[] = [];
   if (!company.company_name) issues.push(issue(company, "ai-summary", "ERROR", "company_name missing"));
   if (!hasAnyFinancialMetric(company) && !(company.risk?.flags ?? []).length) {
-    issues.push(issue(company, "ai-summary", "WARNING", "summary source metrics are limited"));
+    issues.push(issue(company, "ai-summary", "INFO", "summary source metrics are limited"));
   }
   return issues;
 }
@@ -120,7 +120,7 @@ function auditScore(company: Company) {
   if (!isNumber(company.score)) issues.push(issue(company, "score", "ERROR", "score missing"));
   if (!company.score_breakdown || Object.keys(company.score_breakdown).length === 0) {
     if (!hasAnyFinancialMetric(company)) {
-      issues.push(issue(company, "score", "WARNING", "score breakdown and fallback metrics are limited"));
+      issues.push(issue(company, "score", "INFO", "score breakdown and fallback metrics are limited"));
     }
   }
   return issues;
@@ -154,11 +154,11 @@ function auditPeer(company: Company, companies: Company[]) {
 function auditEarnings(company: Company) {
   const issues: AuditIssue[] = [];
   if (!hasTwoHistoryPeriods(company)) {
-    issues.push(issue(company, "earnings", "WARNING", "history has less than 2 periods"));
+    issues.push(issue(company, "earnings", "INFO", "history has less than 2 periods"));
     return issues;
   }
   if (!hasEarningsComparableMetrics(company)) {
-    issues.push(issue(company, "earnings", "WARNING", "history exists but comparable metrics are limited"));
+    issues.push(issue(company, "earnings", "INFO", "history exists but comparable metrics are limited"));
   }
   return issues;
 }
@@ -199,6 +199,7 @@ async function main() {
 
   const errors = issues.filter((item) => item.severity === "ERROR");
   const warnings = issues.filter((item) => item.severity === "WARNING");
+  const info = issues.filter((item) => item.severity === "INFO");
 
   const byFeature = {
     aiSummary: issues.filter((item) => item.feature === "ai-summary").length,
@@ -212,11 +213,13 @@ async function main() {
     total: companies.length,
     errors: errors.length,
     warnings: warnings.length,
+    info: info.length,
     byFeature,
   });
 
   printGroup("ERRORS", errors);
   printGroup("WARNINGS", warnings);
+  printGroup("INFO / DATA LIMITATIONS", info);
 
   if (errors.length > 0) process.exitCode = 1;
 }
