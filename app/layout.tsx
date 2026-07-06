@@ -12,6 +12,7 @@ import ScoreExplanationInjector from "@/components/score-explanation-injector";
 import CompanyCompareFloatingButton from "@/components/company-compare-floating-button";
 import CompanyAiSummaryInjector from "@/components/company-ai-summary-injector";
 import CompanyPeerComparisonInjector from "@/components/company-peer-comparison-injector";
+import CompanyEarningsFlashInjector from "@/components/company-earnings-flash-injector";
 import CompareTray from "@/components/compare-tray";
 
 export const metadata: Metadata = {
@@ -64,6 +65,7 @@ export default function RootLayout({
           <ScoreExplanationInjector />
           <CompanyAiSummaryInjector />
           <CompanyPeerComparisonInjector />
+          <CompanyEarningsFlashInjector />
           <CompanyCompareFloatingButton />
           <CompareTray />
           <FeedbackButton />
