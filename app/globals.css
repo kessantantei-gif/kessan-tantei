@@ -27,20 +27,31 @@ html,
 body {
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: hidden !important;
+  overscroll-behavior-x: none;
+}
+
+html {
+  position: relative;
 }
 
 body {
+  position: relative;
+  min-width: 0;
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
   text-rendering: optimizeLegibility;
 }
 
+body > * {
+  max-width: 100%;
+}
+
 main {
   width: 100%;
-  max-width: 100vw;
-  overflow-x: clip;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 img,
@@ -78,10 +89,54 @@ main > header {
   display: none !important;
 }
 
+/*
+  Hard guard against accidental body-level horizontal scrolling.
+  Long financial tables / code blocks should scroll inside themselves, not move the whole page.
+*/
+@media (max-width: 768px) {
+  body,
+  main,
+  section,
+  article,
+  nav,
+  header,
+  footer {
+    max-width: 100% !important;
+    overflow-x: hidden;
+  }
+
+  [class*="w-screen"],
+  [class*="min-w-screen"],
+  [style*="width: 100vw"],
+  [style*="min-width: 100vw"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  [class*="translate-x"],
+  [class*="-translate-x"] {
+    max-width: 100% !important;
+  }
+
+  [class*="fixed"],
+  [class*="absolute"] {
+    max-width: calc(100vw - 1rem) !important;
+  }
+
+  table,
+  pre,
+  .overflow-x-auto {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 @media (max-width: 640px) {
   html,
   body {
-    overflow-x: hidden;
+    overflow-x: hidden !important;
   }
 
   main[data-company-page="true"] {
