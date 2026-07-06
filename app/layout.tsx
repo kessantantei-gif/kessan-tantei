@@ -15,6 +15,7 @@ import CompanyPeerComparisonInjector from "@/components/company-peer-comparison-
 import CompanyEarningsFlashInjector from "@/components/company-earnings-flash-injector";
 import CompanyProAnalysisInjector from "@/components/company-pro-analysis-injector";
 import CompanyWatchlistInjector from "@/components/company-watchlist-injector";
+import CompanyCompareFloatingButton from "@/components/company-compare-floating-button";
 import SeoJsonLd, { organizationJsonLd, websiteJsonLd } from "@/components/seo-json-ld";
 
 export const viewport: Viewport = {
@@ -83,6 +84,7 @@ export default function RootLayout({
           <CompanyEarningsFlashInjector />
           <CompanyProAnalysisInjector />
           <CompanyWatchlistInjector />
+          <CompanyCompareFloatingButton />
           <FeedbackButton />
           <AuthButton />
           <Toaster richColors position="top-right" />
