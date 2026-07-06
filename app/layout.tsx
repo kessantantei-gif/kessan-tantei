@@ -14,7 +14,6 @@ import CompanyAiSummaryInjector from "@/components/company-ai-summary-injector";
 import CompanyFinancialSignalsInjector from "@/components/company-financial-signals-injector";
 import CompanyPeerComparisonInjector from "@/components/company-peer-comparison-injector";
 import CompanyEarningsFlashInjector from "@/components/company-earnings-flash-injector";
-import CompanyWatchlistInjector from "@/components/company-watchlist-injector";
 import CompanyProAnalysisInjector from "@/components/company-pro-analysis-injector";
 import CompareTray from "@/components/compare-tray";
 import SeoJsonLd, { organizationJsonLd, websiteJsonLd } from "@/components/seo-json-ld";
@@ -77,7 +76,6 @@ export default function RootLayout({
           <CompanyPeerComparisonInjector />
           <CompanyEarningsFlashInjector />
           <CompanyProAnalysisInjector />
-          <CompanyWatchlistInjector />
           <CompanyCompareFloatingButton />
           <CompareTray />
           <FeedbackButton />
