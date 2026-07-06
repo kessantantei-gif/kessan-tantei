@@ -29,47 +29,21 @@ const PANELS: { title: string; key: TrendKey }[] = [
   { title: "営業CF推移", key: "operatingCF" },
 ];
 
-function formatOku(value?: number | null, suffix = "億") {
+function formatOku(value?: number | null, suffix = "億円") {
   if (typeof value !== "number" || !Number.isFinite(value)) return "—";
-
   const oku = value / 100_000_000;
   const abs = Math.abs(oku);
   const digits = abs >= 100 ? 0 : abs >= 10 ? 1 : 2;
-  return `${oku.toLocaleString("ja-JP", { maximumFractionDigits: digits })}${suffix}`;
-}
-
-function formatDiff(current?: number, previous?: number) {
-  if (
-    typeof current !== "number" ||
-    typeof previous !== "number" ||
-    !Number.isFinite(current) ||
-    !Number.isFinite(previous)
-  ) {
-    return { amount: "—", rate: "—", up: null as boolean | null };
-  }
-
-  const diff = current - previous;
-  const up = diff >= 0;
-  const sign = up ? "+" : "";
-  const rate = previous === 0 ? "—" : `${sign}${((diff / Math.abs(previous)) * 100).toFixed(1)}%`;
-
-  return {
-    amount: `${sign}${formatOku(diff)}`,
-    rate,
-    up,
-  };
+  return `${oku.toLocaleString("ja-JP", { maximumFractionDigits: digits })} ${suffix}`;
 }
 
 function displayPeriod(row?: HistoryRow) {
   if (!row) return "最新";
-
   const rawPeriod = row.fiscalPeriod ?? row.fiscal_period ?? row.period;
   if (typeof rawPeriod === "string" && rawPeriod.trim()) return rawPeriod.trim();
-
   const rawYear = row.fiscalYear ?? row.fiscal_year ?? row.year;
   if (rawYear === undefined || rawYear === null || rawYear === "") return "年度不明";
-
-  return `${rawYear}年度`;
+  return `${rawYear}年期`;
 }
 
 function sortKey(row: HistoryRow) {
@@ -91,140 +65,55 @@ function findTrendCard(title: string) {
   return heading?.closest("div.rounded-3xl") as HTMLElement | null;
 }
 
-function findOriginalChart(card: HTMLElement) {
-  const candidates = Array.from(card.querySelectorAll("div"));
-  return candidates.find((node) => {
-    const className = node.className.toString();
-    return className.includes("mt-6") && className.includes("items-end") && className.includes("h-36");
-  }) as HTMLElement | undefined;
-}
-
-function trendVerdict(key: TrendKey, latest?: number, previous?: number) {
-  if (typeof latest !== "number" || !Number.isFinite(latest)) return "データ不足";
-  if (typeof previous !== "number" || !Number.isFinite(previous)) return "比較データ不足";
-
-  if (key === "revenue") {
-    if (latest > previous) return "増収";
-    if (latest < previous) return "減収";
-    return "横ばい";
-  }
-
-  if (previous < 0 && latest >= 0) return key === "operatingCF" ? "CF黒字転換" : "黒字転換";
-  if (previous >= 0 && latest < 0) return key === "operatingCF" ? "CF赤字転落" : "赤字転落";
-  if (latest > previous) return previous < 0 ? "赤字縮小" : "改善";
-  if (latest < previous) return latest < 0 ? "赤字拡大" : "悪化";
-  return "横ばい";
-}
-
 function buildChart(rows: HistoryRow[], key: TrendKey) {
   const cleanRows = normalizedRows(rows);
-
-  const values = cleanRows.map((row) => Math.abs(Number(row[key] ?? 0)));
-  const max = Math.max(...values, 1);
-  const latest = cleanRows.at(-1);
-  const previous = cleanRows.at(-2);
-  const latestValue = Number(latest?.[key] ?? NaN);
-  const previousValue = Number(previous?.[key] ?? NaN);
-  const latestDiff = formatDiff(latestValue, previousValue);
-  const verdict = trendVerdict(key, latestValue, previousValue);
+  const values = cleanRows.map((row) => Number(row[key] ?? 0));
+  const max = Math.max(...values.map((value) => Math.abs(value)), 1);
 
   const root = document.createElement("div");
   root.dataset.kessanTrendEnhanced = "true";
-  root.className = "mt-5 rounded-2xl border border-white/10 bg-black/20 p-4";
-
-  const summary = document.createElement("div");
-  summary.className = "grid gap-2 sm:grid-cols-3";
-
-  const summaryItems = [
-    { label: `${displayPeriod(latest)} 最新値`, value: formatOku(latestValue, "億円"), tone: "border-cyan-300/20 bg-cyan-500/10 text-cyan-100" },
-    { label: "前年差", value: `${latestDiff.amount} / ${latestDiff.rate}`, tone: latestDiff.up === false ? "border-red-300/20 bg-red-500/10 text-red-100" : "border-green-300/20 bg-green-500/10 text-green-100" },
-    { label: "判定", value: verdict, tone: latestDiff.up === false ? "border-red-300/20 bg-red-500/10 text-red-100" : "border-green-300/20 bg-green-500/10 text-green-100" },
-  ];
-
-  for (const item of summaryItems) {
-    const box = document.createElement("div");
-    box.className = `rounded-2xl border p-3 ${item.tone}`;
-
-    const label = document.createElement("p");
-    label.className = "text-[10px] font-bold tracking-[0.18em] opacity-70";
-    label.textContent = item.label;
-
-    const value = document.createElement("p");
-    value.className = "mt-1 text-sm font-black sm:text-base";
-    value.textContent = item.value;
-
-    box.append(label, value);
-    summary.append(box);
-  }
-
-  const graph = document.createElement("div");
-  graph.className = "mt-8 flex items-end gap-3 sm:gap-4";
+  root.className = "mt-4 w-full max-w-full space-y-4 overflow-hidden";
 
   if (cleanRows.length === 0) {
     const empty = document.createElement("p");
     empty.className = "text-sm text-slate-400";
     empty.textContent = "データなし";
-    root.append(summary, empty);
+    root.append(empty);
     return root;
   }
 
-  cleanRows.forEach((row, index) => {
+  for (const row of cleanRows) {
     const value = Number(row[key] ?? 0);
-    const prev = index > 0 ? Number(cleanRows[index - 1][key] ?? NaN) : undefined;
-    const diff = formatDiff(value, prev);
-    const height = Math.max(56, (Math.abs(value) / max) * 130);
-    const isLatest = row === latest;
+    const width = Math.max(3, Math.min(100, (Math.abs(value) / max) * 100));
+    const isPositive = value >= 0;
 
     const item = document.createElement("div");
-    item.className = "flex min-w-0 flex-1 flex-col items-center";
+    item.className = "min-w-0";
 
-    const barWrap = document.createElement("div");
-    barWrap.className = "relative flex h-[150px] w-full items-end justify-center";
+    const head = document.createElement("div");
+    head.className = "mb-2 flex min-w-0 items-baseline justify-between gap-3";
+
+    const period = document.createElement("p");
+    period.className = "min-w-0 truncate text-sm font-bold text-slate-400 sm:text-base";
+    period.textContent = displayPeriod(row);
+
+    const amount = document.createElement("p");
+    amount.className = "shrink-0 text-right text-sm font-black text-slate-200 sm:text-base";
+    amount.textContent = formatOku(value);
+
+    const rail = document.createElement("div");
+    rail.className = "h-3 w-full max-w-full overflow-hidden rounded-full bg-white/10";
 
     const bar = document.createElement("div");
-    bar.className = value >= 0
-      ? `relative w-full overflow-hidden rounded-t-2xl border bg-gradient-to-t from-green-500/75 to-cyan-300/90 ${isLatest ? "border-yellow-200/70 ring-2 ring-yellow-300/40" : "border-green-300/20"}`
-      : `relative w-full overflow-hidden rounded-t-2xl border bg-gradient-to-t from-red-600/75 to-orange-300/90 ${isLatest ? "border-yellow-200/70 ring-2 ring-yellow-300/40" : "border-red-300/20"}`;
-    bar.style.height = `${height}px`;
-    bar.title = `${displayPeriod(row)}: ${formatOku(value, "億円")} / 前年差 ${diff.amount} / ${diff.rate}`;
+    bar.className = isPositive ? "h-full rounded-full bg-green-400" : "h-full rounded-full bg-red-400";
+    bar.style.width = `${width}%`;
 
-    const valueLabel = document.createElement("div");
-    valueLabel.className = "absolute left-1/2 top-2 z-10 -translate-x-1/2 whitespace-nowrap rounded-xl bg-black/55 px-2 py-1 text-center text-[10px] font-black leading-tight text-white shadow-sm backdrop-blur sm:text-xs";
-    valueLabel.textContent = formatOku(value);
+    head.append(period, amount);
+    rail.append(bar);
+    item.append(head, rail);
+    root.append(item);
+  }
 
-    bar.append(valueLabel);
-    barWrap.append(bar);
-
-    const diffWrap = document.createElement("div");
-    diffWrap.className = "mt-3 flex h-8 w-full items-center justify-center";
-
-    const diffBadge = document.createElement("div");
-    diffBadge.className = diff.up === false
-      ? "max-w-full rounded-full border border-red-300/30 bg-red-950/70 px-2 py-1 text-center text-[10px] font-black leading-tight text-red-100 sm:text-xs"
-      : "max-w-full rounded-full border border-green-300/30 bg-green-950/70 px-2 py-1 text-center text-[10px] font-black leading-tight text-green-100 sm:text-xs";
-    diffBadge.textContent = index === 0 ? "前年差—" : diff.rate;
-    diffWrap.append(diffBadge);
-
-    const periodWrap = document.createElement("div");
-    periodWrap.className = "mt-2 flex h-14 w-full items-start justify-center";
-
-    const period = document.createElement("div");
-    period.className = isLatest
-      ? "flex min-h-10 max-w-full items-center justify-center rounded-2xl border border-yellow-300/50 bg-yellow-300/15 px-2 py-1 text-center text-[10px] font-black leading-tight text-yellow-100 sm:text-xs"
-      : "flex min-h-10 max-w-full items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-2 py-1 text-center text-[10px] font-black leading-tight text-slate-300 sm:text-xs";
-    period.textContent = isLatest ? `${displayPeriod(row)}\n最新` : displayPeriod(row);
-    period.style.whiteSpace = "pre-line";
-    periodWrap.append(period);
-
-    item.append(barWrap, diffWrap, periodWrap);
-    graph.append(item);
-  });
-
-  const caption = document.createElement("p");
-  caption.className = "mt-2 text-xs leading-6 text-slate-500";
-  caption.textContent = "表示は直近最大3期です。棒の中に金額、棒の下に前年差率と決算期を固定表示しています。";
-
-  root.append(summary, graph, caption);
   return root;
 }
 
@@ -236,10 +125,12 @@ function applyCharts(history: HistoryRow[]) {
     const already = card.querySelector("[data-kessan-trend-enhanced='true']");
     if (already) continue;
 
-    const original = findOriginalChart(card);
-    if (!original) continue;
+    const heading = Array.from(card.querySelectorAll("h2")).find((node) => node.textContent?.trim() === panel.title);
+    if (!heading) continue;
 
-    original.replaceWith(buildChart(history, panel.key));
+    const existingContent = heading.nextElementSibling;
+    if (existingContent) existingContent.remove();
+    heading.insertAdjacentElement("afterend", buildChart(history, panel.key));
   }
 }
 
