@@ -74,6 +74,12 @@ main > header {
   display: none;
 }
 
+[data-company-watchlist-button="true"],
+[data-company-compare-button="true"],
+[data-compare-tray="true"] {
+  display: none !important;
+}
+
 @media (min-width: 1024px) {
   main > section[class*="py-16"],
   main > section[class*="py-12"],
@@ -102,21 +108,32 @@ main > header {
   #__next,
   main {
     min-width: 0 !important;
-    max-width: 100vw !important;
+    width: 100% !important;
+    max-width: 100% !important;
     overflow-x: hidden !important;
+    overscroll-behavior-x: none !important;
+    touch-action: pan-y !important;
   }
 
   body * {
-    max-width: 100vw;
-    min-width: 0;
+    min-width: 0 !important;
+    max-width: 100% !important;
     overflow-wrap: anywhere;
+  }
+
+  main,
+  main > section,
+  main > div,
+  main > article,
+  main section,
+  main article {
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   main > section,
   main > div,
   main > article {
-    width: 100% !important;
-    max-width: 100% !important;
     padding-left: 0.75rem !important;
     padding-right: 0.75rem !important;
   }
@@ -127,6 +144,10 @@ main > header {
 
   main [class*="grid"] {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  main [class*="flex"] {
+    min-width: 0 !important;
   }
 
   main [class*="p-8"],
@@ -180,7 +201,6 @@ main > header {
     overflow-x: auto;
   }
 
-  body > div[style*="position: fixed"],
   body [class*="fixed"] {
     max-width: calc(100vw - 1.5rem) !important;
   }
