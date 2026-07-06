@@ -19,10 +19,55 @@
   }
 }
 
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+main {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: clip;
+}
+
+img,
+svg,
+canvas,
+video,
+table {
+  max-width: 100%;
+}
+
+pre,
+code {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /*
@@ -32,4 +77,32 @@ body {
 */
 main > header {
   display: none;
+}
+
+/*
+  Mobile safety net: several legacy cards use large desktop widths or injected widgets.
+  Keep them inside the viewport without forcing pinch zoom.
+*/
+@media (max-width: 640px) {
+  h1,
+  h2,
+  h3,
+  p,
+  span,
+  div,
+  a,
+  button {
+    overflow-wrap: anywhere;
+  }
+
+  [class*="max-w-7xl"],
+  [class*="max-w-6xl"],
+  [class*="max-w-5xl"],
+  [class*="max-w-4xl"] {
+    max-width: 100vw;
+  }
+
+  [class*="rounded-3xl"] {
+    border-radius: 1.25rem;
+  }
 }
