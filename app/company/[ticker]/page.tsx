@@ -15,13 +15,6 @@ import CompanyBoard, { type BoardComment } from "@/components/company-board";
 import FeedbackButton from "@/components/feedback-button";
 import type { Metadata } from "next";
 
-// NOTE:
-// This file is intentionally kept as a full-file replacement because the project
-// has accumulated several injected UI components. Company watch controls were
-// duplicated between this page and layout-level injectors, so the page-level
-// watch button was removed. Re-add a single watch control only after confirming
-// there is no layout-level duplicate.
-
 type PageProps = {
   params: Promise<{ ticker: string }>;
 };
@@ -319,7 +312,7 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
 `;
 
   return (
-    <main className="min-h-screen bg-[#050816] text-white">
+    <main className="min-h-screen bg-[#050816] text-white" data-company-page="true">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(34,197,94,0.16),transparent_32%),radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),transparent_28%),radial-gradient(circle_at_bottom,_rgba(168,85,247,0.12),transparent_35%)]" />
 
       <header className="relative z-10 border-b border-white/10 backdrop-blur">
@@ -547,7 +540,7 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
                     rel="noreferrer"
                     className="block rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:border-green-400/40"
                   >
-                    <p className="text-sm text-slate-500">{formatNewsDate(item.publishedAt)}</p>
+                    <p className="text-sm text-slate-500">{formatNewsDate(item.published_at)}</p>
                     <p className="mt-1 font-black text-white">{item.title}</p>
                     <p className="mt-2 text-sm leading-6 text-slate-400">{item.summary}</p>
                   </a>
