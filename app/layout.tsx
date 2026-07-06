@@ -9,13 +9,11 @@ import FeedbackButton from "@/components/feedback-button";
 import SiteNav from "@/components/site-nav";
 import CompanyTrendChartEnhancer from "@/components/company-trend-chart-enhancer";
 import ScoreExplanationInjector from "@/components/score-explanation-injector";
-import CompanyCompareFloatingButton from "@/components/company-compare-floating-button";
 import CompanyAiSummaryInjector from "@/components/company-ai-summary-injector";
 import CompanyFinancialSignalsInjector from "@/components/company-financial-signals-injector";
 import CompanyPeerComparisonInjector from "@/components/company-peer-comparison-injector";
 import CompanyEarningsFlashInjector from "@/components/company-earnings-flash-injector";
 import CompanyProAnalysisInjector from "@/components/company-pro-analysis-injector";
-import CompareTray from "@/components/compare-tray";
 import SeoJsonLd, { organizationJsonLd, websiteJsonLd } from "@/components/seo-json-ld";
 
 export const metadata: Metadata = {
@@ -76,8 +74,6 @@ export default function RootLayout({
           <CompanyPeerComparisonInjector />
           <CompanyEarningsFlashInjector />
           <CompanyProAnalysisInjector />
-          <CompanyCompareFloatingButton />
-          <CompareTray />
           <FeedbackButton />
           <AuthButton />
           <Toaster richColors position="top-right" />
