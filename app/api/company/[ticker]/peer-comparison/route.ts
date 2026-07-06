@@ -11,9 +11,6 @@ type CompanyRow = {
   score: number | null;
   danger_score: number | null;
   financials: Record<string, number | null | undefined> | null;
-  industry?: string | null;
-  sector?: string | null;
-  market?: string | null;
 };
 
 function num(value: unknown) {
@@ -25,7 +22,7 @@ function metric(company: CompanyRow, key: string) {
 }
 
 function peerDistance(target: CompanyRow, peer: CompanyRow) {
-  const keys = ["revenueGrowth", "operatingMargin", "operatingCFMargin", "equityRatio"];
+  const keys = ["revenueGrowth", "grossProfitGrowth", "operatingMargin", "operatingCFMargin", "ocfMargin", "equityRatio"];
   let distance = 0;
   let count = 0;
 
@@ -52,7 +49,6 @@ function normalize(company: CompanyRow, isTarget = false) {
     operatingMargin: metric(company, "operatingMargin"),
     operatingCFMargin: metric(company, "operatingCFMargin") ?? metric(company, "ocfMargin"),
     equityRatio: metric(company, "equityRatio"),
-    industry: company.industry ?? company.sector ?? null,
   };
 }
 
@@ -61,7 +57,7 @@ export async function GET(_req: Request, { params }: RouteProps) {
 
   const { data: target, error: targetError } = await supabaseAdmin
     .from("company_analyses")
-    .select("ticker, company_name, score, danger_score, financials, industry, sector, market")
+    .select("ticker, company_name, score, danger_score, financials")
     .eq("ticker", ticker)
     .maybeSingle();
 
@@ -70,45 +66,29 @@ export async function GET(_req: Request, { params }: RouteProps) {
   }
 
   const targetCompany = target as CompanyRow;
-  const targetIndustry = targetCompany.industry ?? targetCompany.sector ?? null;
 
-  let peerQuery = supabaseAdmin
+  const { data: peers, error: peerError } = await supabaseAdmin
     .from("company_analyses")
-    .select("ticker, company_name, score, danger_score, financials, industry, sector, market")
+    .select("ticker, company_name, score, danger_score, financials, risk_level")
     .neq("ticker", ticker)
     .neq("risk_level", "EXCLUDED")
-    .limit(120);
+    .order("score", { ascending: false })
+    .limit(150);
 
-  if (targetIndustry) {
-    peerQuery = peerQuery.or(`industry.eq.${targetIndustry},sector.eq.${targetIndustry}`);
+  if (peerError) {
+    return NextResponse.json({ error: "peer fetch failed" }, { status: 500 });
   }
 
-  let { data: peers, error: peerError } = await peerQuery;
-
-  if (peerError || !peers || peers.length < 3) {
-    const fallback = await supabaseAdmin
-      .from("company_analyses")
-      .select("ticker, company_name, score, danger_score, financials, industry, sector, market")
-      .neq("ticker", ticker)
-      .neq("risk_level", "EXCLUDED")
-      .order("score", { ascending: false })
-      .limit(120);
-
-    peers = fallback.data ?? [];
-  }
-
-  const sortedPeers = ((peers ?? []) as CompanyRow[])
-    .filter((peer) => peer.ticker !== ticker)
+  const sortedPeers = ((peers ?? []) as (CompanyRow & { risk_level?: string | null })[])
+    .filter((peer) => peer.ticker !== ticker && peer.risk_level !== "EXCLUDED")
     .sort((a, b) => peerDistance(targetCompany, a) - peerDistance(targetCompany, b))
     .slice(0, 5);
 
   return NextResponse.json({
     ticker: targetCompany.ticker,
     companyName: targetCompany.company_name,
-    peerBasis: targetIndustry ? "industry" : "similar-metrics",
-    note: targetIndustry
-      ? "同業種または近い業種の企業を優先して比較しています。"
-      : "業種データが不足しているため、スコアと主要財務指標が近い企業を比較候補にしています。",
+    peerBasis: "similar-metrics",
+    note: "スコアと主要財務指標が近い企業を比較候補として自動抽出しています。",
     companies: [normalize(targetCompany, true), ...sortedPeers.map((peer) => normalize(peer))],
     disclaimer: "同業比較は財務データの理解補助であり、個別銘柄の売買判断を示すものではありません。",
   });
