@@ -79,6 +79,29 @@ main > header {
   display: none;
 }
 
+/* PC density: keep the dashboard compact instead of leaving huge empty zones. */
+@media (min-width: 1024px) {
+  main > section[class*="py-16"],
+  main > section[class*="py-12"],
+  main > div[class*="py-16"],
+  main > div[class*="py-12"] {
+    padding-top: 2.75rem;
+    padding-bottom: 2.75rem;
+  }
+
+  main [class*="gap-8"] {
+    gap: 1.25rem;
+  }
+
+  main [class*="gap-10"] {
+    gap: 1.5rem;
+  }
+
+  main [class*="p-8"] {
+    padding: 1.5rem;
+  }
+}
+
 /*
   Mobile safety net: several legacy cards use large desktop widths or injected widgets.
   Keep them inside the viewport without forcing pinch zoom.
@@ -100,6 +123,32 @@ main > header {
   [class*="max-w-5xl"],
   [class*="max-w-4xl"] {
     max-width: 100vw;
+  }
+
+  main > section,
+  main > div,
+  main > article {
+    padding-left: 0.875rem !important;
+    padding-right: 0.875rem !important;
+  }
+
+  main [class*="p-8"],
+  main [class*="p-7"],
+  main [class*="p-6"] {
+    padding: 1rem !important;
+  }
+
+  main [class*="py-16"],
+  main [class*="py-12"],
+  main [class*="py-10"] {
+    padding-top: 1.5rem !important;
+    padding-bottom: 1.5rem !important;
+  }
+
+  main [class*="gap-8"],
+  main [class*="gap-6"],
+  main [class*="gap-5"] {
+    gap: 0.875rem !important;
   }
 
   [class*="rounded-3xl"] {
