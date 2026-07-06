@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { href: "/ranking", label: "ランキング", shortLabel: "順位" },
+  { href: "/watchlist", label: "ウォッチ", shortLabel: "ウォッチ" },
   { href: "/news", label: "ニュース", shortLabel: "ニュース" },
   { href: "/data-quality", label: "データ品質", shortLabel: "品質" },
   { href: "/pricing", label: "初月100円Pro", shortLabel: "Pro", accent: true },
