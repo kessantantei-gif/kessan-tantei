@@ -9,6 +9,7 @@
     "lint": "eslint",
     "backfill:history": "tsx scripts/backfill-zero-financials.ts",
     "audit:history-periods": "tsx scripts/audit-history-periods.ts",
+    "audit:phase4": "tsx scripts/audit-phase4.ts",
     "normalize:history-periods": "tsx scripts/normalize-history-periods.ts",
     "check:fiscal-periods": "tsx scripts/check-fiscal-period-extraction.ts"
   },
