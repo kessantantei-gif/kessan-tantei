@@ -101,21 +101,25 @@ async function auditDb(items: AuditItem[]) {
   if (companies.length < 500) add(items, "DB", "WARNING", `company count is low: ${companies.length}`);
   else add(items, "DB", "INFO", `company count: ${companies.length}`);
 
-  const tickers = new Set<string>();
-  let duplicates = 0;
+  const tickerCounts = new Map<string, number>();
   let missingScore = 0;
   let missingName = 0;
   let missingHistory = 0;
 
   for (const company of companies) {
-    if (tickers.has(company.ticker)) duplicates += 1;
-    tickers.add(company.ticker);
+    tickerCounts.set(company.ticker, (tickerCounts.get(company.ticker) ?? 0) + 1);
     if (!company.company_name) missingName += 1;
     if (typeof company.score !== "number") missingScore += 1;
     if (!Array.isArray(company.history) || company.history.length === 0) missingHistory += 1;
   }
 
-  if (duplicates > 0) add(items, "DB", "ERROR", `duplicate tickers: ${duplicates}`);
+  const duplicateTickers = [...tickerCounts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([ticker, count]) => `${ticker}(${count})`);
+
+  if (duplicateTickers.length > 0) {
+    add(items, "DB", "ERROR", `duplicate tickers: ${duplicateTickers.join(", ")}`);
+  }
   if (missingName > 0) add(items, "DB", "ERROR", `missing company names: ${missingName}`);
   if (missingScore > 0) add(items, "DB", "ERROR", `missing scores: ${missingScore}`);
   if (missingHistory > 0) add(items, "DB", "INFO", `companies with limited history: ${missingHistory}`);
