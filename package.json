@@ -11,6 +11,7 @@
     "audit:history-periods": "tsx scripts/audit-history-periods.ts",
     "audit:phase4": "tsx scripts/audit-phase4.ts",
     "audit:release": "tsx scripts/audit-release.ts",
+    "inspect:duplicate-tickers": "tsx scripts/inspect-duplicate-tickers.ts",
     "normalize:history-periods": "tsx scripts/normalize-history-periods.ts",
     "check:fiscal-periods": "tsx scripts/check-fiscal-period-extraction.ts"
   },
