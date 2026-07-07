@@ -89,10 +89,79 @@ main > header {
   display: none !important;
 }
 
-/*
-  Hard guard against accidental body-level horizontal scrolling.
-  Long financial tables / code blocks should scroll inside themselves, not move the whole page.
-*/
+/* Company page density improvements. Scoped by the company-page marker. */
+main[data-company-page="true"] > section {
+  padding-top: 1rem !important;
+  padding-bottom: 1rem !important;
+}
+
+main[data-company-page="true"] .rounded-3xl {
+  border-radius: 1.25rem;
+}
+
+main[data-company-page="true"] [class*="shadow-2xl"] {
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+}
+
+main[data-company-page="true"] h1 {
+  letter-spacing: -0.03em;
+}
+
+main[data-company-page="true"] h2 {
+  font-size: 1.15rem;
+  line-height: 1.35;
+}
+
+main[data-company-page="true"] pre {
+  max-height: 18rem;
+  overflow: auto;
+  border-radius: 1rem;
+  background: rgba(0, 0, 0, 0.18);
+  padding: 0.9rem;
+  line-height: 1.65 !important;
+  font-size: 0.86rem;
+}
+
+main[data-company-page="true"] div:has(> h2) > div.mt-4 {
+  max-height: 18rem;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+main[data-company-page="true"] div:has(> h2) > div.mt-4::-webkit-scrollbar,
+main[data-company-page="true"] pre::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+main[data-company-page="true"] div:has(> h2) > div.mt-4::-webkit-scrollbar-thumb,
+main[data-company-page="true"] pre::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.45);
+}
+
+@media (min-width: 1024px) {
+  main[data-company-page="true"] > section {
+    padding-top: 1.5rem !important;
+    padding-bottom: 1.5rem !important;
+  }
+
+  main[data-company-page="true"] [class*="p-6"],
+  main[data-company-page="true"] [class*="p-5"] {
+    padding: 1.1rem !important;
+  }
+
+  main[data-company-page="true"] [class*="gap-5"],
+  main[data-company-page="true"] [class*="gap-4"] {
+    gap: 0.9rem !important;
+  }
+
+  main[data-company-page="true"] h1 {
+    font-size: 2.35rem !important;
+    line-height: 1.08 !important;
+  }
+}
+
 @media (max-width: 768px) {
   body,
   main,
@@ -159,6 +228,37 @@ main > header {
 
   main[data-company-page="true"] [class*="grid"] {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  main[data-company-page="true"] [class*="p-6"],
+  main[data-company-page="true"] [class*="p-5"],
+  main[data-company-page="true"] [class*="p-4"] {
+    padding: 0.85rem !important;
+  }
+
+  main[data-company-page="true"] [class*="gap-5"],
+  main[data-company-page="true"] [class*="gap-4"],
+  main[data-company-page="true"] [class*="gap-3"] {
+    gap: 0.65rem !important;
+  }
+
+  main[data-company-page="true"] h1 {
+    font-size: 1.65rem !important;
+    line-height: 1.15 !important;
+  }
+
+  main[data-company-page="true"] h2 {
+    font-size: 1.05rem !important;
+  }
+
+  main[data-company-page="true"] p,
+  main[data-company-page="true"] div {
+    line-height: 1.6;
+  }
+
+  main[data-company-page="true"] div:has(> h2) > div.mt-4,
+  main[data-company-page="true"] pre {
+    max-height: 13rem;
   }
 
   main[data-company-page="true"] table,
