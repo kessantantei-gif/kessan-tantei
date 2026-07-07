@@ -81,6 +81,46 @@ main > header {
   display: none !important;
 }
 
+/* Desktop-only repair for injected company widgets. */
+@media (min-width: 769px) {
+  main[data-company-page="true"] {
+    overflow-x: hidden;
+  }
+
+  main[data-company-page="true"] > section,
+  main[data-company-page="true"] > div:not([class*="absolute"]),
+  main[data-company-page="true"] article {
+    width: min(100%, 1280px);
+    max-width: 1280px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  main[data-company-page="true"] section,
+  main[data-company-page="true"] article,
+  main[data-company-page="true"] [class*="rounded-"] {
+    min-width: 0;
+  }
+
+  main[data-company-page="true"] .overflow-x-auto,
+  main[data-company-page="true"] table {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  main[data-company-page="true"] p,
+  main[data-company-page="true"] li,
+  main[data-company-page="true"] span,
+  main[data-company-page="true"] div {
+    word-break: normal;
+    overflow-wrap: break-word;
+  }
+
+  main[data-company-page="true"] [class*="grid-cols-"] > * {
+    min-width: 0;
+  }
+}
+
 @media (max-width: 768px) {
   html,
   body,
