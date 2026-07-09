@@ -6,12 +6,12 @@ import { usePathname } from "next/navigation";
 import CompanyAiSummary from "./company-ai-summary";
 
 function findInsertTarget() {
+  const scoreExplanation = document.querySelector("[data-score-explanation='true']") as HTMLElement | null;
+  if (scoreExplanation) return scoreExplanation;
+
   const h1 = document.querySelector("h1");
   const heroCard = h1?.closest("div.rounded-3xl") as HTMLElement | null;
-  if (heroCard) return heroCard;
-
-  const main = document.querySelector("main section");
-  return main?.firstElementChild as HTMLElement | null;
+  return heroCard?.parentElement as HTMLElement | null;
 }
 
 export default function CompanyAiSummaryInjector() {
