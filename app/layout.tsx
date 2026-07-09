@@ -16,7 +16,6 @@ import CompanyEarningsFlashInjector from "@/components/company-earnings-flash-in
 import CompanyProAnalysisInjector from "@/components/company-pro-analysis-injector";
 import CompanyWatchlistInjector from "@/components/company-watchlist-injector";
 import CompanyCompareFloatingButton from "@/components/company-compare-floating-button";
-import CompanyPageOrderController from "@/components/company-page-order-controller";
 import CompareTray from "@/components/compare-tray";
 import SeoJsonLd, { organizationJsonLd, websiteJsonLd } from "@/components/seo-json-ld";
 
@@ -87,7 +86,6 @@ export default function RootLayout({
           <CompanyProAnalysisInjector />
           <CompanyWatchlistInjector />
           <CompanyCompareFloatingButton />
-          <CompanyPageOrderController />
           <CompareTray />
           <FeedbackButton />
           <AuthButton />
