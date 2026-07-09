@@ -110,7 +110,7 @@ function buildCard(payload: Payload) {
   root.append(bars);
 
   const reasons = document.createElement("div");
-  reasons.className = "mt-4 space-y-2";
+  reasons.className = "mt-4 grid gap-2 md:grid-cols-2";
   const rows = reasonRows(payload);
 
   if (rows.length === 0) {
@@ -139,10 +139,10 @@ function buildCard(payload: Payload) {
   return root;
 }
 
-function findScoreCard() {
-  const nodes = Array.from(document.querySelectorAll("p"));
-  const label = nodes.find((node) => node.textContent?.trim() === "TOTAL SCORE");
-  return label?.closest("div.rounded-3xl") as HTMLElement | null;
+function findHeroGrid() {
+  const h1 = document.querySelector("h1");
+  const heroCard = h1?.closest("div.rounded-3xl") as HTMLElement | null;
+  return heroCard?.parentElement as HTMLElement | null;
 }
 
 export default function ScoreExplanationInjector() {
@@ -159,9 +159,10 @@ export default function ScoreExplanationInjector() {
         if (cancelled || !payload) return;
 
         const run = () => {
-          const card = findScoreCard();
-          if (!card || card.querySelector("[data-score-explanation='true']")) return;
-          card.append(buildCard(payload));
+          if (document.querySelector("[data-score-explanation='true']")) return;
+          const heroGrid = findHeroGrid();
+          if (!heroGrid || !heroGrid.parentElement) return;
+          heroGrid.insertAdjacentElement("afterend", buildCard(payload));
         };
 
         run();
