@@ -9,8 +9,7 @@ function textOf(node: Element | null) {
 
 function companyRoot() {
   const main = document.querySelector("main[data-company-page='true']") as HTMLElement | null;
-  const section = main?.querySelector(":scope > section") as HTMLElement | null;
-  return section;
+  return main?.querySelector(":scope > section") as HTMLElement | null;
 }
 
 function findHeroGrid(root: HTMLElement) {
@@ -21,6 +20,7 @@ function findHeroGrid(root: HTMLElement) {
 
 function findCardByHeading(root: HTMLElement, labels: string[]) {
   const headings = Array.from(root.querySelectorAll("h2, p"));
+
   for (const heading of headings) {
     const text = textOf(heading);
     if (!labels.some((label) => text.includes(label))) continue;
@@ -40,8 +40,7 @@ function findDataCard(root: HTMLElement, selector: string) {
 }
 
 function moveAfter(anchor: HTMLElement, card: HTMLElement | null) {
-  if (!card || card === anchor) return anchor;
-  if (!card.parentElement) return anchor;
+  if (!card || card === anchor || !card.parentElement) return anchor;
   anchor.insertAdjacentElement("afterend", card);
   return card;
 }
@@ -57,18 +56,15 @@ function tagSection(card: HTMLElement | null, label: string, description?: strin
     ${description ? `<span class="text-slate-500">${description}</span>` : ""}
   `;
 
-  const first = card.firstElementChild;
-  if (first) card.insertBefore(badge, first);
-  else card.appendChild(badge);
+  card.insertBefore(badge, card.firstElementChild);
 }
 
 function tagProCards(root: HTMLElement) {
-  const proCards = Array.from(root.querySelectorAll("a[href='/pricing']"))
-    .map((link) => link.closest("div.rounded-3xl, div.rounded-2xl") as HTMLElement | null)
-    .filter(Boolean) as HTMLElement[];
+  const pricingLinks = Array.from(root.querySelectorAll("a[href='/pricing']"));
 
-  for (const card of proCards) {
-    if (card.dataset.proScopeTagged === "true") continue;
+  for (const link of pricingLinks) {
+    const card = link.closest("div.rounded-3xl, div.rounded-2xl") as HTMLElement | null;
+    if (!card || card.dataset.proScopeTagged === "true") continue;
     card.dataset.proScopeTagged = "true";
 
     const scope = document.createElement("div");
@@ -79,9 +75,7 @@ function tagProCards(root: HTMLElement) {
       <p class="text-slate-300">Pro：詳細分析、Red Flags、決算変化、全銘柄の深掘り</p>
     `;
 
-    const inner = card.querySelector("div.rounded-3xl, div.rounded-2xl") as HTMLElement | null;
-    if (inner) inner.insertBefore(scope, inner.firstElementChild);
-    else card.insertBefore(scope, card.firstElementChild);
+    card.insertBefore(scope, card.firstElementChild);
   }
 }
 
@@ -122,7 +116,6 @@ function reorderCompanyPage() {
   tagSection(scoreReason, "SCORE", "スコアの根拠");
   tagSection(signals, "SIGNALS", "財務シグナル");
   tagSection(peer, "PEERS", "同業比較");
-
   tagProCards(root);
 }
 
@@ -133,18 +126,14 @@ export default function CompanyPageOrderController() {
   useEffect(() => {
     if (!isCompanyPage) return;
 
-    const run = () => reorderCompanyPage();
-    run();
-    requestAnimationFrame(run);
-    window.setTimeout(run, 250);
-    window.setTimeout(run, 750);
-    window.setTimeout(run, 1500);
+    reorderCompanyPage();
+    requestAnimationFrame(reorderCompanyPage);
 
-    const observer = new MutationObserver(run);
-    observer.observe(document.body, { childList: true, subtree: true });
-    window.setTimeout(() => observer.disconnect(), 5000);
+    const timers = [250, 700, 1400, 2400].map((delay) =>
+      window.setTimeout(reorderCompanyPage, delay)
+    );
 
-    return () => observer.disconnect();
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [isCompanyPage, pathname]);
 
   return null;
