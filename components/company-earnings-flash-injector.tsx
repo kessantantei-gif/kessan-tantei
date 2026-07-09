@@ -9,11 +9,18 @@ function findInsertTarget() {
   const peer = document.querySelector("[data-company-peer-comparison='true']") as HTMLElement | null;
   if (peer) return peer;
 
+  const signals = document.querySelector("[data-company-financial-signals='true']") as HTMLElement | null;
+  if (signals) return signals;
+
   const ai = document.querySelector("[data-company-ai-summary='true']") as HTMLElement | null;
   if (ai) return ai;
 
+  const scoreExplanation = document.querySelector("[data-score-explanation='true']") as HTMLElement | null;
+  if (scoreExplanation) return scoreExplanation;
+
   const h1 = document.querySelector("h1");
-  return h1?.closest("div.rounded-3xl") as HTMLElement | null;
+  const heroCard = h1?.closest("div.rounded-3xl") as HTMLElement | null;
+  return heroCard?.parentElement as HTMLElement | null;
 }
 
 export default function CompanyEarningsFlashInjector() {
