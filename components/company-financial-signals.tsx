@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type Signal = {
@@ -22,8 +23,26 @@ type Props = {
   ticker: string;
 };
 
+function ProSignalCta({ hiddenCount }: { hiddenCount: number }) {
+  return (
+    <div className="mt-4 rounded-2xl border border-yellow-300/30 bg-yellow-400/10 p-4 text-sm leading-7 text-yellow-50">
+      <p className="font-black text-yellow-200">🔒 財務シグナル詳細はPro限定</p>
+      <p className="mt-1 text-slate-300">
+        無料版では代表的なシグナルだけ表示しています。残り{hiddenCount}件の詳細、注意点、確認ポイントはProで確認できます。
+      </p>
+      <Link
+        href="/pricing"
+        className="mt-3 inline-flex min-h-10 items-center justify-center rounded-full bg-yellow-400 px-4 py-2 text-xs font-black text-slate-950 hover:bg-yellow-300"
+      >
+        Proでシグナルを確認する
+      </Link>
+    </div>
+  );
+}
+
 function SignalBlock({ title, items, tone }: { title: string; items: Signal[]; tone: "green" | "yellow" | "cyan" }) {
-  if (items.length === 0) return null;
+  const preview = items.slice(0, 1);
+  if (preview.length === 0) return null;
 
   const toneClass = {
     green: "border-green-300/20 bg-green-500/10 text-green-100",
@@ -35,15 +54,25 @@ function SignalBlock({ title, items, tone }: { title: string; items: Signal[]; t
     <div className={`rounded-2xl border p-4 ${toneClass}`}>
       <p className="text-sm font-black">{title}</p>
       <div className="mt-3 space-y-2">
-        {items.map((item) => (
+        {preview.map((item) => (
           <div key={`${item.title}-${item.detail}`} className="rounded-xl border border-white/10 bg-black/20 p-3">
             <p className="text-sm font-black text-white">{item.title}</p>
             <p className="mt-1 text-xs leading-5 text-slate-300">{item.detail}</p>
           </div>
         ))}
+        {items.length > preview.length ? (
+          <div className="rounded-xl border border-yellow-300/20 bg-yellow-400/10 p-3 text-xs font-bold text-yellow-100">
+            🔒 残り{items.length - preview.length}件はPro限定
+          </div>
+        ) : null}
       </div>
     </div>
   );
+}
+
+function previewSummary(text: string) {
+  if (text.length <= 80) return text;
+  return `${text.slice(0, 80)}…`;
 }
 
 export default function CompanyFinancialSignals({ ticker }: Props) {
@@ -83,6 +112,10 @@ export default function CompanyFinancialSignals({ ticker }: Props) {
     );
   }
 
+  const totalSignals = payload.positive.length + payload.caution.length + payload.watch.length;
+  const visibleSignals = [payload.positive, payload.caution, payload.watch].filter((items) => items.length > 0).length;
+  const hiddenCount = Math.max(0, totalSignals - visibleSignals);
+
   return (
     <section className="mt-6 rounded-3xl border border-green-300/20 bg-gradient-to-br from-green-500/10 via-white/[0.04] to-yellow-500/10 p-5 shadow-2xl shadow-black/20 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -93,13 +126,13 @@ export default function CompanyFinancialSignals({ ticker }: Props) {
             財務データから、良い点・注意点・確認ポイントを信号形式で整理します。
           </p>
         </div>
-        <span className="w-fit rounded-full border border-green-300/20 bg-green-300/10 px-3 py-1 text-xs font-bold text-green-100">
-          自動判定
+        <span className="w-fit rounded-full border border-yellow-300/20 bg-yellow-300/10 px-3 py-1 text-xs font-bold text-yellow-100">
+          一部無料 / 詳細Pro
         </span>
       </div>
 
       <p className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-8 text-slate-100 sm:text-base">
-        {payload.summary}
+        {previewSummary(payload.summary)}
       </p>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
@@ -107,6 +140,8 @@ export default function CompanyFinancialSignals({ ticker }: Props) {
         <SignalBlock title="注意シグナル" items={payload.caution} tone="yellow" />
         <SignalBlock title="確認ポイント" items={payload.watch} tone="cyan" />
       </div>
+
+      {hiddenCount > 0 ? <ProSignalCta hiddenCount={hiddenCount} /> : null}
 
       <p className="mt-4 text-xs leading-6 text-slate-500">{payload.disclaimer}</p>
     </section>
