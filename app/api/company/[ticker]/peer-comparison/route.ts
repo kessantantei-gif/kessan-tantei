@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import growthCompanies from "@/data/growth-companies.json";
 
 type RouteProps = {
   params: Promise<{ ticker: string }>;
@@ -14,6 +15,88 @@ type CompanyRow = {
   risk_level?: string | null;
 };
 
+type CompanyMeta = {
+  ticker: string;
+  name: string;
+  market?: string;
+  sector33?: string;
+  sector17?: string;
+};
+
+type Theme = {
+  id: string;
+  label: string;
+  tickers: string[];
+  keywords: string[];
+};
+
+const THEMES: Theme[] = [
+  {
+    id: "space",
+    label: "宇宙・衛星",
+    tickers: ["186A", "9348", "5595", "290A"],
+    keywords: ["アストロスケール", "ｉｓｐａｃｅ", "ispace", "ＱＰＳ", "QPS", "Ｓｙｎｓｐｅｃｔｉｖｅ", "Synspective", "宇宙", "衛星"],
+  },
+  {
+    id: "biotech",
+    label: "創薬・バイオ",
+    tickers: [],
+    keywords: ["バイオ", "ファーマ", "創薬", "医薬", "メディシノバ", "ペルセウス", "サンバイオ", "ヘリオス"],
+  },
+  {
+    id: "ai",
+    label: "AI・機械学習",
+    tickers: [],
+    keywords: ["ＡＩ", "AI", "ＰＫＳＨＡ", "PKSHA", "ＨＥＲＯＺ", "HEROZ", "ＶＲＡＩＮ", "VRAIN", "ＦＲＯＮＴＥＯ", "FRONTEO"],
+  },
+  {
+    id: "saas",
+    label: "SaaS・クラウド",
+    tickers: [],
+    keywords: ["ＳａａＳ", "SaaS", "クラウド", "ｆｒｅｅｅ", "freee", "ＨＥＮＮＧＥ", "HENNGE", "サイボウズ", "マネーフォワード"],
+  },
+  {
+    id: "game-ip",
+    label: "ゲーム・IP・コンテンツ",
+    tickers: [],
+    keywords: ["ゲーム", "アニメ", "ＩＰ", "IP", "カバー", "ＡＮＹＣＯＬＯＲ", "ANYCOLOR", "ブシロード", "ＩＧポート"],
+  },
+  {
+    id: "fintech",
+    label: "FinTech・決済",
+    tickers: [],
+    keywords: ["決済", "フィンテック", "FinTech", "ペイメント", "ＧＭＯフィナンシャル", "ウェルスナビ"],
+  },
+  {
+    id: "cybersecurity",
+    label: "サイバーセキュリティ",
+    tickers: [],
+    keywords: ["セキュリティ", "サイバー", "トレンドマイクロ", "ＦＦＲＩ", "FFRI", "カウリス"],
+  },
+  {
+    id: "adtech",
+    label: "広告・マーケティング",
+    tickers: [],
+    keywords: ["広告", "マーケティング", "アド", "ジーニー", "Ｍａｃｂｅｅ", "フリークアウト"],
+  },
+  {
+    id: "robotics",
+    label: "ロボティクス・自動化",
+    tickers: [],
+    keywords: ["ロボット", "ロボティクス", "自動化", "ＦＡ", "FA", "ティアンドエス"],
+  },
+  {
+    id: "energy",
+    label: "再生可能エネルギー",
+    tickers: [],
+    keywords: ["エナジー", "再生可能", "太陽光", "蓄電池", "グリーンエネルギー", "レノバ"],
+  },
+];
+
+const companyMetaMap = new Map(
+  (growthCompanies as CompanyMeta[]).map((company) => [company.ticker, company])
+);
+
 function num(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
@@ -25,6 +108,32 @@ function metric(company: CompanyRow, key: string) {
 function gap(a: number | null, b: number | null, fallback = 999) {
   if (a === null || b === null) return fallback;
   return Math.abs(a - b);
+}
+
+function meta(company: CompanyRow) {
+  return companyMetaMap.get(company.ticker) ?? null;
+}
+
+function themeOf(company: CompanyRow) {
+  const source = `${company.company_name} ${meta(company)?.name ?? ""}`.toLowerCase();
+  return (
+    THEMES.find((theme) =>
+      theme.tickers.includes(company.ticker) ||
+      theme.keywords.some((keyword) => source.includes(keyword.toLowerCase()))
+    ) ?? null
+  );
+}
+
+function sameBusinessPriority(target: CompanyRow, peer: CompanyRow) {
+  const targetTheme = themeOf(target);
+  const peerTheme = themeOf(peer);
+  if (targetTheme && peerTheme?.id === targetTheme.id) return 0;
+
+  const targetMeta = meta(target);
+  const peerMeta = meta(peer);
+  if (targetMeta?.sector33 && peerMeta?.sector33 === targetMeta.sector33) return 1;
+  if (targetMeta?.sector17 && peerMeta?.sector17 === targetMeta.sector17) return 2;
+  return 3;
 }
 
 function financialDistance(target: CompanyRow, peer: CompanyRow) {
@@ -71,6 +180,9 @@ function broadPeerDistance(target: CompanyRow, peer: CompanyRow) {
 }
 
 function normalize(company: CompanyRow, isTarget = false) {
+  const companyTheme = themeOf(company);
+  const companyMeta = meta(company);
+
   return {
     ticker: company.ticker,
     companyName: company.company_name,
@@ -81,6 +193,8 @@ function normalize(company: CompanyRow, isTarget = false) {
     operatingMargin: metric(company, "operatingMargin"),
     operatingCFMargin: metric(company, "operatingCFMargin") ?? metric(company, "ocfMargin"),
     equityRatio: metric(company, "equityRatio"),
+    theme: companyTheme?.label ?? null,
+    sector33: companyMeta?.sector33 ?? null,
   };
 }
 
@@ -93,6 +207,16 @@ function uniqueByTicker(companies: CompanyRow[]) {
   });
 }
 
+function businessSorted(target: CompanyRow, peers: CompanyRow[], distance: (peer: CompanyRow) => number) {
+  return uniqueByTicker(peers)
+    .filter((peer) => peer.ticker !== target.ticker && peer.risk_level !== "EXCLUDED")
+    .sort((a, b) => {
+      const businessGap = sameBusinessPriority(target, a) - sameBusinessPriority(target, b);
+      if (businessGap !== 0) return businessGap;
+      return distance(a) - distance(b);
+    });
+}
+
 function buildGroup({
   id,
   label,
@@ -101,6 +225,7 @@ function buildGroup({
   target,
   peers,
   score,
+  strictTheme = false,
 }: {
   id: string;
   label: string;
@@ -109,11 +234,15 @@ function buildGroup({
   target: CompanyRow;
   peers: CompanyRow[];
   score: (peer: CompanyRow) => number;
+  strictTheme?: boolean;
 }) {
-  const sortedPeers = uniqueByTicker(peers)
-    .filter((peer) => peer.ticker !== target.ticker && peer.risk_level !== "EXCLUDED")
-    .sort((a, b) => score(a) - score(b))
-    .slice(0, 8);
+  const targetTheme = themeOf(target);
+  const sameThemePeers = targetTheme
+    ? peers.filter((peer) => themeOf(peer)?.id === targetTheme.id)
+    : [];
+
+  const source = strictTheme && sameThemePeers.length >= 2 ? sameThemePeers : peers;
+  const sortedPeers = businessSorted(target, source, score).slice(0, 8);
 
   return {
     id,
@@ -147,31 +276,35 @@ export async function GET(_req: Request, { params }: RouteProps) {
     .neq("ticker", ticker)
     .neq("risk_level", "EXCLUDED")
     .order("score", { ascending: false })
-    .limit(220);
+    .limit(300);
 
   if (peerError) {
     return NextResponse.json({ error: "peer fetch failed" }, { status: 500 });
   }
 
   const candidatePeers = (peers ?? []) as CompanyRow[];
+  const targetTheme = themeOf(targetCompany);
+  const targetMeta = meta(targetCompany);
   const score = targetCompany.score ?? 0;
   const revenueGrowth = metric(targetCompany, "revenueGrowth");
+  const comparisonLabel = targetTheme?.label ?? targetMeta?.sector33 ?? "事業・財務特性";
 
   const groups = [
     buildGroup({
       id: "peer",
-      label: "比較候補",
-      description: "スコア・成長性・収益性・安全性が近い企業です。業種だけでなく財務の近さも加味しています。",
-      basis: ["総合スコア", "売上成長率", "営業利益率", "営業CF率", "自己資本比率"],
+      label: "事業テーマ比較",
+      description: `${comparisonLabel}を最優先し、その中で財務指標が近い企業を並べています。`,
+      basis: [comparisonLabel, "総合スコア", "収益性", "財務安全性"],
       target: targetCompany,
       peers: candidatePeers,
       score: (peer) => broadPeerDistance(targetCompany, peer),
+      strictTheme: true,
     }),
     buildGroup({
       id: "financial",
       label: "財務類似企業",
-      description: "利益率・営業CF率・自己資本比率など、財務体質が近い企業です。",
-      basis: ["営業利益率", "営業CF率", "自己資本比率", "現預金余力", "粗利率"],
+      description: "事業テーマを優先したうえで、利益率・営業CF率・自己資本比率が近い企業です。",
+      basis: [comparisonLabel, "営業利益率", "営業CF率", "自己資本比率"],
       target: targetCompany,
       peers: candidatePeers,
       score: (peer) => financialDistance(targetCompany, peer),
@@ -179,8 +312,8 @@ export async function GET(_req: Request, { params }: RouteProps) {
     buildGroup({
       id: "growth",
       label: "成長率が近い企業",
-      description: "売上成長率と粗利成長率が近い企業です。成長株同士の比較に使います。",
-      basis: ["売上成長率", "売上総利益成長率", "営業利益率"],
+      description: "事業テーマを優先したうえで、売上成長率と粗利成長率が近い企業です。",
+      basis: [comparisonLabel, "売上成長率", "粗利成長率", "営業利益率"],
       target: targetCompany,
       peers: candidatePeers,
       score: (peer) => growthDistance(targetCompany, peer),
@@ -188,10 +321,13 @@ export async function GET(_req: Request, { params }: RouteProps) {
     buildGroup({
       id: "rival",
       label: "ライバル候補",
-      description: "投資家が横比較しやすい、スコア帯と成長ステージが近い企業です。",
-      basis: ["スコア帯", "Danger帯", "成長率", "収益性"],
+      description: "事業テーマ・業種・スコア帯・成長ステージを総合して選んだ比較候補です。",
+      basis: [comparisonLabel, "スコア帯", "Danger帯", "成長ステージ"],
       target: targetCompany,
-      peers: candidatePeers.filter((peer) => Math.abs((peer.score ?? 0) - score) <= 18 || gap(metric(peer, "revenueGrowth"), revenueGrowth, 999) <= 20),
+      peers: candidatePeers.filter((peer) =>
+        sameBusinessPriority(targetCompany, peer) <= 1 &&
+        (Math.abs((peer.score ?? 0) - score) <= 22 || gap(metric(peer, "revenueGrowth"), revenueGrowth, 999) <= 25)
+      ),
       score: (peer) => broadPeerDistance(targetCompany, peer) * 0.8 + gap(peer.score, score, 99),
     }),
   ];
@@ -199,10 +335,11 @@ export async function GET(_req: Request, { params }: RouteProps) {
   return NextResponse.json({
     ticker: targetCompany.ticker,
     companyName: targetCompany.company_name,
-    peerBasis: "multi-axis",
-    note: "業種名だけではなく、財務指標・成長率・スコア帯を使って比較候補を自動抽出しています。",
+    peerBasis: "business-first",
+    comparisonLabel,
+    note: `比較対象は「${comparisonLabel}」を最優先し、同テーマ内で財務・成長率・スコア帯を比較しています。候補不足時のみ同じ業種へ範囲を広げます。`,
     groups,
     companies: groups[0]?.companies ?? [normalize(targetCompany, true)],
-    disclaimer: "比較候補は財務データの理解補助であり、実際の競合関係や個別銘柄の売買判断を示すものではありません。",
+    disclaimer: "比較候補は事業テーマと財務データの理解補助であり、実際の競合関係や個別銘柄の売買判断を示すものではありません。",
   });
 }
