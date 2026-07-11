@@ -69,19 +69,23 @@ function previewSummary(text: string) {
 export default function CompanyEarningsFlash({ ticker }: Props) {
   const [payload, setPayload] = useState<Payload | null>(null);
   const [failed, setFailed] = useState(false);
+  const [isPro, setIsPro] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    fetch(`/api/company/${ticker}/earnings-flash`, { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: Payload | null) => {
+    Promise.all([
+      fetch(`/api/company/${ticker}/earnings-flash`, { cache: "no-store" }).then((res) => (res.ok ? res.json() : null)),
+      fetch("/api/pro-status", { cache: "no-store" }).then((res) => (res.ok ? res.json() : null)),
+    ])
+      .then(([data, status]: [Payload | null, { isPro?: boolean } | null]) => {
         if (cancelled) return;
         if (!data) {
           setFailed(true);
           return;
         }
         setPayload(data);
+        setIsPro(Boolean(status?.isPro));
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
@@ -103,8 +107,8 @@ export default function CompanyEarningsFlash({ ticker }: Props) {
     );
   }
 
-  const previewChanges = payload.changes.slice(0, 3);
-  const hiddenCount = Math.max(0, payload.changes.length - previewChanges.length);
+  const visibleChanges = isPro ? payload.changes : payload.changes.slice(0, 3);
+  const hiddenCount = Math.max(0, payload.changes.length - visibleChanges.length);
 
   return (
     <section className="mt-6 rounded-3xl border border-yellow-300/20 bg-gradient-to-br from-yellow-500/10 via-white/[0.04] to-orange-500/10 p-5 shadow-2xl shadow-black/20 sm:p-6">
@@ -118,19 +122,36 @@ export default function CompanyEarningsFlash({ ticker }: Props) {
               : "前期比較に必要なデータを確認しています。"}
           </p>
         </div>
-        <span className="w-fit rounded-full border border-yellow-300/20 bg-yellow-300/10 px-3 py-1 text-xs font-bold text-yellow-100">
-          主要変化のみ無料
+        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${isPro ? "border-green-300/20 bg-green-300/10 text-green-100" : "border-yellow-300/20 bg-yellow-300/10 text-yellow-100"}`}>
+          {isPro ? "Pro 全件表示" : "主要変化のみ無料"}
         </span>
       </div>
 
       <p className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-8 text-slate-100 sm:text-base">
-        {previewSummary(payload.summary)}
+        {isPro ? payload.summary : previewSummary(payload.summary)}
       </p>
 
       {payload.enoughData ? (
         <>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {previewChanges.map((item) => (
+          {isPro ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-green-300/20 bg-green-500/10 p-4">
+                <p className="text-sm font-black text-green-100">改善した項目</p>
+                <p className="mt-2 text-sm leading-6 text-slate-200">
+                  {(payload.improved ?? []).length > 0 ? payload.improved?.join("、") : "大きな改善項目は限定的です。"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-red-300/20 bg-red-500/10 p-4">
+                <p className="text-sm font-black text-red-100">悪化した項目</p>
+                <p className="mt-2 text-sm leading-6 text-slate-200">
+                  {(payload.worsened ?? []).length > 0 ? payload.worsened?.join("、") : "大きな悪化項目は限定的です。"}
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {visibleChanges.map((item) => (
               <div key={item.label} className={`rounded-2xl border p-4 ${directionClass(item.direction)}`}>
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-black">{item.label}</p>
@@ -143,13 +164,19 @@ export default function CompanyEarningsFlash({ ticker }: Props) {
             ))}
           </div>
 
-          {hiddenCount > 0 ? (
+          {!isPro && hiddenCount > 0 ? (
             <div className="mt-3 rounded-xl border border-yellow-300/20 bg-yellow-400/10 p-3 text-xs font-bold text-yellow-100">
               🔒 残り{hiddenCount}指標、改善・悪化項目、見るべきポイントはPro限定
             </div>
           ) : null}
 
-          <ProEarningsCta />
+          {isPro && payload.watchPoint ? (
+            <div className="mt-4 rounded-2xl border border-cyan-300/20 bg-cyan-500/10 p-4 text-sm leading-7 text-cyan-50">
+              <span className="font-black">見るべきポイント：</span>{payload.watchPoint}
+            </div>
+          ) : null}
+
+          {!isPro ? <ProEarningsCta /> : null}
         </>
       ) : null}
 
