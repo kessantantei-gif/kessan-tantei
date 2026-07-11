@@ -35,9 +35,7 @@ type Payload = {
   disclaimer: string;
 };
 
-type Props = {
-  ticker: string;
-};
+type Props = { ticker: string };
 
 function pct(value: number | null) {
   if (typeof value !== "number" || !Number.isFinite(value)) return "—";
@@ -50,12 +48,10 @@ function num(value: number | null) {
   return value.toLocaleString("ja-JP", { maximumFractionDigits: 0 });
 }
 
-function tone(value: number | null, reverse = false) {
+function tone(value: number | null) {
   if (typeof value !== "number" || !Number.isFinite(value)) return "text-slate-500";
-  const good = reverse ? value <= 30 : value >= 30;
-  const warn = reverse ? value <= 60 : value >= 0;
-  if (good) return "text-green-200";
-  if (warn) return "text-yellow-200";
+  if (value >= 30) return "text-green-200";
+  if (value >= 0) return "text-yellow-200";
   return "text-red-200";
 }
 
@@ -64,12 +60,9 @@ function ProComparisonLock({ hiddenCount }: { hiddenCount: number }) {
     <div className="rounded-2xl border border-yellow-300/30 bg-yellow-400/10 p-4 text-sm leading-7 text-yellow-50">
       <p className="font-black text-yellow-200">🔒 Pro限定の比較候補があります</p>
       <p className="mt-1 text-slate-300">
-        無料版では各比較タイプの一部だけ表示しています。残り{hiddenCount}件の比較候補、詳細指標、横比較表はProで確認できます。
+        無料版では一部だけ表示しています。残り{hiddenCount}件の比較候補はProで確認できます。
       </p>
-      <Link
-        href="/pricing"
-        className="mt-3 inline-flex min-h-10 items-center justify-center rounded-full bg-yellow-400 px-4 py-2 text-xs font-black text-slate-950 hover:bg-yellow-300"
-      >
+      <Link href="/pricing" className="mt-3 inline-flex min-h-10 items-center justify-center rounded-full bg-yellow-400 px-4 py-2 text-xs font-black text-slate-950 hover:bg-yellow-300">
         Proで比較を開放する
       </Link>
     </div>
@@ -80,20 +73,16 @@ function CompanyMiniCard({ company }: { company: PeerCompany }) {
   return (
     <Link
       href={`/company/${company.ticker}`}
-      className={
-        company.isTarget
-          ? "min-w-0 rounded-2xl border border-cyan-300/30 bg-cyan-500/10 p-4"
-          : "min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4 hover:bg-white/10"
-      }
+      className={company.isTarget
+        ? "min-w-0 rounded-2xl border border-cyan-300/30 bg-cyan-500/10 p-4"
+        : "min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4 hover:bg-white/10"}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="break-words text-base font-black leading-snug text-white sm:text-lg">{company.companyName}</p>
           <p className="mt-1 text-xs font-bold text-slate-500">{company.ticker}</p>
         </div>
-        {company.isTarget ? (
-          <span className="shrink-0 rounded-full bg-cyan-300 px-2 py-1 text-[10px] font-black text-slate-950">対象</span>
-        ) : null}
+        {company.isTarget ? <span className="shrink-0 rounded-full bg-cyan-300 px-2 py-1 text-[10px] font-black text-slate-950">対象</span> : null}
       </div>
       <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
         <div className="rounded-xl border border-white/10 bg-black/20 p-3">
@@ -112,19 +101,23 @@ function CompanyMiniCard({ company }: { company: PeerCompany }) {
 export default function CompanyPeerComparison({ ticker }: Props) {
   const [payload, setPayload] = useState<Payload | null>(null);
   const [failed, setFailed] = useState(false);
+  const [isPro, setIsPro] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    fetch(`/api/company/${ticker}/peer-comparison`, { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: Payload | null) => {
+    Promise.all([
+      fetch(`/api/company/${ticker}/peer-comparison`, { cache: "no-store" }).then((res) => (res.ok ? res.json() : null)),
+      fetch("/api/pro-status", { cache: "no-store" }).then((res) => (res.ok ? res.json() : null)),
+    ])
+      .then(([data, status]: [Payload | null, { isPro?: boolean } | null]) => {
         if (cancelled) return;
         if (!data) {
           setFailed(true);
           return;
         }
         setPayload(data);
+        setIsPro(Boolean(status?.isPro));
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
@@ -148,17 +141,7 @@ export default function CompanyPeerComparison({ ticker }: Props) {
 
   const groups = payload.groups?.length
     ? payload.groups
-    : [
-        {
-          id: "peer",
-          label: "比較候補",
-          description: payload.note,
-          basis: ["スコア", "主要財務指標"],
-          freeLimit: 3,
-          proOnly: payload.companies.length > 3,
-          companies: payload.companies,
-        },
-      ];
+    : [{ id: "peer", label: "比較候補", description: payload.note, basis: ["スコア", "主要財務指標"], freeLimit: 3, proOnly: payload.companies.length > 3, companies: payload.companies }];
 
   return (
     <section className="mt-6 rounded-3xl border border-green-300/20 bg-gradient-to-br from-green-500/10 via-white/[0.04] to-cyan-500/10 p-4 shadow-2xl shadow-black/20 sm:p-6">
@@ -168,21 +151,14 @@ export default function CompanyPeerComparison({ ticker }: Props) {
           <h2 className="mt-2 text-2xl font-black text-white">比較候補</h2>
           <p className="mt-2 text-sm leading-7 text-slate-400">{payload.note}</p>
         </div>
-        <span className="w-fit rounded-full border border-green-300/20 bg-green-300/10 px-3 py-1 text-xs font-bold text-green-100">
-          財務 × 成長 × スコア
+        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${isPro ? "border-green-300/20 bg-green-300/10 text-green-100" : "border-yellow-300/20 bg-yellow-300/10 text-yellow-100"}`}>
+          {isPro ? "Pro 全件表示" : "一部無料 / 全件Pro"}
         </span>
-      </div>
-
-      <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-7 text-slate-300">
-        <p className="font-black text-white">比較条件</p>
-        <p className="mt-1 text-slate-400">
-          業種名だけでなく、スコア帯・売上成長率・営業利益率・営業CF率・自己資本比率を使って比較候補を出しています。
-        </p>
       </div>
 
       <div className="mt-5 space-y-5">
         {groups.map((group) => {
-          const visible = group.companies.slice(0, group.freeLimit + 1);
+          const visible = isPro ? group.companies : group.companies.slice(0, group.freeLimit + 1);
           const hiddenCount = Math.max(0, group.companies.length - visible.length);
 
           return (
@@ -194,20 +170,16 @@ export default function CompanyPeerComparison({ ticker }: Props) {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {group.basis.slice(0, 4).map((item) => (
-                    <span key={item} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-slate-300">
-                      {item}
-                    </span>
+                    <span key={item} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-slate-300">{item}</span>
                   ))}
                 </div>
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {visible.map((company) => (
-                  <CompanyMiniCard key={`${group.id}-${company.ticker}`} company={company} />
-                ))}
+                {visible.map((company) => <CompanyMiniCard key={`${group.id}-${company.ticker}`} company={company} />)}
               </div>
 
-              {hiddenCount > 0 ? <div className="mt-3"><ProComparisonLock hiddenCount={hiddenCount} /></div> : null}
+              {!isPro && hiddenCount > 0 ? <div className="mt-3"><ProComparisonLock hiddenCount={hiddenCount} /></div> : null}
             </div>
           );
         })}
