@@ -1,0 +1,46 @@
+[
+  {
+    "ticker": "186A",
+    "companyName": "アストロスケールホールディングス",
+    "theme": "宇宙・衛星",
+    "subTheme": "スペースデブリ除去・軌道上サービス",
+    "businessModel": "宇宙インフラ・政府民間案件",
+    "marketCapClass": null,
+    "rivalTickers": ["9348", "5595", "290A"],
+    "keywords": ["宇宙", "衛星", "デブリ", "軌道上サービス", "スペースデブリ"],
+    "reviewed": true
+  },
+  {
+    "ticker": "9348",
+    "companyName": "ispace",
+    "theme": "宇宙・衛星",
+    "subTheme": "月面輸送・月面開発",
+    "businessModel": "宇宙輸送・月面データ",
+    "marketCapClass": null,
+    "rivalTickers": ["186A", "5595", "290A"],
+    "keywords": ["宇宙", "月面", "月着陸", "月面輸送", "ランダー"],
+    "reviewed": true
+  },
+  {
+    "ticker": "5595",
+    "companyName": "QPS研究所",
+    "theme": "宇宙・衛星",
+    "subTheme": "小型SAR衛星・地球観測",
+    "businessModel": "衛星データ・官公庁法人向け",
+    "marketCapClass": null,
+    "rivalTickers": ["290A", "186A", "9348"],
+    "keywords": ["宇宙", "衛星", "SAR", "地球観測", "小型衛星"],
+    "reviewed": true
+  },
+  {
+    "ticker": "290A",
+    "companyName": "Synspective",
+    "theme": "宇宙・衛星",
+    "subTheme": "小型SAR衛星・地球観測",
+    "businessModel": "衛星データ・解析サービス",
+    "marketCapClass": null,
+    "rivalTickers": ["5595", "186A", "9348"],
+    "keywords": ["宇宙", "衛星", "SAR", "地球観測", "解析"],
+    "reviewed": true
+  }
+]
