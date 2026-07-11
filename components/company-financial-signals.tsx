@@ -40,9 +40,9 @@ function ProSignalCta({ hiddenCount }: { hiddenCount: number }) {
   );
 }
 
-function SignalBlock({ title, items, tone }: { title: string; items: Signal[]; tone: "green" | "yellow" | "cyan" }) {
-  const preview = items.slice(0, 1);
-  if (preview.length === 0) return null;
+function SignalBlock({ title, items, tone, isPro }: { title: string; items: Signal[]; tone: "green" | "yellow" | "cyan"; isPro: boolean }) {
+  const visibleItems = isPro ? items : items.slice(0, 1);
+  if (visibleItems.length === 0) return null;
 
   const toneClass = {
     green: "border-green-300/20 bg-green-500/10 text-green-100",
@@ -54,15 +54,15 @@ function SignalBlock({ title, items, tone }: { title: string; items: Signal[]; t
     <div className={`rounded-2xl border p-4 ${toneClass}`}>
       <p className="text-sm font-black">{title}</p>
       <div className="mt-3 space-y-2">
-        {preview.map((item) => (
+        {visibleItems.map((item) => (
           <div key={`${item.title}-${item.detail}`} className="rounded-xl border border-white/10 bg-black/20 p-3">
             <p className="text-sm font-black text-white">{item.title}</p>
             <p className="mt-1 text-xs leading-5 text-slate-300">{item.detail}</p>
           </div>
         ))}
-        {items.length > preview.length ? (
+        {!isPro && items.length > visibleItems.length ? (
           <div className="rounded-xl border border-yellow-300/20 bg-yellow-400/10 p-3 text-xs font-bold text-yellow-100">
-            🔒 残り{items.length - preview.length}件はPro限定
+            🔒 残り{items.length - visibleItems.length}件はPro限定
           </div>
         ) : null}
       </div>
@@ -78,19 +78,23 @@ function previewSummary(text: string) {
 export default function CompanyFinancialSignals({ ticker }: Props) {
   const [payload, setPayload] = useState<Payload | null>(null);
   const [failed, setFailed] = useState(false);
+  const [isPro, setIsPro] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    fetch(`/api/company/${ticker}/financial-signals`, { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: Payload | null) => {
+    Promise.all([
+      fetch(`/api/company/${ticker}/financial-signals`, { cache: "no-store" }).then((res) => (res.ok ? res.json() : null)),
+      fetch("/api/pro-status", { cache: "no-store" }).then((res) => (res.ok ? res.json() : null)),
+    ])
+      .then(([data, status]: [Payload | null, { isPro?: boolean } | null]) => {
         if (cancelled) return;
         if (!data) {
           setFailed(true);
           return;
         }
         setPayload(data);
+        setIsPro(Boolean(status?.isPro));
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
@@ -113,7 +117,7 @@ export default function CompanyFinancialSignals({ ticker }: Props) {
   }
 
   const totalSignals = payload.positive.length + payload.caution.length + payload.watch.length;
-  const visibleSignals = [payload.positive, payload.caution, payload.watch].filter((items) => items.length > 0).length;
+  const visibleSignals = isPro ? totalSignals : [payload.positive, payload.caution, payload.watch].filter((items) => items.length > 0).length;
   const hiddenCount = Math.max(0, totalSignals - visibleSignals);
 
   return (
@@ -126,22 +130,22 @@ export default function CompanyFinancialSignals({ ticker }: Props) {
             財務データから、良い点・注意点・確認ポイントを信号形式で整理します。
           </p>
         </div>
-        <span className="w-fit rounded-full border border-yellow-300/20 bg-yellow-300/10 px-3 py-1 text-xs font-bold text-yellow-100">
-          一部無料 / 詳細Pro
+        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${isPro ? "border-green-300/20 bg-green-300/10 text-green-100" : "border-yellow-300/20 bg-yellow-300/10 text-yellow-100"}`}>
+          {isPro ? "Pro 全件表示" : "一部無料 / 詳細Pro"}
         </span>
       </div>
 
       <p className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-8 text-slate-100 sm:text-base">
-        {previewSummary(payload.summary)}
+        {isPro ? payload.summary : previewSummary(payload.summary)}
       </p>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
-        <SignalBlock title="良いシグナル" items={payload.positive} tone="green" />
-        <SignalBlock title="注意シグナル" items={payload.caution} tone="yellow" />
-        <SignalBlock title="確認ポイント" items={payload.watch} tone="cyan" />
+        <SignalBlock title="良いシグナル" items={payload.positive} tone="green" isPro={isPro} />
+        <SignalBlock title="注意シグナル" items={payload.caution} tone="yellow" isPro={isPro} />
+        <SignalBlock title="確認ポイント" items={payload.watch} tone="cyan" isPro={isPro} />
       </div>
 
-      {hiddenCount > 0 ? <ProSignalCta hiddenCount={hiddenCount} /> : null}
+      {!isPro && hiddenCount > 0 ? <ProSignalCta hiddenCount={hiddenCount} /> : null}
 
       <p className="mt-4 text-xs leading-6 text-slate-500">{payload.disclaimer}</p>
     </section>
