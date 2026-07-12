@@ -1,9 +1,14 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase";
+
+function value(cookieStore: Awaited<ReturnType<typeof cookies>>, name: string) {
+  return cookieStore.get(name)?.value?.slice(0, 180) || "";
+}
 
 export async function createCheckoutSession() {
   const { userId } = await auth();
@@ -25,6 +30,15 @@ export async function createCheckoutSession() {
   if (!couponId) {
     throw new Error("STRIPE_LAUNCH_COUPON_ID が設定されていません");
   }
+
+  const cookieStore = await cookies();
+  const acquisition = {
+    utm_source: value(cookieStore, "kt_utm_source"),
+    utm_medium: value(cookieStore, "kt_utm_medium"),
+    utm_campaign: value(cookieStore, "kt_utm_campaign"),
+    utm_content: value(cookieStore, "kt_utm_content"),
+    referrer: value(cookieStore, "kt_referrer"),
+  };
 
   const { data: profile } = await supabaseAdmin
     .from("profiles")
@@ -48,6 +62,22 @@ export async function createCheckoutSession() {
     });
   }
 
+  await supabaseAdmin.from("acquisition_events").insert({
+    event_name: "checkout_start",
+    path: "/pricing",
+    clerk_user_id: userId,
+    utm_source: acquisition.utm_source || null,
+    utm_medium: acquisition.utm_medium || null,
+    utm_campaign: acquisition.utm_campaign || null,
+    utm_content: acquisition.utm_content || null,
+    referrer: acquisition.referrer || null,
+  });
+
+  const metadata = {
+    clerk_user_id: userId,
+    ...acquisition,
+  };
+
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     mode: "subscription",
@@ -55,7 +85,8 @@ export async function createCheckoutSession() {
     discounts: [{ coupon: couponId }],
     success_url: `${appUrl}/profile?checkout=success`,
     cancel_url: `${appUrl}/pricing?checkout=cancel`,
-    metadata: { clerk_user_id: userId },
+    metadata,
+    subscription_data: { metadata },
   });
 
   if (!session.url) {
