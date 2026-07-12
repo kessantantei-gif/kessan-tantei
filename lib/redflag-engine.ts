@@ -11,7 +11,7 @@ export type RedFlagInput = {
   ocfNegativeStreak: number;
   currentAssets: number;
   currentLiabilities: number;
-  equityRatio: number;
+  equityRatio?: number;
   previousAuditorType: AuditFirmType;
   currentAuditorType: AuditFirmType;
 };
@@ -58,7 +58,11 @@ export function analyzeRedFlags(input: RedFlagInput) {
     flags.push({ title: "流動資産 < 流動負債", scoreImpact: 20 });
   }
 
-  if (input.equityRatio > 0 && input.equityRatio < 30) {
+  if (
+    input.equityRatio !== undefined &&
+    Number.isFinite(input.equityRatio) &&
+    input.equityRatio < 30
+  ) {
     dangerScore += 15;
     flags.push({ title: "自己資本比率30%未満", scoreImpact: 15 });
   }
@@ -69,12 +73,6 @@ export function analyzeRedFlags(input: RedFlagInput) {
   ) {
     dangerScore += 50;
     flags.push({ title: "Big4→中小監査法人", scoreImpact: 50 });
-  } else if (
-    input.previousAuditorType === "midSmall" &&
-    input.currentAuditorType === "midSmall"
-  ) {
-    dangerScore += 25;
-    flags.push({ title: "中小→中小監査法人", scoreImpact: 25 });
   }
 
   if (input.msWarrant) {
