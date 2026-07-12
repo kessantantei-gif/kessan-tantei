@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { rankingDefinitions } from "@/lib/rankings/definitions";
 import { seoThemeIds } from "@/lib/seo-hubs";
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.kessan-tantei.jp";
+const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://kessan-tantei.jp").replace(/\/$/, "");
 
 export const dynamic = "force-dynamic";
 
