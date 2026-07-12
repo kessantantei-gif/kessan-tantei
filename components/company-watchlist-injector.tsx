@@ -53,9 +53,12 @@ export default function CompanyWatchlistInjector() {
 
   useEffect(() => {
     if (!ticker) return;
-    let observer: MutationObserver | null = null;
+
+    let cancelled = false;
+    const timers: number[] = [];
 
     const run = () => {
+      if (cancelled) return;
       markCompanyPage();
       removeLegacyWatchButtons();
       if (document.querySelector("[data-company-watch-button='true']")) return;
@@ -73,14 +76,14 @@ export default function CompanyWatchlistInjector() {
 
     run();
     requestAnimationFrame(run);
-    window.setTimeout(run, 300);
-    window.setTimeout(run, 900);
+    for (const delay of [150, 350, 700, 1200]) {
+      timers.push(window.setTimeout(run, delay));
+    }
 
-    observer = new MutationObserver(run);
-    observer.observe(document.body, { childList: true, subtree: true });
-    window.setTimeout(() => observer?.disconnect(), 2500);
-
-    return () => observer?.disconnect();
+    return () => {
+      cancelled = true;
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
   }, [ticker]);
 
   return null;
