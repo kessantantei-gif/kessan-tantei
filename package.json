@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "backfill:history": "tsx scripts/backfill-zero-financials.ts",
+    "audit:financial-data": "tsx scripts/audit-financial-data.ts",
     "audit:history-periods": "tsx scripts/audit-history-periods.ts",
     "audit:phase4": "tsx scripts/audit-phase4.ts",
     "audit:phase7": "tsx scripts/audit-phase7.ts",
