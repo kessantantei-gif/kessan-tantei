@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
+  { href: "/updates", label: "今日の更新", shortLabel: "更新" },
   { href: "/ranking", label: "ランキング", shortLabel: "順位" },
   { href: "/watchlist", label: "ウォッチ", shortLabel: "保存" },
   { href: "/alerts", label: "アラート", shortLabel: "通知" },
