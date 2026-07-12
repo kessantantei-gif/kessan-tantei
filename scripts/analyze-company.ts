@@ -20,6 +20,18 @@ type GrowthCompany = {
   edinetMatchedDocID?: string | null;
 };
 
+type HistoryRow = {
+  year: string;
+  fiscalYear: number;
+  fiscalMonth: number;
+  fiscalPeriod: string;
+  periodEnd: string;
+  revenue: number;
+  operatingIncome: number;
+  operatingCF: number;
+  docID: string;
+};
+
 const ticker = process.env.TICKER || "";
 const companyName = process.env.COMPANY_NAME || ticker;
 const docID = process.env.DOC_ID || "";
@@ -81,6 +93,32 @@ function calculateOcfNegativeStreak(items: { operatingCF: number }[]) {
   return streak;
 }
 
+function buildHistoryRow(id: string): HistoryRow {
+  downloadIfNeeded(id);
+  const financials = parseEdinetFinancials(id);
+
+  if (
+    !financials.periodEnd ||
+    !financials.fiscalYear ||
+    !financials.fiscalMonth ||
+    !financials.fiscalPeriod
+  ) {
+    throw new Error(`決算期をXBRL contextから取得できません: ${id}`);
+  }
+
+  return {
+    year: String(financials.fiscalYear),
+    fiscalYear: financials.fiscalYear,
+    fiscalMonth: financials.fiscalMonth,
+    fiscalPeriod: financials.fiscalPeriod,
+    periodEnd: financials.periodEnd,
+    revenue: financials.revenue,
+    operatingIncome: financials.operatingIncome,
+    operatingCF: financials.operatingCF,
+    docID: id,
+  };
+}
+
 async function main() {
   const growthCompany = loadGrowthCompany();
 
@@ -100,32 +138,26 @@ async function main() {
     historyDocIDs.unshift(docID);
   }
 
-  historyDocIDs = Array.from(new Set(historyDocIDs)).slice(0, 3).reverse();
+  historyDocIDs = Array.from(new Set(historyDocIDs)).slice(0, 6);
 
-  const history: {
-    year: string;
-    revenue: number;
-    operatingIncome: number;
-    operatingCF: number;
-  }[] = [];
+  const parsedHistory: HistoryRow[] = [];
 
-  const currentYear = new Date().getFullYear();
-
-  for (const [index, id] of historyDocIDs.entries()) {
+  for (const id of historyDocIDs) {
     try {
-      downloadIfNeeded(id);
-
-      const f = parseEdinetFinancials(id);
-
-      history.push({
-        year: String(currentYear - historyDocIDs.length + 1 + index),
-        revenue: f.revenue,
-        operatingIncome: f.operatingIncome,
-        operatingCF: f.operatingCF,
-      });
+      parsedHistory.push(buildHistoryRow(id));
     } catch (error) {
-      console.log("history parse failed:", id);
+      console.log("history parse failed:", id, error);
     }
+  }
+
+  const history = Array.from(
+    new Map(parsedHistory.map((row) => [row.periodEnd, row])).values()
+  )
+    .sort((a, b) => a.periodEnd.localeCompare(b.periodEnd))
+    .slice(-3);
+
+  if (!history.some((row) => row.docID === docID)) {
+    throw new Error(`最新書類 ${docID} の決算期を履歴へ反映できませんでした`);
   }
 
   const financials = parseEdinetFinancials(docID);
