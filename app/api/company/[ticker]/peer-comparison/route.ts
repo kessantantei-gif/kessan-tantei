@@ -41,13 +41,13 @@ function metric(company: CompanyRow, key: string) {
   return num(company.financials?.[key]);
 }
 
-function gap(a: number | null, b: number | null, fallback = 999) {
-  if (a === null || b === null) return fallback;
-  return Math.abs(a - b);
-}
-
 function meta(company: CompanyRow) {
   return companyMetaMap.get(company.ticker) ?? null;
+}
+
+function comparableGap(a: number | null, b: number | null) {
+  if (a === null || b === null) return null;
+  return Math.abs(a - b);
 }
 
 function financialDistance(target: CompanyRow, peer: CompanyRow) {
@@ -64,30 +64,74 @@ function financialDistance(target: CompanyRow, peer: CompanyRow) {
   let count = 0;
 
   for (const key of keys) {
-    const a = metric(target, key);
-    const b = metric(peer, key);
-    if (a === null || b === null) continue;
-    distance += Math.abs(a - b);
+    const currentGap = comparableGap(metric(target, key), metric(peer, key));
+    if (currentGap === null) continue;
+    distance += currentGap;
     count += 1;
   }
 
-  const scoreGap = Math.abs((target.score ?? 0) - (peer.score ?? 0));
-  return (count ? distance / count : 999) + scoreGap * 0.35;
-}
+  if (count === 0) return Number.POSITIVE_INFINITY;
 
-function growthDistance(target: CompanyRow, peer: CompanyRow) {
+  const scoreGap = comparableGap(num(target.score), num(peer.score));
+  const missingMetricPenalty = (keys.length - count) * 6;
+  const missingScorePenalty = scoreGap === null ? 12 : 0;
+
   return (
-    gap(metric(target, "revenueGrowth"), metric(peer, "revenueGrowth")) * 1.2 +
-    gap(metric(target, "grossProfitGrowth"), metric(peer, "grossProfitGrowth")) * 0.8 +
-    gap(metric(target, "operatingMargin"), metric(peer, "operatingMargin"), 120) * 0.25
+    distance / count +
+    (scoreGap ?? 0) * 0.35 +
+    missingMetricPenalty +
+    missingScorePenalty
   );
 }
 
+function growthDistance(target: CompanyRow, peer: CompanyRow) {
+  const weightedMetrics = [
+    { key: "revenueGrowth", weight: 1.2 },
+    { key: "grossProfitGrowth", weight: 0.8 },
+    { key: "operatingMargin", weight: 0.25 },
+  ] as const;
+
+  let distance = 0;
+  let comparedWeight = 0;
+  let comparedCount = 0;
+
+  for (const item of weightedMetrics) {
+    const currentGap = comparableGap(
+      metric(target, item.key),
+      metric(peer, item.key)
+    );
+    if (currentGap === null) continue;
+    distance += currentGap * item.weight;
+    comparedWeight += item.weight;
+    comparedCount += 1;
+  }
+
+  if (comparedCount === 0 || comparedWeight === 0) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const missingMetricPenalty = (weightedMetrics.length - comparedCount) * 15;
+  return distance / comparedWeight + missingMetricPenalty;
+}
+
 function broadDistance(target: CompanyRow, peer: CompanyRow) {
+  const financial = financialDistance(target, peer);
+  const growth = growthDistance(target, peer);
+
+  if (!Number.isFinite(financial) && !Number.isFinite(growth)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const dangerGap = comparableGap(
+    num(target.danger_score),
+    num(peer.danger_score)
+  );
+
   return (
-    financialDistance(target, peer) +
-    growthDistance(target, peer) * 0.35 +
-    Math.abs((target.danger_score ?? 0) - (peer.danger_score ?? 0)) * 0.2
+    (Number.isFinite(financial) ? financial : 80) +
+    (Number.isFinite(growth) ? growth * 0.35 : 30) +
+    (dangerGap ?? 0) * 0.2 +
+    (dangerGap === null ? 10 : 0)
   );
 }
 
@@ -103,8 +147,8 @@ function normalize(
     ticker: company.ticker,
     companyName: company.company_name,
     isTarget,
-    score: company.score ?? null,
-    dangerScore: company.danger_score ?? null,
+    score: num(company.score),
+    dangerScore: num(company.danger_score),
     revenueGrowth: metric(company, "revenueGrowth"),
     operatingMargin: metric(company, "operatingMargin"),
     operatingCFMargin:
@@ -176,12 +220,15 @@ function buildGroup({
   sortScore: (peer: CompanyRow) => number;
   masterMap: Map<string, RuntimeCompanyMasterEntry>;
 }) {
-  const sorted = uniqueCompanies(candidates)
+  const scored = uniqueCompanies(candidates)
     .filter(
       (peer) => peer.ticker !== target.ticker && peer.risk_level !== "EXCLUDED"
     )
-    .sort((a, b) => sortScore(a) - sortScore(b))
-    .slice(0, 8);
+    .map((peer) => ({ peer, distance: sortScore(peer) }))
+    .filter((item) => Number.isFinite(item.distance))
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, 8)
+    .map((item) => item.peer);
 
   return {
     id,
@@ -189,10 +236,10 @@ function buildGroup({
     description,
     basis,
     freeLimit: 3,
-    proOnly: sorted.length > 3,
+    proOnly: scored.length > 3,
     companies: [
       normalize(target, masterMap, true),
-      ...sorted.map((peer) => normalize(peer, masterMap)),
+      ...scored.map((peer) => normalize(peer, masterMap)),
     ],
   };
 }
@@ -218,7 +265,7 @@ export async function GET(_req: Request, { params }: RouteProps) {
     .select("ticker, company_name, score, danger_score, financials, risk_level")
     .neq("ticker", ticker)
     .neq("risk_level", "EXCLUDED")
-    .order("score", { ascending: false })
+    .order("score", { ascending: false, nullsFirst: false })
     .limit(300);
 
   if (peerError) {
@@ -245,9 +292,14 @@ export async function GET(_req: Request, { params }: RouteProps) {
     ticker
   );
 
+  const themeCandidates = uniqueCompanies([
+    ...curatedRivals,
+    ...sameSubTheme,
+    ...sameTheme,
+  ]);
   const businessCandidates =
-    uniqueCompanies([...curatedRivals, ...sameSubTheme, ...sameTheme]).length >= 2
-      ? uniqueCompanies([...curatedRivals, ...sameSubTheme, ...sameTheme])
+    themeCandidates.length >= 2
+      ? themeCandidates
       : sectorFallback(targetCompany, candidatePeers);
 
   const comparisonLabel =
@@ -256,11 +308,7 @@ export async function GET(_req: Request, { params }: RouteProps) {
     meta(targetCompany)?.sector33 ??
     "事業・財務特性";
 
-  const priorityCandidates = uniqueCompanies([
-    ...curatedRivals,
-    ...sameSubTheme,
-    ...sameTheme,
-  ])
+  const priorityCandidates = themeCandidates
     .filter((peer) => peer.ticker !== ticker)
     .slice(0, 8);
 
@@ -317,9 +365,9 @@ export async function GET(_req: Request, { params }: RouteProps) {
     ticker: targetCompany.ticker,
     companyName: targetCompany.company_name,
     peerBasis: master?.reviewed
-      ? "admin-reviewed-company-master"
+      ? "curated-business-master"
       : master
-        ? "automatic-company-master"
+        ? "multi-axis"
         : "sector-financial-fallback",
     comparisonLabel,
     masterReviewed: Boolean(master?.reviewed),
@@ -329,6 +377,6 @@ export async function GET(_req: Request, { params }: RouteProps) {
     groups,
     companies: groups[0]?.companies ?? [normalize(targetCompany, masterMap, true)],
     disclaimer:
-      "比較候補は事業テーマと財務データの理解補助であり、実際の競合関係や個別銘柄の売買判断を示すものではありません。",
+      "比較候補は事業テーマと、取得できた財務データの理解補助です。欠損値は0として扱わず、実際の競合関係や個別銘柄の売買判断を示すものではありません。",
   });
 }
