@@ -49,12 +49,12 @@ export const featureHubs = [
     description: "本業から生み出した営業キャッシュフローを比較します。",
   },
   {
-    slug: "operating-margin-improvement",
+    slug: "margin-improvement",
     title: "利益率改善企業",
     description: "営業利益率が前期から改善した企業を比較します。",
   },
   {
-    slug: "operating-cf-improvement",
+    slug: "ocf-improvement",
     title: "営業CF改善企業",
     description: "営業キャッシュフローが前期から改善した企業を比較します。",
   },
@@ -64,7 +64,7 @@ export const featureHubs = [
     description: "売上成長率と営業利益率の合計で成長と収益性を比較します。",
   },
   {
-    slug: "loss-making-growth",
+    slug: "loss-high-growth",
     title: "赤字成長企業",
     description: "売上は伸びている一方で営業赤字の企業を確認します。",
   },
