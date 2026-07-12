@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { supabaseAdmin } from "@/lib/supabase";
 import { rankingDefinitions } from "@/lib/rankings/definitions";
+import { seoThemeIds } from "@/lib/seo-hubs";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.kessan-tantei.jp";
 
@@ -27,6 +28,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.9,
     },
     {
+      url: `${appUrl}/themes`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.85,
+    },
+    {
+      url: `${appUrl}/features`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.85,
+    },
+    {
       url: `${appUrl}/data-quality`,
       lastModified: new Date(),
       changeFrequency: "daily",
@@ -49,6 +62,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })
   );
 
+  const themePages: MetadataRoute.Sitemap = seoThemeIds.map((theme) => ({
+    url: `${appUrl}/themes/${theme}`,
+    lastModified: new Date(),
+    changeFrequency: "daily",
+    priority: 0.8,
+  }));
+
   const { data } = await supabaseAdmin
     .from("company_analyses")
     .select("ticker, updated_at, created_at, risk_level")
@@ -62,5 +82,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.9,
   }));
 
-  return [...staticPages, ...rankingPages, ...companyPages];
+  return [...staticPages, ...rankingPages, ...themePages, ...companyPages];
 }
