@@ -21,6 +21,7 @@ import CompanyPageOrderController from "@/components/company-page-order-controll
 import CompanyProBoundaryController from "@/components/company-pro-boundary-controller";
 import CompareTray from "@/components/compare-tray";
 import AcquisitionTracker from "@/components/acquisition-tracker";
+import RecentCompanyTracker from "@/components/recent-company-tracker";
 import SeoJsonLd, { organizationJsonLd, websiteJsonLd } from "@/components/seo-json-ld";
 
 export const viewport: Viewport = {
@@ -80,6 +81,7 @@ export default function RootLayout({
           <Suspense fallback={null}>
             <AcquisitionTracker />
           </Suspense>
+          <RecentCompanyTracker />
           <SiteNav />
           {children}
           <CompanyTrendChartEnhancer />
