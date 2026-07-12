@@ -37,12 +37,14 @@ function calcGrowthRate(current: number, previous: number) {
 }
 
 function average(values: number[]) {
-  if (values.length === 0) return 0;
+  if (values.length === 0) return null;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 function calculateRevenueGrowthScore(financials: Financials, history: HistoryItem[]) {
-  const validHistory = history.filter((item) => typeof item.revenue === "number");
+  const validHistory = history.filter(
+    (item) => typeof item.revenue === "number" && Number.isFinite(item.revenue)
+  );
 
   if (validHistory.length >= 2) {
     const growthRates: number[] = [];
@@ -59,23 +61,27 @@ function calculateRevenueGrowthScore(financials: Financials, history: HistoryIte
 
     const avgGrowth = average(growthRates);
 
-    // -20%以下 = 0点、+80%以上 = 100点
-    return scoreRange(avgGrowth, -20, 80);
+    if (avgGrowth !== null) {
+      // -20%以下 = 0点、+80%以上 = 100点
+      return scoreRange(avgGrowth, -20, 80);
+    }
   }
 
-  // 履歴がない場合は、売上があるだけでは満点にしない
-  if (financials.revenue !== null && financials.revenue > 0) return 45;
-  return 10;
+  // 比較可能な履歴がない場合は、売上があるだけでは高得点にしない
+  if (financials.revenue !== null && financials.revenue > 0) return 35;
+  return 0;
 }
 
 function calculateProfitabilityScore(
   metrics: ReturnType<typeof calculateFinancialMetrics>
 ) {
-  const operatingMargin = metrics.operatingMargin ?? -50;
-  const ocfMargin = metrics.operatingCFMargin ?? -50;
+  const operatingMargin = metrics.operatingMargin;
+  const ocfMargin = metrics.operatingCFMargin;
 
-  const operatingMarginScore = scoreRange(operatingMargin, -30, 30);
-  const ocfMarginScore = scoreRange(ocfMargin, -30, 30);
+  const operatingMarginScore =
+    operatingMargin === undefined ? 0 : scoreRange(operatingMargin, -30, 30);
+  const ocfMarginScore =
+    ocfMargin === undefined ? 0 : scoreRange(ocfMargin, -30, 30);
 
   return {
     operatingMargin,
@@ -88,17 +94,21 @@ function calculateStabilityScore(
   metrics: ReturnType<typeof calculateFinancialMetrics>,
   history: HistoryItem[]
 ) {
-  const equityRatio = metrics.equityRatio ?? 0;
-  const cashCoverage = metrics.cashRatio !== undefined ? metrics.cashRatio / 100 : 2;
+  const equityRatio = metrics.equityRatio;
+  const cashCoverage =
+    metrics.cashRatio !== undefined ? metrics.cashRatio / 100 : undefined;
 
-  const equityScore = scoreRange(equityRatio, 10, 80);
-  const cashCoverageScore = scoreRange(cashCoverage, 0.2, 2.5);
+  const equityScore =
+    equityRatio === undefined ? 0 : scoreRange(equityRatio, 10, 80);
+  const cashCoverageScore =
+    cashCoverage === undefined ? 0 : scoreRange(cashCoverage, 0.2, 2.5);
 
   const validHistory = history.filter(
-    (item) => typeof item.operatingCF === "number"
+    (item) =>
+      typeof item.operatingCF === "number" && Number.isFinite(item.operatingCF)
   );
 
-  let ocfConsistencyScore = 50;
+  let ocfConsistencyScore = 0;
 
   if (validHistory.length > 0) {
     const positiveCount = validHistory.filter(
@@ -130,13 +140,20 @@ export function calculateScores(financials: Financials, history: HistoryItem[] =
 
   const rawTotalScore = growthScore + qualityScore + safetyScore;
 
-  // 100点乱発防止。満点はかなり厳しくする。
+  // 欠損値を好条件として扱わず、確認できる指標だけで評価する。
   let totalScore = rawTotalScore;
 
-  if (profitability.operatingMargin < 5) totalScore -= 4;
-  if (profitability.ocfMargin < 5) totalScore -= 4;
-  if (stability.equityRatio < 30) totalScore -= 4;
-  if (stability.cashCoverage < 1) totalScore -= 4;
+  if (profitability.operatingMargin === undefined) totalScore -= 4;
+  else if (profitability.operatingMargin < 5) totalScore -= 4;
+
+  if (profitability.ocfMargin === undefined) totalScore -= 4;
+  else if (profitability.ocfMargin < 5) totalScore -= 4;
+
+  if (stability.equityRatio === undefined) totalScore -= 4;
+  else if (stability.equityRatio < 30) totalScore -= 4;
+
+  if (stability.cashCoverage === undefined) totalScore -= 4;
+  else if (stability.cashCoverage < 1) totalScore -= 4;
 
   totalScore = clamp(totalScore, 0, 100);
 
@@ -145,9 +162,18 @@ export function calculateScores(financials: Financials, history: HistoryItem[] =
     qualityScore: round1(qualityScore),
     safetyScore: round1(safetyScore),
     totalScore: round1(totalScore),
-    operatingMargin: round1(profitability.operatingMargin),
-    ocfMargin: round1(profitability.ocfMargin),
-    equityRatio: round1(stability.equityRatio),
+    operatingMargin:
+      profitability.operatingMargin === undefined
+        ? undefined
+        : round1(profitability.operatingMargin),
+    ocfMargin:
+      profitability.ocfMargin === undefined
+        ? undefined
+        : round1(profitability.ocfMargin),
+    equityRatio:
+      stability.equityRatio === undefined
+        ? undefined
+        : round1(stability.equityRatio),
     financialMetrics,
   };
 }
