@@ -52,8 +52,8 @@ function unique(items: string[]) {
 
 function buildSummary(
   companyName: string,
-  score: number,
-  dangerScore: number,
+  score: number | null,
+  dangerScore: number | null,
   financials: Financials,
   riskFlags: RiskFlag[],
   history: HistoryRow[]
@@ -161,16 +161,20 @@ function buildSummary(
     cautions.push(`${namedRisks[0]}が検出されています。関連する注記や資金調達条件の確認が必要です。`);
   }
 
-  if (score >= 80 && dangerScore < 40) {
-    positives.unshift(`総合スコア${score}点、Danger Score${dangerScore}点で、財務評価とリスクのバランスは良好です。`);
-  } else if (score >= 70 && dangerScore >= 60) {
-    watchPoints.unshift(`総合スコアは${score}点と高めですが、Danger Scoreは${dangerScore}点です。成長性だけでなくリスク項目の中身を優先して確認したい状態です。`);
-  } else if (score < 60 && dangerScore >= 60) {
-    cautions.unshift(`総合スコア${score}点、Danger Score${dangerScore}点で、収益性・安全性・リスクの複数面を慎重に確認したい水準です。`);
-  } else if (score >= 60) {
-    watchPoints.unshift(`総合スコアは${score}点、Danger Scoreは${dangerScore}点です。強みと注意点が混在しています。`);
+  if (score !== null && dangerScore !== null) {
+    if (score >= 80 && dangerScore < 40) {
+      positives.unshift(`総合スコア${score}点、Danger Score${dangerScore}点で、財務評価とリスクのバランスは良好です。`);
+    } else if (score >= 70 && dangerScore >= 60) {
+      watchPoints.unshift(`総合スコアは${score}点と高めですが、Danger Scoreは${dangerScore}点です。成長性だけでなくリスク項目の中身を優先して確認したい状態です。`);
+    } else if (score < 60 && dangerScore >= 60) {
+      cautions.unshift(`総合スコア${score}点、Danger Score${dangerScore}点で、収益性・安全性・リスクの複数面を慎重に確認したい水準です。`);
+    } else if (score >= 60) {
+      watchPoints.unshift(`総合スコアは${score}点、Danger Scoreは${dangerScore}点です。強みと注意点が混在しています。`);
+    } else {
+      cautions.unshift(`総合スコアは${score}点です。主要財務指標とリスク項目を個別に確認したい水準です。`);
+    }
   } else {
-    cautions.unshift(`総合スコアは${score}点です。主要財務指標とリスク項目を個別に確認したい水準です。`);
+    watchPoints.unshift("総合スコアまたはDanger Scoreを算定できるデータが不足しているため、点数による評価は表示していません。");
   }
 
   if (positives.length === 0 && cautions.length === 0 && watchPoints.length === 0) {
@@ -207,8 +211,8 @@ export async function GET(_req: Request, { params }: RouteProps) {
 
   const result = buildSummary(
     data.company_name,
-    num(data.score) ?? 0,
-    num(data.danger_score) ?? 0,
+    num(data.score),
+    num(data.danger_score),
     data.financials ?? {},
     data.risk?.flags ?? [],
     (data.history ?? []) as HistoryRow[]
@@ -217,8 +221,8 @@ export async function GET(_req: Request, { params }: RouteProps) {
   return NextResponse.json({
     ticker: data.ticker,
     companyName: data.company_name,
-    generatedBy: "accounting-rules-v2",
-    disclaimer: "このサマリーは決算データの理解補助であり、個別銘柄の売買判断や将来業績を示すものではありません。",
+    generatedBy: "accounting-rules-v3",
+    disclaimer: "このサマリーは決算データの理解補助であり、個別銘柄の売買判断や将来業績を示すものではありません。未取得の指標は推定せず、取得済みデータのみで文章化しています。",
     ...result,
   });
 }
