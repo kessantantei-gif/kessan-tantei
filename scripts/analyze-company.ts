@@ -161,7 +161,7 @@ async function main() {
   }
 
   const financials = parseEdinetFinancials(docID);
-  const scores = calculateScores(financials);
+  const scores = calculateScores(financials, history);
   const disclosureSignals = parseDisclosureSignals(docID);
   const ocfNegativeStreak = calculateOcfNegativeStreak(history);
 
