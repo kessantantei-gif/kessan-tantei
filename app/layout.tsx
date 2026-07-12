@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/react";
@@ -19,6 +20,7 @@ import CompanyCompareFloatingButton from "@/components/company-compare-floating-
 import CompanyPageOrderController from "@/components/company-page-order-controller";
 import CompanyProBoundaryController from "@/components/company-pro-boundary-controller";
 import CompareTray from "@/components/compare-tray";
+import AcquisitionTracker from "@/components/acquisition-tracker";
 import SeoJsonLd, { organizationJsonLd, websiteJsonLd } from "@/components/seo-json-ld";
 
 export const viewport: Viewport = {
@@ -39,7 +41,6 @@ export const metadata: Metadata = {
   verification: {
     google: "GprsF0U3m9SZj2MJ5AUo9FK-Ame_DGhpPLv5LKiIyqA",
   },
-
   openGraph: {
     title: "決算探偵 | グロース市場特化の財務分析ランキング",
     description:
@@ -57,7 +58,6 @@ export const metadata: Metadata = {
       },
     ],
   },
-
   twitter: {
     card: "summary_large_image",
     title: "決算探偵 | グロース市場特化の財務分析ランキング",
@@ -77,6 +77,9 @@ export default function RootLayout({
       <html lang="ja">
         <body>
           <SeoJsonLd data={[websiteJsonLd(), organizationJsonLd()]} />
+          <Suspense fallback={null}>
+            <AcquisitionTracker />
+          </Suspense>
           <SiteNav />
           {children}
           <CompanyTrendChartEnhancer />
