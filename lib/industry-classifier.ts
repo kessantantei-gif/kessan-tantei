@@ -70,7 +70,7 @@ export type IndustryTheme =
   | "manufacturing"
   | "other";
 
-export const industryThemeLabels: Record<IndustryTheme, string> = {
+export const industryThemeLabels: Readonly<Record<IndustryTheme, string>> = {
   saas: "SaaS",
   ai: "AI・データ",
   dx: "DX・業務支援",
@@ -95,9 +95,8 @@ export const industryThemeLabels: Record<IndustryTheme, string> = {
   other: "その他",
 };
 
-export function industryThemeLabel(theme: IndustryTheme) {
-  return industryThemeLabels[theme];
-}
+export const industryThemeLabel = (theme: IndustryTheme): string =>
+  industryThemeLabels[theme];
 
 const industryThemeKeywords: Record<Exclude<IndustryTheme, "other">, string[]> = {
   saas: ["SaaS", "ＳａａＳ", "サース", "クラウドサービス", "サブスクリプション"],
@@ -127,7 +126,9 @@ export function classifyIndustryThemes(searchableText: string): IndustryTheme[] 
   const normalized = searchableText.normalize("NFKC");
   const themes = Object.entries(industryThemeKeywords)
     .filter(([, keywords]) =>
-      keywords.some((keyword) => normalized.toLowerCase().includes(keyword.normalize("NFKC").toLowerCase()))
+      keywords.some((keyword) =>
+        normalized.toLowerCase().includes(keyword.normalize("NFKC").toLowerCase())
+      )
     )
     .map(([theme]) => theme as Exclude<IndustryTheme, "other">);
 
