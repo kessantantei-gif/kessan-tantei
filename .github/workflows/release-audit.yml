@@ -1,11 +1,29 @@
 name: Release Audit
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
+
+concurrency:
+  group: release-audit-main
+  cancel-in-progress: true
 
 jobs:
   release-audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_PRO_PRICE_ID: ${{ secrets.STRIPE_PRO_PRICE_ID }}
+      STRIPE_LAUNCH_COUPON_ID: ${{ secrets.STRIPE_LAUNCH_COUPON_ID }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,15 +37,58 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run release audit
-        run: npm run audit:release
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          STRIPE_PRO_PRICE_ID: ${{ secrets.STRIPE_PRO_PRICE_ID }}
-          STRIPE_LAUNCH_COUPON_ID: ${{ secrets.STRIPE_LAUNCH_COUPON_ID }}
-          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
-          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+      - name: Build and run all production audits
+        shell: bash
+        run: |
+          mkdir -p reports
+          set +e
+
+          run_check() {
+            local name="$1"
+            shift
+            echo "===== ${name} =====" | tee -a reports/final-ci-summary.txt
+            "$@" 2>&1 | tee "reports/${name}.log"
+            local code=${PIPESTATUS[0]}
+            echo "exit_code=${code}" | tee -a reports/final-ci-summary.txt
+            echo | tee -a reports/final-ci-summary.txt
+            return ${code}
+          }
+
+          failed=0
+          run_check lint npm run lint || failed=1
+          run_check build npm run build || failed=1
+          run_check financial-data npm run audit:financial-data || failed=1
+          run_check history-periods npm run audit:history-periods || failed=1
+          run_check stripe npm run audit:stripe || failed=1
+          run_check seo npm run audit:seo || failed=1
+          run_check release npm run audit:release || failed=1
+          run_check final npm run audit:final || failed=1
+
+          exit ${failed}
+
+      - name: Verify production HTTP endpoints
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p reports
+          base="${NEXT_PUBLIC_APP_URL:-https://kessan-tantei.jp}"
+          failed=0
+          for path in / /ranking /pricing /privacy /terms /legal /disclaimer /robots.txt /sitemap.xml; do
+            url="${base%/}${path}"
+            code=$(curl --location --silent --show-error --output /tmp/body --write-out "%{http_code}" --retry 4 --retry-delay 5 --retry-all-errors --max-time 30 "$url" || true)
+            bytes=$(wc -c < /tmp/body 2>/dev/null || echo 0)
+            printf '%s\t%s\t%s bytes\n' "$code" "$url" "$bytes" | tee -a reports/http-smoke.txt
+            if [[ ! "$code" =~ ^(200|301|302|307|308)$ ]]; then
+              failed=1
+            fi
+          done
+          exit ${failed}
+
+      - name: Upload audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-audit-${{ github.sha }}
+          path: reports/
+          if-no-files-found: error
+          retention-days: 30
