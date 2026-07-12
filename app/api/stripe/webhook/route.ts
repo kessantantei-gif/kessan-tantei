@@ -65,6 +65,23 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     plan: isProStatus(status) ? "pro" : "free",
     updated_at: new Date().toISOString(),
   });
+
+  if (isProStatus(status)) {
+    await supabaseAdmin.from("acquisition_events").insert({
+      event_name: "checkout_complete",
+      path: "/pricing",
+      clerk_user_id: clerkUserId || null,
+      utm_source: session.metadata?.utm_source || null,
+      utm_medium: session.metadata?.utm_medium || null,
+      utm_campaign: session.metadata?.utm_campaign || null,
+      utm_content: session.metadata?.utm_content || null,
+      referrer: session.metadata?.referrer || null,
+      metadata: {
+        stripe_customer_id: stripeCustomerId,
+        stripe_subscription_id: currentSubscriptionId,
+      },
+    });
+  }
 }
 
 async function handleSubscription(subscription: Stripe.Subscription) {
