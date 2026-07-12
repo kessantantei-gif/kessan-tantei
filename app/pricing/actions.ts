@@ -6,8 +6,22 @@ import { redirect } from "next/navigation";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase";
 
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
+
 function value(cookieStore: Awaited<ReturnType<typeof cookies>>, name: string) {
   return cookieStore.get(name)?.value?.slice(0, 180) || "";
+}
+
+async function hasActiveStripeSubscription(customerId: string) {
+  const subscriptions = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 20,
+  });
+
+  return subscriptions.data.some((subscription) =>
+    ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status)
+  );
 }
 
 export async function createCheckoutSession() {
@@ -42,9 +56,16 @@ export async function createCheckoutSession() {
 
   const { data: profile } = await supabaseAdmin
     .from("profiles")
-    .select("stripe_customer_id")
+    .select("stripe_customer_id, subscription_status")
     .eq("clerk_user_id", userId)
     .maybeSingle();
+
+  if (
+    profile?.subscription_status &&
+    ACTIVE_SUBSCRIPTION_STATUSES.has(profile.subscription_status)
+  ) {
+    redirect("/profile?subscription=already-active");
+  }
 
   let customerId = profile?.stripe_customer_id ?? null;
 
@@ -55,11 +76,16 @@ export async function createCheckoutSession() {
 
     customerId = customer.id;
 
-    await supabaseAdmin.from("profiles").upsert({
-      clerk_user_id: userId,
-      stripe_customer_id: customerId,
-      updated_at: new Date().toISOString(),
-    });
+    await supabaseAdmin.from("profiles").upsert(
+      {
+        clerk_user_id: userId,
+        stripe_customer_id: customerId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "clerk_user_id" }
+    );
+  } else if (await hasActiveStripeSubscription(customerId)) {
+    redirect("/profile?subscription=already-active");
   }
 
   await supabaseAdmin.from("acquisition_events").insert({
