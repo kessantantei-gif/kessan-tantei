@@ -3,6 +3,20 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase";
 
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
+
+async function hasActiveStripeSubscription(customerId: string) {
+  const subscriptions = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 20,
+  });
+
+  return subscriptions.data.some((subscription) =>
+    ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status)
+  );
+}
+
 export async function POST() {
   const { userId } = await auth();
 
@@ -26,9 +40,19 @@ export async function POST() {
 
   const { data: profile } = await supabaseAdmin
     .from("profiles")
-    .select("stripe_customer_id")
+    .select("stripe_customer_id, subscription_status")
     .eq("clerk_user_id", userId)
     .maybeSingle();
+
+  if (
+    profile?.subscription_status &&
+    ACTIVE_SUBSCRIPTION_STATUSES.has(profile.subscription_status)
+  ) {
+    return NextResponse.json(
+      { error: "すでにProプランを契約しています", redirect: "/profile" },
+      { status: 409 }
+    );
+  }
 
   let customerId = profile?.stripe_customer_id ?? null;
 
@@ -39,12 +63,22 @@ export async function POST() {
 
     customerId = customer.id;
 
-    await supabaseAdmin.from("profiles").upsert({
-      clerk_user_id: userId,
-      stripe_customer_id: customerId,
-      updated_at: new Date().toISOString(),
-    });
+    await supabaseAdmin.from("profiles").upsert(
+      {
+        clerk_user_id: userId,
+        stripe_customer_id: customerId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "clerk_user_id" }
+    );
+  } else if (await hasActiveStripeSubscription(customerId)) {
+    return NextResponse.json(
+      { error: "すでにProプランを契約しています", redirect: "/profile" },
+      { status: 409 }
+    );
   }
+
+  const metadata = { clerk_user_id: userId };
 
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
@@ -53,7 +87,8 @@ export async function POST() {
     discounts: [{ coupon: couponId }],
     success_url: `${appUrl}/profile?checkout=success`,
     cancel_url: `${appUrl}/pricing?checkout=cancel`,
-    metadata: { clerk_user_id: userId },
+    metadata,
+    subscription_data: { metadata },
   });
 
   return NextResponse.json({ url: session.url });
