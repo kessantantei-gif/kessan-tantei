@@ -16,6 +16,14 @@ type NewsItem = {
   published_at?: string | null;
 };
 
+type FocusGroup = {
+  label: string;
+  title: string;
+  description: string;
+  tone: "green" | "cyan" | "red";
+  companies: RankingCompany[];
+};
+
 function formatNewsDate(value?: string | null) {
   if (!value) return "日付不明";
 
@@ -48,6 +56,17 @@ function applyRankingLock(companies: RankingCompany[], isPro: boolean) {
       locked: true,
     };
   });
+}
+
+function metricValue(company: RankingCompany, key: string) {
+  const value = company.financials?.[key as keyof typeof company.financials];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function focusToneClasses(tone: FocusGroup["tone"]) {
+  if (tone === "green") return "border-green-400/20 bg-green-500/10 text-green-200";
+  if (tone === "cyan") return "border-cyan-400/20 bg-cyan-500/10 text-cyan-200";
+  return "border-red-400/20 bg-red-500/10 text-red-200";
 }
 
 async function loadCompanies() {
@@ -109,6 +128,65 @@ export default async function HomePage() {
     .slice(0, 5);
   const dangerTop = applyRankingLock(dangerTopRaw, isPro);
 
+  const focusGroups: FocusGroup[] = [
+    {
+      label: "QUALITY GROWTH",
+      title: "高成長かつ営業黒字",
+      description: "売上成長率20%以上で、営業利益率がプラスの企業です。",
+      tone: "green",
+      companies: [...companies]
+        .filter(
+          (company) =>
+            (metricValue(company, "revenueGrowth") ?? -Infinity) >= 20 &&
+            (metricValue(company, "operatingMargin") ?? -Infinity) >= 0
+        )
+        .sort(byNumber((company) => company.score))
+        .slice(0, 3),
+    },
+    {
+      label: "CASH IMPROVEMENT",
+      title: "営業CF改善",
+      description: "営業CFが前期から改善している企業です。",
+      tone: "cyan",
+      companies: [...companies]
+        .filter((company) => (metricValue(company, "operatingCFGrowth") ?? 0) > 0)
+        .sort(byNumber((company) => metricValue(company, "operatingCFGrowth") ?? 0))
+        .slice(0, 3),
+    },
+    {
+      label: "RISK WATCH",
+      title: "リスク要確認",
+      description: "Danger Scoreが高く、詳細項目を確認したい企業です。",
+      tone: "red",
+      companies: [...companies]
+        .sort(byNumber((company) => company.danger_score))
+        .slice(0, 3),
+    },
+  ];
+
+  const proRankingLinks = [
+    {
+      href: "/ranking/margin-improvement",
+      label: "利益率改善",
+      description: "営業利益率が前期から改善した企業を確認",
+    },
+    {
+      href: "/ranking/ocf-improvement",
+      label: "営業CF改善",
+      description: "利益だけでなく現金収支が改善した企業を確認",
+    },
+    {
+      href: "/ranking/rule40-excellent",
+      label: "Rule of 40",
+      description: "成長率と利益率のバランスが高い企業を確認",
+    },
+    {
+      href: "/ranking/risk-signal",
+      label: "リスクシグナル",
+      description: "Danger ScoreとRed Flagsの詳細を確認",
+    },
+  ];
+
   return (
     <main className="min-h-screen bg-[#050816] text-white">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(34,197,94,0.16),transparent_32%),radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),transparent_28%),radial-gradient(circle_at_bottom,_rgba(168,85,247,0.12),transparent_35%)]" />
@@ -165,6 +243,53 @@ export default async function HomePage() {
             </div>
           </div>
         </div>
+
+        <section className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-xl sm:p-8">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-black tracking-[0.28em] text-yellow-300">TODAY&apos;S FOCUS</p>
+              <h2 className="mt-2 text-2xl font-black sm:text-3xl">今日見るべき企業</h2>
+              <p className="mt-2 text-sm leading-7 text-slate-400">
+                最新の取得済み決算データから、成長・キャッシュ・リスクの3方向で自動抽出しています。
+              </p>
+            </div>
+            <Link href="/ranking" className="text-sm font-bold text-yellow-200 hover:text-yellow-100">
+              全ランキングを見る →
+            </Link>
+          </div>
+
+          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+            {focusGroups.map((group) => (
+              <div key={group.label} className={`rounded-2xl border p-4 ${focusToneClasses(group.tone)}`}>
+                <p className="text-[11px] font-black tracking-[0.22em]">{group.label}</p>
+                <h3 className="mt-2 text-lg font-black text-white">{group.title}</h3>
+                <p className="mt-2 text-xs leading-6 text-slate-400">{group.description}</p>
+                <div className="mt-4 space-y-2">
+                  {group.companies.length === 0 ? (
+                    <p className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-slate-400">
+                      条件に該当する企業は確認中です。
+                    </p>
+                  ) : (
+                    group.companies.map((company, index) => (
+                      <Link
+                        key={company.ticker}
+                        href={`/company/${company.ticker}`}
+                        className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3 text-sm transition hover:bg-white/10"
+                      >
+                        <span className="min-w-0 truncate font-bold text-white">
+                          {index + 1}. {company.company_name}
+                        </span>
+                        <span className="shrink-0 text-xs font-black text-slate-300">
+                          {group.tone === "red" ? `${company.danger_score}点` : `${company.score}点`}
+                        </span>
+                      </Link>
+                    ))
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
         <Link
           href="/ranking"
@@ -228,6 +353,44 @@ export default async function HomePage() {
           </div>
         </div>
 
+        <section className="mt-6 rounded-3xl border border-yellow-400/25 bg-gradient-to-br from-yellow-500/15 via-white/[0.04] to-orange-500/10 p-5 backdrop-blur-xl sm:p-8">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-black tracking-[0.28em] text-yellow-300">PRO RANKINGS</p>
+              <h2 className="mt-2 text-2xl font-black sm:text-3xl">Proで深掘りするランキング</h2>
+              <p className="mt-2 text-sm leading-7 text-slate-300">
+                FreeではTOP3まで、Proでは全順位・数値・企業コメントまで確認できます。
+              </p>
+            </div>
+            <span className="w-fit rounded-full bg-yellow-400 px-3 py-1 text-xs font-black text-slate-950">
+              {isPro ? "Pro利用中" : "初月100円"}
+            </span>
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {proRankingLinks.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="rounded-2xl border border-yellow-300/20 bg-black/20 p-4 transition hover:-translate-y-0.5 hover:bg-yellow-400/10"
+              >
+                <p className="font-black text-yellow-100">{item.label}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-400">{item.description}</p>
+                <span className="mt-4 inline-block text-sm font-bold text-yellow-200">見る →</span>
+              </Link>
+            ))}
+          </div>
+
+          {!isPro ? (
+            <Link
+              href="/pricing"
+              className="mt-5 inline-flex min-h-11 items-center justify-center rounded-full bg-yellow-400 px-5 py-2.5 text-sm font-black text-slate-950 hover:bg-yellow-300"
+            >
+              初月100円で全順位を開放する
+            </Link>
+          ) : null}
+        </section>
+
         <section className="mt-6 rounded-3xl border border-yellow-400/20 bg-yellow-500/10 p-5 backdrop-blur-xl sm:p-7">
           <h2 className="text-2xl font-black sm:text-3xl">
             Proで見えるもの
@@ -258,7 +421,7 @@ export default async function HomePage() {
             {news.length === 0 ? (
               <p className="text-slate-400">ニュースはまだありません。</p>
             ) : (
-              (news as NewsItem[]).map((item) => (
+              news.map((item: NewsItem) => (
                 <a
                   key={item.id}
                   href={item.url}
