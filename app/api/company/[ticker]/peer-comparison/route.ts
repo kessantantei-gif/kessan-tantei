@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import growthCompanies from "@/data/growth-companies.json";
 import {
-  getCompanyMaster,
-  getSameSubThemeTickers,
-  getSameThemeTickers,
-} from "@/lib/company-master";
+  getRuntimeSameSubThemeTickers,
+  getRuntimeSameThemeTickers,
+  loadRuntimeCompanyMasterEntries,
+  type RuntimeCompanyMasterEntry,
+} from "@/lib/company-master-runtime";
 
 type RouteProps = {
   params: Promise<{ ticker: string }>;
@@ -90,8 +91,12 @@ function broadDistance(target: CompanyRow, peer: CompanyRow) {
   );
 }
 
-function normalize(company: CompanyRow, isTarget = false) {
-  const master = getCompanyMaster(company.ticker);
+function normalize(
+  company: CompanyRow,
+  masterMap: Map<string, RuntimeCompanyMasterEntry>,
+  isTarget = false
+) {
+  const master = masterMap.get(company.ticker) ?? null;
   const companyMeta = meta(company);
 
   return {
@@ -140,14 +145,12 @@ function sectorFallback(target: CompanyRow, peers: CompanyRow[]) {
   if (!targetMeta) return peers;
 
   const same33 = peers.filter(
-    (peer) =>
-      targetMeta.sector33 && meta(peer)?.sector33 === targetMeta.sector33
+    (peer) => targetMeta.sector33 && meta(peer)?.sector33 === targetMeta.sector33
   );
   if (same33.length >= 3) return same33;
 
   const same17 = peers.filter(
-    (peer) =>
-      targetMeta.sector17 && meta(peer)?.sector17 === targetMeta.sector17
+    (peer) => targetMeta.sector17 && meta(peer)?.sector17 === targetMeta.sector17
   );
   if (same17.length >= 3) return same17;
 
@@ -162,6 +165,7 @@ function buildGroup({
   target,
   candidates,
   sortScore,
+  masterMap,
 }: {
   id: string;
   label: string;
@@ -170,11 +174,11 @@ function buildGroup({
   target: CompanyRow;
   candidates: CompanyRow[];
   sortScore: (peer: CompanyRow) => number;
+  masterMap: Map<string, RuntimeCompanyMasterEntry>;
 }) {
   const sorted = uniqueCompanies(candidates)
     .filter(
-      (peer) =>
-        peer.ticker !== target.ticker && peer.risk_level !== "EXCLUDED"
+      (peer) => peer.ticker !== target.ticker && peer.risk_level !== "EXCLUDED"
     )
     .sort((a, b) => sortScore(a) - sortScore(b))
     .slice(0, 8);
@@ -186,18 +190,24 @@ function buildGroup({
     basis,
     freeLimit: 3,
     proOnly: sorted.length > 3,
-    companies: [normalize(target, true), ...sorted.map((peer) => normalize(peer))],
+    companies: [
+      normalize(target, masterMap, true),
+      ...sorted.map((peer) => normalize(peer, masterMap)),
+    ],
   };
 }
 
 export async function GET(_req: Request, { params }: RouteProps) {
   const { ticker } = await params;
 
-  const { data: target, error: targetError } = await supabaseAdmin
-    .from("company_analyses")
-    .select("ticker, company_name, score, danger_score, financials, risk_level")
-    .eq("ticker", ticker)
-    .maybeSingle();
+  const [{ data: target, error: targetError }, runtimeEntries] = await Promise.all([
+    supabaseAdmin
+      .from("company_analyses")
+      .select("ticker, company_name, score, danger_score, financials, risk_level")
+      .eq("ticker", ticker)
+      .maybeSingle(),
+    loadRuntimeCompanyMasterEntries(),
+  ]);
 
   if (targetError || !target) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -218,18 +228,19 @@ export async function GET(_req: Request, { params }: RouteProps) {
   const targetCompany = target as CompanyRow;
   const candidatePeers = (peers ?? []) as CompanyRow[];
   const peerMap = mapByTicker(candidatePeers);
-  const master = getCompanyMaster(ticker);
+  const masterMap = new Map(runtimeEntries.map((entry) => [entry.ticker, entry]));
+  const master = masterMap.get(ticker) ?? null;
 
   const curatedRivals = master
     ? orderedByTickers(master.rivalTickers, peerMap, ticker)
     : [];
   const sameSubTheme = orderedByTickers(
-    getSameSubThemeTickers(ticker),
+    getRuntimeSameSubThemeTickers(runtimeEntries, ticker),
     peerMap,
     ticker
   );
   const sameTheme = orderedByTickers(
-    getSameThemeTickers(ticker),
+    getRuntimeSameThemeTickers(runtimeEntries, ticker),
     peerMap,
     ticker
   );
@@ -245,24 +256,29 @@ export async function GET(_req: Request, { params }: RouteProps) {
     meta(targetCompany)?.sector33 ??
     "事業・財務特性";
 
+  const priorityCandidates = uniqueCompanies([
+    ...curatedRivals,
+    ...sameSubTheme,
+    ...sameTheme,
+  ])
+    .filter((peer) => peer.ticker !== ticker)
+    .slice(0, 8);
+
   const groups = [
     {
       id: "rival",
       label: "ライバル候補",
       description: master
-        ? `${master.theme}の中で、監修済みライバルと同テーマ企業を優先しています。`
+        ? `${master.theme}の中で、管理画面で監修したライバルと同テーマ企業を優先しています。`
         : `${comparisonLabel}を優先し、スコア帯と成長段階が近い企業を並べています。`,
       basis: master
         ? [master.theme, master.subTheme, "監修済みライバル"]
         : [comparisonLabel, "スコア帯", "成長段階"],
       freeLimit: 3,
-      proOnly: businessCandidates.length > 3,
+      proOnly: priorityCandidates.length > 3,
       companies: [
-        normalize(targetCompany, true),
-        ...uniqueCompanies([...curatedRivals, ...sameSubTheme, ...sameTheme])
-          .filter((peer) => peer.ticker !== ticker)
-          .slice(0, 8)
-          .map((peer) => normalize(peer)),
+        normalize(targetCompany, masterMap, true),
+        ...priorityCandidates.map((peer) => normalize(peer, masterMap)),
       ],
     },
     buildGroup({
@@ -273,6 +289,7 @@ export async function GET(_req: Request, { params }: RouteProps) {
       target: targetCompany,
       candidates: businessCandidates,
       sortScore: (peer) => broadDistance(targetCompany, peer),
+      masterMap,
     }),
     buildGroup({
       id: "financial",
@@ -282,6 +299,7 @@ export async function GET(_req: Request, { params }: RouteProps) {
       target: targetCompany,
       candidates: businessCandidates,
       sortScore: (peer) => financialDistance(targetCompany, peer),
+      masterMap,
     }),
     buildGroup({
       id: "growth",
@@ -291,20 +309,25 @@ export async function GET(_req: Request, { params }: RouteProps) {
       target: targetCompany,
       candidates: businessCandidates,
       sortScore: (peer) => growthDistance(targetCompany, peer),
+      masterMap,
     }),
   ].filter((group) => group.companies.length > 1);
 
   return NextResponse.json({
     ticker: targetCompany.ticker,
     companyName: targetCompany.company_name,
-    peerBasis: master ? "curated-business-master" : "sector-financial-fallback",
+    peerBasis: master?.reviewed
+      ? "admin-reviewed-company-master"
+      : master
+        ? "automatic-company-master"
+        : "sector-financial-fallback",
     comparisonLabel,
     masterReviewed: Boolean(master?.reviewed),
     note: master
-      ? `比較対象は監修済み会社マスタの「${master.theme} / ${master.subTheme}」を最優先しています。`
+      ? `比較対象は会社マスタの「${master.theme} / ${master.subTheme}」を最優先しています。`
       : `会社マスタ未登録のため「${comparisonLabel}」を優先し、財務・成長率・スコア帯で補完しています。`,
     groups,
-    companies: groups[0]?.companies ?? [normalize(targetCompany, true)],
+    companies: groups[0]?.companies ?? [normalize(targetCompany, masterMap, true)],
     disclaimer:
       "比較候補は事業テーマと財務データの理解補助であり、実際の競合関係や個別銘柄の売買判断を示すものではありません。",
   });
