@@ -12,6 +12,7 @@
     "audit:phase4": "tsx scripts/audit-phase4.ts",
     "audit:phase7": "tsx scripts/audit-phase7.ts",
     "audit:phase8": "tsx scripts/audit-phase8.ts",
+    "audit:phase9": "tsx scripts/audit-phase9.ts",
     "audit:release": "tsx scripts/audit-release.ts",
     "audit:stripe": "tsx scripts/audit-stripe.ts",
     "audit:seo": "tsx scripts/audit-seo.ts",
