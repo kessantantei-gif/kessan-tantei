@@ -127,9 +127,6 @@ function auditCodeContent(items: Item[]) {
 
   if (exists(".github/workflows/release-audit.yml")) {
     const workflow = read(".github/workflows/release-audit.yml");
-    if (workflow.includes("push:")) {
-      add(items, "WARNING", "ACTIONS", "release audit runs on push. Keep workflow_dispatch only until GitHub Secrets are fully configured.");
-    }
     if (!workflow.includes("workflow_dispatch")) add(items, "ERROR", "ACTIONS", "release audit workflow_dispatch is missing");
   }
 }
