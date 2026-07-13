@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function POST(req: Request) {
   try {
+    const resendApiKey = process.env.RESEND_API_KEY;
+    const feedbackToEmail = process.env.FEEDBACK_TO_EMAIL;
+
+    if (!resendApiKey || !feedbackToEmail) {
+      console.error("Feedback email configuration is missing");
+      return NextResponse.json(
+        { error: "feedback service unavailable" },
+        { status: 503 }
+      );
+    }
+
     const body = await req.json();
 
     const type = body.type ?? "その他";
@@ -18,9 +27,11 @@ export async function POST(req: Request) {
       );
     }
 
+    const resend = new Resend(resendApiKey);
+
     await resend.emails.send({
       from: "onboarding@resend.dev",
-      to: process.env.FEEDBACK_TO_EMAIL!,
+      to: feedbackToEmail,
       subject: `【決算探偵 Feedback】${type}`,
       text: `
 種別: ${type}
