@@ -54,7 +54,11 @@ function clean(value: unknown) {
 
 function normalizeTicker(value: unknown) {
   const raw = clean(value).replace(/\.0$/, "");
-  return /^\d{4}$/.test(raw) ? raw : "";
+  const direct = raw.match(/^([0-9A-Z]{4})$/i)?.[1];
+  if (direct) return direct.toUpperCase();
+
+  const edinetSecurityCode = raw.match(/^([0-9A-Z]{4})0$/i)?.[1];
+  return edinetSecurityCode ? edinetSecurityCode.toUpperCase() : "";
 }
 
 function resolveMarket(raw: string): MarketSegment | null {
@@ -162,6 +166,51 @@ function parseCsvLine(line: string) {
   return values.map((value) => value.trim());
 }
 
+function normalizeHeader(value: string) {
+  return value
+    .replace(/^\uFEFF/, "")
+    .replace(/[\s　]/g, "")
+    .normalize("NFKC")
+    .toUpperCase();
+}
+
+function findHeaderIndex(headers: string[], candidates: string[]) {
+  const normalizedCandidates = candidates.map(normalizeHeader);
+  return headers.findIndex((header) => {
+    const normalized = normalizeHeader(header);
+    return normalizedCandidates.some((candidate) => normalized.includes(candidate));
+  });
+}
+
+function detectEdinetHeader(lines: string[]) {
+  const maxScanRows = Math.min(lines.length, 30);
+
+  for (let rowIndex = 0; rowIndex < maxScanRows; rowIndex += 1) {
+    const headers = parseCsvLine(lines[rowIndex]);
+    const edinetIndex = findHeaderIndex(headers, ["ＥＤＩＮＥＴコード", "EDINETコード"]);
+    const filerIndex = findHeaderIndex(headers, ["提出者名"]);
+    const corporateIndex = findHeaderIndex(headers, ["法人番号"]);
+    const securityIndex = findHeaderIndex(headers, ["証券コード"]);
+
+    if (edinetIndex >= 0 && filerIndex >= 0 && securityIndex >= 0) {
+      return {
+        rowIndex,
+        headers,
+        edinetIndex,
+        filerIndex,
+        corporateIndex,
+        securityIndex,
+      };
+    }
+  }
+
+  const preview = lines
+    .slice(0, Math.min(lines.length, 8))
+    .map((line, index) => `${index + 1}: ${parseCsvLine(line).join(" / ")}`)
+    .join(" | ");
+  throw new Error(`EDINETコードリストのヘッダー行を検出できませんでした: ${preview}`);
+}
+
 async function loadEdinetCompanies(): Promise<Map<string, EdinetCompany>> {
   const buffer = await download(EDINET_CODELIST_URL);
   const zip = new AdmZip(buffer);
@@ -171,24 +220,19 @@ async function loadEdinetCompanies(): Promise<Map<string, EdinetCompany>> {
   if (!entry) throw new Error("EDINETコードリストZIPにCSVがありません。");
 
   const text = new TextDecoder("shift_jis").decode(entry.getData());
-  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean);
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 2) throw new Error("EDINETコードリストが空です。");
 
-  const headers = parseCsvLine(lines[0]);
-  const indexOf = (...names: string[]) =>
-    headers.findIndex((header) => names.some((name) => header.includes(name)));
-
-  const edinetIndex = indexOf("ＥＤＩＮＥＴコード", "EDINETコード");
-  const filerIndex = indexOf("提出者名");
-  const corporateIndex = indexOf("法人番号");
-  const securityIndex = indexOf("証券コード");
-
-  if (edinetIndex < 0 || filerIndex < 0 || securityIndex < 0) {
-    throw new Error(`EDINETコードリストの必須列が見つかりません: ${headers.join(" / ")}`);
-  }
+  const {
+    rowIndex: headerRowIndex,
+    edinetIndex,
+    filerIndex,
+    corporateIndex,
+    securityIndex,
+  } = detectEdinetHeader(lines);
 
   const result = new Map<string, EdinetCompany>();
-  for (const line of lines.slice(1)) {
+  for (const line of lines.slice(headerRowIndex + 1)) {
     const values = parseCsvLine(line);
     const ticker = normalizeTicker(values[securityIndex]);
     const edinetCode = clean(values[edinetIndex]);
@@ -339,7 +383,7 @@ async function main() {
     }
 
     const edinetMatched = rows.filter((row) => row.edinet_code).length;
-    await supabase
+    const { error: finishError } = await supabase
       .from("data_import_runs")
       .update({
         status: "success",
@@ -360,6 +404,7 @@ async function main() {
         },
       })
       .eq("id", run.id);
+    if (finishError) throw new Error(`インポート履歴完了更新失敗: ${finishError.message}`);
 
     console.log("=== JPX全市場マスタ同期完了 ===");
     console.log(`総数: ${rows.length}`);
