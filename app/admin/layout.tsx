@@ -2,6 +2,9 @@ import Link from "next/link";
 
 const links = [
   ["管理トップ", "/admin"],
+  ["ユーザー", "/admin/users"],
+  ["掲示板投稿", "/admin/comments"],
+  ["通報", "/admin/reports"],
   ["会社マスタ", "/admin/company-master"],
   ["分析・データ", "/admin/operations"],
   ["売上・会員", "/admin/billing"],
