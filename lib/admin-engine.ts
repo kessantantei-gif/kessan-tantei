@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { isAdminPreviewUser } from "@/lib/pro-engine";
 
 export async function isAdminUser() {
   const { userId } = await auth();
@@ -12,5 +13,7 @@ export async function isAdminUser() {
     .eq("clerk_user_id", userId)
     .maybeSingle();
 
-  return data?.role === "admin";
+  if (data?.role === "admin") return true;
+
+  return isAdminPreviewUser();
 }
