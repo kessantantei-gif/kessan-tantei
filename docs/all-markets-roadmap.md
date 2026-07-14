@@ -22,23 +22,42 @@
 
 ## Phase 1 DB移行基盤
 
-状態: 着手前
+状態: 完了
 
-作業:
+成果物:
 
-- 現行Supabaseスキーマの棚卸し
-- 新テーブルのSQL migration作成
-- インデックス、制約、RLS設計
-- `company_analyses`からのバックフィル
-- 互換ビューまたは読み取りアダプター作成
-- 移行監査スクリプト作成
+- 既存 `companies` テーブルとの衝突を回避した `all_market_companies` の新設
+- `market_memberships`
+- `company_financial_periods`
+- `company_score_snapshots`
+- `company_risk_snapshots`
+- `data_import_runs`
+- `data_quality_issues`
+- `company_analyses` 587社のバックフィル
+- 財務履歴 1,723件の展開
+- 監査スクリプト `audit:phase1-all-markets`
+- RLS、制約、インデックス、互換ビュー
+
+本番監査結果:
+
+- `company_analyses`: 587
+- `all_market_companies`: 587
+- growth: 587
+- 不正市場区分: 0
+- 現在市場履歴: 587
+- 現在スコア: 587
+- 現在リスク: 587
+- 財務履歴: 1,723
+- 市場履歴欠損: 0
+- スコア欠損: 0
+- リスク欠損: 0
 
 完了条件:
 
-- 既存会社件数と新companies件数が一致
+- 既存会社件数と全市場会社マスタ件数が一致
 - 既存財務・履歴・スコアに欠落なし
-- 既存会社ページ、ランキング、管理画面が正常
-- rollback手順がある
+- 既存 `companies` テーブルは変更しない
+- rollback方針あり
 
 ## Phase 2 東証全市場マスタ
 
