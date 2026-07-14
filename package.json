@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "backfill:history": "tsx scripts/backfill-zero-financials.ts",
+    "backfill:edinet-all-markets": "DOTENV_CONFIG_PATH=.env.local tsx scripts/backfill-all-markets-edinet.ts --days=400 --continue-on-error",
     "repair:financial-data": "tsx scripts/repair-financial-anomalies.ts",
     "repair:core-financial-data": "tsx scripts/repair-core-financial-data.ts",
     "sync:jpx-markets": "DOTENV_CONFIG_PATH=.env.local tsx scripts/sync-jpx-all-markets.ts",
