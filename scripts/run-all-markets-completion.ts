@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 
 const includeSync = !process.argv.includes("--skip-sync");
 const includeRepairs = process.argv.includes("--with-repairs");
+const includeDailyEdinet = process.argv.includes("--with-daily-edinet");
 
 type Step = {
   name: string;
@@ -19,8 +20,18 @@ const steps: Step[] = [
         },
       ]
     : []),
+  ...(includeDailyEdinet
+    ? [
+        {
+          name: "EDINET全市場日次同期",
+          command: "npm run sync:edinet-daily",
+          required: true,
+        },
+      ]
+    : []),
   { name: "Phase 1 DB移行監査", command: "npm run audit:phase1-all-markets", required: true },
   { name: "Phase 2 市場マスタ監査", command: "npm run audit:phase2-market-master", required: true },
+  { name: "Phase 3-6 全市場データ監査", command: "npm run audit:all-markets-data", required: true },
   ...(includeRepairs
     ? [
         { name: "財務単位修復", command: "npm run repair:financial-data", required: true },
@@ -47,6 +58,7 @@ const failures: string[] = [];
 console.log("\n============================================================");
 console.log("決算探偵 全市場完全版 統合実行");
 console.log(`市場同期: ${includeSync ? "実行" : "省略"}`);
+console.log(`EDINET日次同期: ${includeDailyEdinet ? "実行" : "省略"}`);
 console.log(`財務修復: ${includeRepairs ? "実行" : "省略"}`);
 console.log("============================================================\n");
 
