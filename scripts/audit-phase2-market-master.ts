@@ -55,7 +55,7 @@ async function main() {
   }
 
   const duplicateTickers = [...duplicateTickerMap.entries()].filter(([, count]) => count > 1);
-  const invalidTickers = listed.filter((company) => !/^\d{4}$/.test(company.ticker));
+  const invalidTickers = listed.filter((company) => !/^[0-9A-Z]{4}$/.test(company.ticker));
   const invalidMarkets = listed.filter(
     (company) => !["prime", "standard", "growth"].includes(company.market_segment)
   );
