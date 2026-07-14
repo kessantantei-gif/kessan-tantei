@@ -27,6 +27,7 @@
     "audit:phase8": "tsx scripts/audit-phase8.ts",
     "audit:phase9": "tsx scripts/audit-phase9.ts",
     "audit:phase10": "tsx scripts/audit-phase10.ts",
+    "audit:phase16-all-markets": "DOTENV_CONFIG_PATH=.env.local tsx scripts/audit-phase16-all-markets.ts",
     "audit:release": "tsx scripts/audit-release.ts",
     "audit:stripe": "tsx scripts/audit-stripe.ts",
     "audit:seo": "tsx scripts/audit-seo.ts",
