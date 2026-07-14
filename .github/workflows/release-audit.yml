@@ -1,14 +1,14 @@
-name: Release Audit
+name: Production Acceptance Audit
 
 on:
   workflow_dispatch:
 
 concurrency:
-  group: release-audit-main
+  group: production-acceptance-audit
   cancel-in-progress: true
 
 jobs:
-  release-audit:
+  production-audit:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -35,7 +35,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Repair, build and run all production audits
+      - name: Run read-only production audits
         shell: bash
         run: |
           mkdir -p reports
@@ -44,33 +44,18 @@ jobs:
           run_check() {
             local name="$1"
             shift
-            echo "===== ${name} =====" | tee -a reports/final-ci-summary.txt
+            echo "===== ${name} =====" | tee -a reports/production-audit-summary.txt
             "$@" 2>&1 | tee "reports/${name}.log"
             local code=${PIPESTATUS[0]}
-            echo "exit_code=${code}" | tee -a reports/final-ci-summary.txt
-            echo | tee -a reports/final-ci-summary.txt
+            echo "exit_code=${code}" | tee -a reports/production-audit-summary.txt
+            echo | tee -a reports/production-audit-summary.txt
             return ${code}
           }
 
-          run_diagnostic() {
-            local name="$1"
-            shift
-            echo "===== ${name} (diagnostic) =====" | tee -a reports/final-ci-summary.txt
-            "$@" 2>&1 | tee "reports/${name}.log"
-            local code=${PIPESTATUS[0]}
-            echo "diagnostic_exit_code=${code}" | tee -a reports/final-ci-summary.txt
-            echo | tee -a reports/final-ci-summary.txt
-            return 0
-          }
-
           failed=0
-          run_check lint npm run lint || failed=1
-          run_check build npm run build || failed=1
           run_check phase1-all-markets npm run audit:phase1-all-markets || failed=1
           run_check phase2-market-master npm run audit:phase2-market-master || failed=1
-          run_check financial-unit-repair npm run repair:financial-data || failed=1
-          run_check financial-core-repair npm run repair:core-financial-data || failed=1
-          run_diagnostic financial-data npm run audit:financial-data
+          run_check all-markets-data npm run audit:all-markets-data || failed=1
           run_check financial-integrity npm run audit:financial-integrity || failed=1
           run_check history-periods npm run audit:history-periods || failed=1
           run_check phase4 npm run audit:phase4 || failed=1
@@ -82,6 +67,7 @@ jobs:
           run_check seo npm run audit:seo || failed=1
           run_check release npm run audit:release || failed=1
           run_check final npm run audit:final || failed=1
+          run_check phase16-all-markets npm run audit:phase16-all-markets || failed=1
 
           exit ${failed}
 
@@ -92,7 +78,7 @@ jobs:
           mkdir -p reports
           base="${NEXT_PUBLIC_APP_URL:-https://kessan-tantei.jp}"
           failed=0
-          for path in / /markets /growth /standard /prime /ranking /pricing /features /themes /updates /privacy /terms /legal /disclaimer /robots.txt /sitemap.xml; do
+          for path in / /markets /growth /standard /standard/ranking /prime /prime/ranking /ranking /pricing /features /themes /updates /privacy /terms /legal /disclaimer /robots.txt /sitemap.xml; do
             url="${base%/}${path}"
             code=$(curl --location --silent --show-error --output /tmp/body --write-out "%{http_code}" --retry 4 --retry-delay 5 --retry-all-errors --max-time 30 "$url" || true)
             bytes=$(wc -c < /tmp/body 2>/dev/null || echo 0)
@@ -107,7 +93,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: release-audit-${{ github.sha }}
+          name: production-acceptance-audit-${{ github.sha }}
           path: reports/
           if-no-files-found: error
           retention-days: 30
