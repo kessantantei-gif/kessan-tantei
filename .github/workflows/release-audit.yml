@@ -54,11 +54,24 @@ jobs:
             return ${code}
           }
 
+          run_diagnostic() {
+            local name="$1"
+            shift
+            echo "===== ${name} (diagnostic) =====" | tee -a reports/final-ci-summary.txt
+            "$@" 2>&1 | tee "reports/${name}.log"
+            local code=${PIPESTATUS[0]}
+            echo "diagnostic_exit_code=${code}" | tee -a reports/final-ci-summary.txt
+            echo | tee -a reports/final-ci-summary.txt
+            return 0
+          }
+
           failed=0
           run_check lint npm run lint || failed=1
           run_check build npm run build || failed=1
-          run_check financial-repair npm run repair:financial-data || failed=1
-          run_check financial-data npm run audit:financial-data || failed=1
+          run_check financial-unit-repair npm run repair:financial-data || failed=1
+          run_check financial-core-repair npm run repair:core-financial-data || failed=1
+          run_diagnostic financial-data npm run audit:financial-data
+          run_check financial-integrity npm run audit:financial-integrity || failed=1
           run_check history-periods npm run audit:history-periods || failed=1
           run_check stripe npm run audit:stripe || failed=1
           run_check seo npm run audit:seo || failed=1
