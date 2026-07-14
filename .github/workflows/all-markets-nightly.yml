@@ -1,0 +1,67 @@
+name: All Markets Nightly
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 18 * * *"
+
+concurrency:
+  group: all-markets-nightly
+  cancel-in-progress: false
+
+jobs:
+  sync-and-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_PRO_PRICE_ID: ${{ secrets.STRIPE_PRO_PRICE_ID }}
+      STRIPE_LAUNCH_COUPON_ID: ${{ secrets.STRIPE_LAUNCH_COUPON_ID }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run all-market completion suite
+        run: npm run complete:all-markets
+
+      - name: Verify market entry pages
+        shell: bash
+        run: |
+          base="${NEXT_PUBLIC_APP_URL:-https://kessan-tantei.jp}"
+          failed=0
+          for path in /markets /growth /standard /prime /ranking /pricing /admin; do
+            url="${base%/}${path}"
+            code=$(curl --location --silent --show-error --output /tmp/body --write-out "%{http_code}" --retry 4 --retry-delay 5 --retry-all-errors --max-time 30 "$url" || true)
+            bytes=$(wc -c < /tmp/body 2>/dev/null || echo 0)
+            printf '%s\t%s\t%s bytes\n' "$code" "$url" "$bytes"
+            if [[ ! "$code" =~ ^(200|301|302|307|308|401|403)$ ]]; then
+              failed=1
+            fi
+          done
+          exit ${failed}
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-markets-nightly-${{ github.run_id }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 30
