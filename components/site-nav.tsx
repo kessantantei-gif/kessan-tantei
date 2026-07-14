@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
+  { href: "/markets", label: "市場を選ぶ", shortLabel: "市場" },
   { href: "/updates", label: "今日の更新", shortLabel: "更新" },
   { href: "/ranking", label: "ランキング", shortLabel: "順位" },
   { href: "/watchlist", label: "ウォッチ", shortLabel: "保存" },
@@ -28,9 +29,9 @@ export default function SiteNav() {
     >
       <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2 sm:gap-4 sm:px-8 sm:py-3">
         <Link
-          href="/"
+          href="/markets"
           className="flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-full px-1 text-lg font-black tracking-tight text-white transition hover:text-green-300 active:scale-95 sm:min-h-11 sm:px-0 sm:text-2xl"
-          aria-label="決算探偵トップへ"
+          aria-label="決算探偵の市場選択へ"
         >
           決算探偵
         </Link>
