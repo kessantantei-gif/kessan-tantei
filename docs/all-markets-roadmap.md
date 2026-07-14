@@ -26,54 +26,56 @@
 
 成果物:
 
-- 既存 `companies` テーブルとの衝突を回避した `all_market_companies` の新設
-- `market_memberships`
-- `company_financial_periods`
-- `company_score_snapshots`
-- `company_risk_snapshots`
-- `data_import_runs`
-- `data_quality_issues`
-- `company_analyses` 587社のバックフィル
-- 財務履歴 1,723件の展開
-- 監査スクリプト `audit:phase1-all-markets`
-- RLS、制約、インデックス、互換ビュー
+- `all_market_companies`全市場会社マスタ
+- 市場区分履歴、財務履歴、スコア履歴、リスク履歴
+- インポート実行履歴、データ品質問題
+- `company_analyses`から587社をバックフィル
+- 財務履歴1,723件をロスレス移行
+- RLS、制約、インデックス
+- 移行監査スクリプト
 
 本番監査結果:
 
-- `company_analyses`: 587
-- `all_market_companies`: 587
-- growth: 587
-- 不正市場区分: 0
-- 現在市場履歴: 587
-- 現在スコア: 587
-- 現在リスク: 587
+- 既存企業: 587
+- 移行企業: 587
+- Growth: 587
 - 財務履歴: 1,723
+- 不正市場区分: 0
 - 市場履歴欠損: 0
 - スコア欠損: 0
 - リスク欠損: 0
 
-完了条件:
-
-- 既存会社件数と全市場会社マスタ件数が一致
-- 既存財務・履歴・スコアに欠落なし
-- 既存 `companies` テーブルは変更しない
-- rollback方針あり
-
 ## Phase 2 東証全市場マスタ
 
-状態: 未着手
+状態: 実装済み・本番同期待ち
 
-作業:
+実装済み:
 
-- 上場会社一覧の取得
-- 証券コード、EDINETコード、法人番号の照合
-- 市場区分、新規上場、市場変更、上場廃止の履歴化
-- 特殊証券の分類
+- JPX公式上場銘柄一覧の取得
+- Prime / Standard / Growth普通株の抽出
+- 証券コード、会社名、33業種の正規化
+- EDINETコードリストの取得
+- 証券コードによるEDINETコード・法人番号照合
+- `all_market_companies`へのupsert
+- 新規上場・市場変更・上場廃止候補の検出
+- `market_memberships`への市場変更履歴保存
+- `data_import_runs`への同期結果保存
+- Phase 2監査スクリプト
+
+残作業:
+
+- 本番で`npm run sync:jpx-markets`を実行
+- 本番で`npm run audit:phase2-market-master`を実行
+- EDINET未紐付け・業種欠損・市場差分を確認
+- 既存グロースページの回帰確認
 
 完了条件:
 
 - 東証普通株の市場区分が全件確定
-- 未紐付け企業が管理画面で確認可能
+- Prime / Standard / Growthの件数が合理的
+- EDINET未紐付け企業が特定可能
+- 市場履歴が会社マスタと一致
+- Phase 2監査がPASSED
 
 ## Phase 3 EDINET全社取得
 
