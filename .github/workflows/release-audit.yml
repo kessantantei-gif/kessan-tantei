@@ -12,7 +12,7 @@ concurrency:
 jobs:
   release-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -68,11 +68,18 @@ jobs:
           failed=0
           run_check lint npm run lint || failed=1
           run_check build npm run build || failed=1
+          run_check phase1-all-markets npm run audit:phase1-all-markets || failed=1
+          run_check phase2-market-master npm run audit:phase2-market-master || failed=1
           run_check financial-unit-repair npm run repair:financial-data || failed=1
           run_check financial-core-repair npm run repair:core-financial-data || failed=1
           run_diagnostic financial-data npm run audit:financial-data
           run_check financial-integrity npm run audit:financial-integrity || failed=1
           run_check history-periods npm run audit:history-periods || failed=1
+          run_check phase4 npm run audit:phase4 || failed=1
+          run_check phase7 npm run audit:phase7 || failed=1
+          run_check phase8 npm run audit:phase8 || failed=1
+          run_check phase9 npm run audit:phase9 || failed=1
+          run_check phase10 npm run audit:phase10 || failed=1
           run_check stripe npm run audit:stripe || failed=1
           run_check seo npm run audit:seo || failed=1
           run_check release npm run audit:release || failed=1
@@ -87,7 +94,7 @@ jobs:
           mkdir -p reports
           base="${NEXT_PUBLIC_APP_URL:-https://kessan-tantei.jp}"
           failed=0
-          for path in / /ranking /pricing /privacy /terms /legal /disclaimer /robots.txt /sitemap.xml; do
+          for path in / /markets /growth /standard /prime /ranking /pricing /features /themes /updates /privacy /terms /legal /disclaimer /robots.txt /sitemap.xml; do
             url="${base%/}${path}"
             code=$(curl --location --silent --show-error --output /tmp/body --write-out "%{http_code}" --retry 4 --retry-delay 5 --retry-all-errors --max-time 30 "$url" || true)
             bytes=$(wc -c < /tmp/body 2>/dev/null || echo 0)
