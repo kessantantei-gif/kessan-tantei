@@ -21,6 +21,7 @@
     "audit:history-periods": "tsx scripts/audit-history-periods.ts",
     "audit:phase1-all-markets": "DOTENV_CONFIG_PATH=.env.local tsx scripts/audit-phase1-all-markets.ts",
     "audit:phase2-market-master": "DOTENV_CONFIG_PATH=.env.local tsx scripts/audit-phase2-market-master.ts",
+    "audit:all-markets-data": "DOTENV_CONFIG_PATH=.env.local tsx scripts/audit-all-markets-data.ts",
     "audit:phase4": "tsx scripts/audit-phase4.ts",
     "audit:phase7": "tsx scripts/audit-phase7.ts",
     "audit:phase8": "tsx scripts/audit-phase8.ts",
