@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
 import { parseEdinetFinancials } from "../lib/edinet-parser";
-import { calculateScores } from "../lib/scoring-engine";
+import { calculateMarketScores } from "../lib/market-scoring-engine";
 import {
   classifyAuditor,
   parseDisclosureSignals,
@@ -18,6 +18,17 @@ type GrowthCompany = {
   edinetCode?: string | null;
   edinetFilerName?: string | null;
   edinetMatchedDocID?: string | null;
+};
+
+type AllMarketCompany = {
+  id: string;
+  ticker: string;
+  company_name: string;
+  edinet_code: string | null;
+  market_segment: "growth" | "standard" | "prime" | "other";
+  industry_name: string | null;
+  is_financial: boolean;
+  is_reit: boolean;
 };
 
 type HistoryRow = {
@@ -80,14 +91,14 @@ function fetchHistoryDocIDs(searchName: string): string[] {
   );
 
   return Array.from(
-    new Set([...output.matchAll(/S100[A-Z0-9]+/g)].map((m) => m[0]))
+    new Set([...output.matchAll(/S100[A-Z0-9]+/g)].map((match) => match[0]))
   );
 }
 
 function calculateOcfNegativeStreak(items: { operatingCF: number }[]) {
   let streak = 0;
-  for (let i = items.length - 1; i >= 0; i--) {
-    if (items[i].operatingCF < 0) streak += 1;
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (items[index].operatingCF < 0) streak += 1;
     else break;
   }
   return streak;
@@ -119,29 +130,151 @@ function buildHistoryRow(id: string): HistoryRow {
   };
 }
 
-async function main() {
-  const growthCompany = loadGrowthCompany();
+async function loadAllMarketCompany(): Promise<AllMarketCompany | null> {
+  const { data, error } = await supabaseAdmin
+    .from("all_market_companies")
+    .select(
+      "id, ticker, company_name, edinet_code, market_segment, industry_name, is_financial, is_reit"
+    )
+    .eq("ticker", ticker)
+    .maybeSingle();
 
-  const finalCompanyName = growthCompany?.name || companyName;
+  if (error) throw new Error(`全市場会社マスタ取得失敗: ${error.message}`);
+  return (data as AllMarketCompany | null) ?? null;
+}
+
+async function saveNormalizedData(args: {
+  company: AllMarketCompany;
+  financials: ReturnType<typeof parseEdinetFinancials>;
+  history: HistoryRow[];
+  scores: ReturnType<typeof calculateMarketScores>;
+  redFlags: ReturnType<typeof analyzeRedFlags>;
+}) {
+  const { company, financials, history, scores, redFlags } = args;
+  const now = new Date().toISOString();
+
+  for (const [sourcePosition, row] of history.entries()) {
+    const { error: deleteError } = await supabaseAdmin
+      .from("company_financial_periods")
+      .delete()
+      .eq("company_id", company.id)
+      .eq("document_id", row.docID);
+    if (deleteError) {
+      throw new Error(`財務履歴の既存行削除失敗 ${row.docID}: ${deleteError.message}`);
+    }
+
+    const { error: insertError } = await supabaseAdmin
+      .from("company_financial_periods")
+      .insert({
+        company_id: company.id,
+        fiscal_year: row.fiscalYear,
+        period_end: row.periodEnd,
+        document_id: row.docID,
+        accounting_scope: "consolidated",
+        period_type: "annual",
+        currency: "JPY",
+        financials: row.docID === docID ? financials : row,
+        source_payload: row,
+        source_position: sourcePosition,
+        data_quality: "unreviewed",
+        updated_at: now,
+      });
+    if (insertError) {
+      throw new Error(`財務履歴保存失敗 ${row.docID}: ${insertError.message}`);
+    }
+  }
+
+  const { error: scoreCloseError } = await supabaseAdmin
+    .from("company_score_snapshots")
+    .update({ is_current: false })
+    .eq("company_id", company.id)
+    .eq("is_current", true);
+  if (scoreCloseError) throw new Error(`旧スコア終了失敗: ${scoreCloseError.message}`);
+
+  const { error: scoreInsertError } = await supabaseAdmin
+    .from("company_score_snapshots")
+    .insert({
+      company_id: company.id,
+      market_segment: company.market_segment,
+      scoring_model: scores.scoringModel,
+      model_version: scores.modelVersion,
+      total_score: scores.totalScore,
+      danger_score: redFlags.dangerScore,
+      score_breakdown: {
+        growth: scores.growthScore,
+        quality: scores.qualityScore,
+        safety: scores.safetyScore,
+        completenessPenalty: scores.completenessPenalty,
+      },
+      calculation_basis: scores.calculationBasis,
+      is_current: true,
+      calculated_at: now,
+    });
+  if (scoreInsertError) throw new Error(`スコア保存失敗: ${scoreInsertError.message}`);
+
+  const { error: riskCloseError } = await supabaseAdmin
+    .from("company_risk_snapshots")
+    .update({ is_current: false })
+    .eq("company_id", company.id)
+    .eq("is_current", true);
+  if (riskCloseError) throw new Error(`旧リスク終了失敗: ${riskCloseError.message}`);
+
+  const { error: riskInsertError } = await supabaseAdmin
+    .from("company_risk_snapshots")
+    .insert({
+      company_id: company.id,
+      risk_model: "danger_v1",
+      model_version: "1.0",
+      risk_level: redFlags.riskLevel,
+      danger_score: redFlags.dangerScore,
+      flags: redFlags.flags,
+      calculation_basis: {
+        source: "analyze-company",
+        documentId: docID,
+        marketSegment: company.market_segment,
+      },
+      is_current: true,
+      calculated_at: now,
+    });
+  if (riskInsertError) throw new Error(`リスク保存失敗: ${riskInsertError.message}`);
+
+  const dataQuality = company.is_financial || company.is_reit ? "warning" : "unreviewed";
+  const { error: companyUpdateError } = await supabaseAdmin
+    .from("all_market_companies")
+    .update({
+      scoring_model: scores.scoringModel,
+      data_quality: dataQuality,
+      last_financial_update: now,
+      updated_at: now,
+    })
+    .eq("id", company.id);
+  if (companyUpdateError) throw new Error(`会社マスタ更新失敗: ${companyUpdateError.message}`);
+}
+
+async function main() {
+  const [growthCompany, allMarketCompany] = await Promise.all([
+    Promise.resolve(loadGrowthCompany()),
+    loadAllMarketCompany(),
+  ]);
+
+  const finalCompanyName =
+    allMarketCompany?.company_name || growthCompany?.name || companyName;
   const searchName =
     growthCompany?.edinetFilerName ||
     growthCompany?.edinetHint ||
     finalCompanyName;
-
-  const industryType = classifyIndustry(finalCompanyName);
+  const marketSegment = allMarketCompany?.market_segment || "growth";
+  const industryType = classifyIndustry(
+    allMarketCompany?.industry_name || finalCompanyName
+  );
 
   downloadIfNeeded(docID);
 
   let historyDocIDs = fetchHistoryDocIDs(searchName);
-
-  if (!historyDocIDs.includes(docID)) {
-    historyDocIDs.unshift(docID);
-  }
-
+  if (!historyDocIDs.includes(docID)) historyDocIDs.unshift(docID);
   historyDocIDs = Array.from(new Set(historyDocIDs)).slice(0, 6);
 
   const parsedHistory: HistoryRow[] = [];
-
   for (const id of historyDocIDs) {
     try {
       parsedHistory.push(buildHistoryRow(id));
@@ -161,14 +294,12 @@ async function main() {
   }
 
   const financials = parseEdinetFinancials(docID);
-  const scores = calculateScores(financials, history);
+  const scores = calculateMarketScores(marketSegment, financials, history);
   const disclosureSignals = parseDisclosureSignals(docID);
   const ocfNegativeStreak = calculateOcfNegativeStreak(history);
-
   const previousAuditorType = classifyAuditor(
     disclosureSignals.previousAuditorName
   );
-
   const currentAuditorType = classifyAuditor(
     disclosureSignals.currentAuditorName
   );
@@ -182,7 +313,7 @@ async function main() {
     ocfNegativeStreak,
     currentAssets: financials.currentAssets,
     currentLiabilities: financials.currentLiabilities,
-    equityRatio: scores.equityRatio,
+    equityRatio: scores.metrics.equityRatio,
     previousAuditorType,
     currentAuditorType,
   });
@@ -191,6 +322,7 @@ async function main() {
     growth: scores.growthScore,
     quality: scores.qualityScore,
     safety: scores.safetyScore,
+    completenessPenalty: scores.completenessPenalty,
   };
 
   await supabaseAdmin
@@ -204,6 +336,8 @@ async function main() {
     company_name: finalCompanyName,
     doc_id: docID,
     industry_type: industryType,
+    market_segment: marketSegment,
+    market_segment_updated_at: new Date().toISOString(),
     score: scores.totalScore,
     danger_score: redFlags.dangerScore,
     risk_level: redFlags.riskLevel,
@@ -212,12 +346,23 @@ async function main() {
     risk: redFlags,
     score_breakdown: scoreBreakdown,
   });
-
   if (error) throw error;
+
+  if (allMarketCompany) {
+    await saveNormalizedData({
+      company: allMarketCompany,
+      financials,
+      history,
+      scores,
+      redFlags,
+    });
+  }
 
   console.log("===== Analyze Company DB Save Success =====");
   console.log("Company:", finalCompanyName);
   console.log("Ticker:", ticker);
+  console.log("Market:", marketSegment);
+  console.log("Scoring Model:", scores.scoringModel, scores.modelVersion);
   console.log("docID:", docID);
   console.log("History Count:", history.length);
   console.log("Score:", scores.totalScore);
