@@ -51,6 +51,7 @@ const steps: Step[] = [
   { name: "SEO監査", command: "npm run audit:seo", required: true },
   { name: "Release監査", command: "npm run audit:release", required: true },
   { name: "最終監査", command: "npm run audit:final", required: true },
+  { name: "Phase 16 全市場受入監査", command: "npm run audit:phase16-all-markets", required: true },
 ];
 
 const failures: string[] = [];
