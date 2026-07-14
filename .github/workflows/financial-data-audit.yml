@@ -1,12 +1,6 @@
 name: Financial Data Audit
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/financial-data-audit.yml"
-      - "scripts/audit-financial-data.ts"
-      - "package.json"
   workflow_dispatch:
 
 jobs:
