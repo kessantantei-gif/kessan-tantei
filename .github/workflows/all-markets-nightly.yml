@@ -2,8 +2,6 @@ name: All Markets Nightly
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "15 18 * * *"
 
 concurrency:
   group: all-markets-nightly
