@@ -18,6 +18,11 @@ const steps: Step[] = [
           command: "npm run sync:jpx-markets",
           required: true,
         },
+        {
+          name: "金融・REIT・外国会社分類",
+          command: "npm run classify:all-markets",
+          required: true,
+        },
       ]
     : []),
   ...(includeDailyEdinet
