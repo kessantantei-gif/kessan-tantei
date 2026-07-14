@@ -13,6 +13,7 @@
     "audit:financial-data": "tsx scripts/audit-financial-data.ts",
     "audit:financial-integrity": "tsx scripts/audit-financial-integrity.ts",
     "audit:history-periods": "tsx scripts/audit-history-periods.ts",
+    "audit:phase1-all-markets": "tsx scripts/audit-phase1-all-markets.ts",
     "audit:phase4": "tsx scripts/audit-phase4.ts",
     "audit:phase7": "tsx scripts/audit-phase7.ts",
     "audit:phase8": "tsx scripts/audit-phase8.ts",
