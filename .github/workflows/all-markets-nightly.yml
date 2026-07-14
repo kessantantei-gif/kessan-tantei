@@ -12,7 +12,7 @@ concurrency:
 jobs:
   sync-and-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -38,15 +38,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run all-market completion suite
-        run: npm run complete:all-markets
+      - name: Run all-market completion suite with daily EDINET
+        run: npm run complete:all-markets -- --with-daily-edinet
 
       - name: Verify market entry pages
         shell: bash
         run: |
           base="${NEXT_PUBLIC_APP_URL:-https://kessan-tantei.jp}"
           failed=0
-          for path in /markets /growth /standard /prime /ranking /pricing /admin; do
+          for path in /markets /growth /standard /standard/ranking /prime /prime/ranking /ranking /pricing /admin /admin/all-markets; do
             url="${base%/}${path}"
             code=$(curl --location --silent --show-error --output /tmp/body --write-out "%{http_code}" --retry 4 --retry-delay 5 --retry-all-errors --max-time 30 "$url" || true)
             bytes=$(wc -c < /tmp/body 2>/dev/null || echo 0)
