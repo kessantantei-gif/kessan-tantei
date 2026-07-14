@@ -325,11 +325,13 @@ async function main() {
     completenessPenalty: scores.completenessPenalty,
   };
 
-  await supabaseAdmin
+  const { error: deleteLegacyError } = await supabaseAdmin
     .from("company_analyses")
     .delete()
-    .eq("ticker", ticker)
-    .eq("doc_id", docID);
+    .eq("ticker", ticker);
+  if (deleteLegacyError) {
+    throw new Error(`既存分析削除失敗 ${ticker}: ${deleteLegacyError.message}`);
+  }
 
   const { error } = await supabaseAdmin.from("company_analyses").insert({
     ticker,
