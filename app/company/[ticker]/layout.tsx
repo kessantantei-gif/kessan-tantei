@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import CompanyPageScrollReset from "@/components/company-page-scroll-reset";
 import { loadRuntimeCompanyMasterMap } from "@/lib/company-master-runtime";
 import { supabaseAdmin } from "@/lib/supabase";
 
- type Props = {
+type Props = {
   children: React.ReactNode;
   params: Promise<{ ticker: string }>;
 };
@@ -61,6 +62,7 @@ export default async function CompanyLayout({ children, params }: Props) {
 
   return (
     <>
+      <CompanyPageScrollReset ticker={ticker} />
       {children}
       <section className="bg-[#050816] px-4 pb-12 text-white sm:px-8">
         <div className="mx-auto max-w-7xl rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-8">
