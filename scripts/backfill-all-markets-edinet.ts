@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { supabaseAdmin } from "../lib/supabase";
 
 const EDINET_API_KEY = process.env.EDINET_API_KEY;
@@ -27,6 +27,17 @@ type AnalysisRow = {
   created_at: string | null;
 };
 
+type Target = {
+  company: Company;
+  document: EdinetDocument;
+};
+
+type Failure = {
+  ticker: string;
+  docID: string;
+  exitCode: number | null;
+};
+
 function parseArgument(name: string) {
   const prefix = `--${name}=`;
   return process.argv.find((value) => value.startsWith(prefix))?.slice(prefix.length);
@@ -46,6 +57,14 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function formatDuration(ms: number) {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours}時間${minutes}分${seconds}秒`;
+}
+
 async function fetchDocuments(date: string): Promise<EdinetDocument[]> {
   const url = new URL("https://disclosure.edinet-fsa.go.jp/api/v2/documents.json");
   url.searchParams.set("date", date);
@@ -54,7 +73,7 @@ async function fetchDocuments(date: string): Promise<EdinetDocument[]> {
 
   for (let attempt = 1; attempt <= 5; attempt += 1) {
     const response = await fetch(url, {
-      headers: { "user-agent": "kessan-tantei-edinet-backfill/2.0" },
+      headers: { "user-agent": "kessan-tantei-edinet-backfill/3.0" },
     });
 
     if (response.ok) {
@@ -123,22 +142,98 @@ function isNewerDocument(candidate: EdinetDocument, current: EdinetDocument) {
   const candidateTime = candidate.submitDateTime ?? "";
   const currentTime = current.submitDateTime ?? "";
   if (candidateTime !== currentTime) return candidateTime > currentTime;
-
-  // 同時刻なら訂正有報を優先する。
   if (candidate.docTypeCode === "130" && current.docTypeCode !== "130") return true;
   return false;
 }
 
-function analyze(company: Company, document: EdinetDocument) {
-  return spawnSync("npx", ["tsx", "scripts/analyze-company.ts"], {
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      COMPANY_NAME: company.company_name,
-      TICKER: company.ticker,
-      DOC_ID: document.docID,
-    },
+function analyze(company: Company, document: EdinetDocument): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    const command = process.platform === "win32" ? "npx.cmd" : "npx";
+    const child = spawn(command, ["tsx", "scripts/analyze-company.ts"], {
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        COMPANY_NAME: company.company_name,
+        TICKER: company.ticker,
+        DOC_ID: document.docID,
+      },
+    });
+
+    child.on("error", reject);
+    child.on("close", (code) => resolve(code));
   });
+}
+
+function printMarketProgress(companies: Company[], latestAnalysisByTicker: Map<string, string>) {
+  for (const market of ["prime", "standard", "growth"]) {
+    const marketCompanies = companies.filter((company) => company.market_segment === market);
+    const completed = marketCompanies.filter((company) => latestAnalysisByTicker.has(company.ticker)).length;
+    console.log(
+      `${market.padEnd(8)} 対象 ${String(marketCompanies.length).padStart(4)} / ` +
+        `分析保存済み ${String(completed).padStart(4)} / 未保存 ${String(marketCompanies.length - completed).padStart(4)}`
+    );
+  }
+}
+
+async function runConcurrentTargets(args: {
+  targets: Target[];
+  concurrency: number;
+  continueOnError: boolean;
+}) {
+  const { targets, concurrency, continueOnError } = args;
+  const failures: Failure[] = [];
+  const startedAt = Date.now();
+  let nextIndex = 0;
+  let completed = 0;
+  let succeeded = 0;
+  let aborted = false;
+
+  const worker = async (workerNumber: number) => {
+    await sleep((workerNumber - 1) * 250);
+
+    while (!aborted) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= targets.length) return;
+
+      const { company, document } = targets[index];
+      console.log(
+        `\n[開始 ${index + 1}/${targets.length}・worker ${workerNumber}] ` +
+          `${company.ticker} ${company.company_name} [${company.market_segment}] ${document.docID}`
+      );
+
+      let exitCode: number | null = null;
+      try {
+        exitCode = await analyze(company, document);
+      } catch (error) {
+        console.error(`分析プロセス起動失敗 ${company.ticker}:`, error);
+      }
+
+      completed += 1;
+      if (exitCode === 0) {
+        succeeded += 1;
+      } else {
+        failures.push({ ticker: company.ticker, docID: document.docID, exitCode });
+        if (!continueOnError) aborted = true;
+      }
+
+      const elapsed = Date.now() - startedAt;
+      const averagePerCompany = elapsed / Math.max(1, completed);
+      const remaining = targets.length - completed;
+      const eta = (averagePerCompany * remaining) / concurrency;
+
+      console.log(
+        `[進捗 ${completed}/${targets.length}] 成功 ${succeeded} / 失敗 ${failures.length} / ` +
+          `経過 ${formatDuration(elapsed)} / 概算残り ${formatDuration(eta)}`
+      );
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, targets.length) }, (_, index) => worker(index + 1))
+  );
+
+  return { succeeded, failures, elapsed: Date.now() - startedAt };
 }
 
 async function main() {
@@ -146,9 +241,13 @@ async function main() {
   const explicitStart = parseArgument("start");
   const days = Number(parseArgument("days") ?? "400");
   const maxCompaniesArgument = Number(parseArgument("max-companies") ?? "0");
+  const concurrencyArgument = Number(parseArgument("concurrency") ?? "3");
   const maxCompanies = Number.isFinite(maxCompaniesArgument) && maxCompaniesArgument > 0
     ? Math.floor(maxCompaniesArgument)
     : null;
+  const concurrency = Number.isFinite(concurrencyArgument)
+    ? Math.min(6, Math.max(1, Math.floor(concurrencyArgument)))
+    : 3;
   const continueOnError = process.argv.includes("--continue-on-error");
 
   const start = explicitStart
@@ -170,7 +269,10 @@ async function main() {
   console.log("Listed companies:", companies.length);
   console.log("Existing analyses:", latestAnalysisByTicker.size);
   console.log("Continue on error:", continueOnError);
+  console.log("Concurrency:", concurrency);
   console.log("Max companies:", maxCompanies ?? "unlimited");
+  console.log("\n市場別の現在保存状況:");
+  printMarketProgress(companies, latestAnalysisByTicker);
   console.log("\n[1/2] EDINET書類一覧を走査します。分析・ZIP取得はまだ行いません。");
 
   let scannedBusinessDays = 0;
@@ -211,8 +313,7 @@ async function main() {
       document: latestDocumentByEdinet.get(company.edinet_code),
     }))
     .filter(
-      (target): target is { company: Company; document: EdinetDocument } =>
-        Boolean(target.document)
+      (target): target is Target => Boolean(target.document)
     )
     .filter(
       ({ company, document }) => latestAnalysisByTicker.get(company.ticker) !== document.docID
@@ -220,46 +321,26 @@ async function main() {
 
   if (maxCompanies !== null) targets = targets.slice(0, maxCompanies);
 
-  console.log("\n[2/2] 各社の最新書類だけを解析します。");
+  console.log("\n[2/2] 各社の最新書類を起点に、直近3期を並列解析します。");
   console.log("Latest documents found:", latestDocumentByEdinet.size);
   console.log("Already latest / skipped:", latestDocumentByEdinet.size - targets.length);
   console.log("Analysis targets:", targets.length);
+  console.log("Concurrency:", concurrency);
 
-  let successCount = 0;
-  const failures: Array<{ ticker: string; docID: string; exitCode: number | null }> = [];
-
-  for (const [index, { company, document }] of targets.entries()) {
-    console.log(
-      `\n[${index + 1}/${targets.length}] ${company.ticker} ${company.company_name} ` +
-        `[${company.market_segment}] ${document.docID}`
-    );
-
-    const result = analyze(company, document);
-    if (result.status === 0) {
-      successCount += 1;
-    } else {
-      failures.push({
-        ticker: company.ticker,
-        docID: document.docID,
-        exitCode: result.status,
-      });
-      if (!continueOnError) break;
-    }
-
-    await sleep(500);
-  }
+  const result = await runConcurrentTargets({ targets, concurrency, continueOnError });
 
   console.log("\n===== Backfill Summary =====");
   console.log("Scanned business days:", scannedBusinessDays);
   console.log("Latest documents found:", latestDocumentByEdinet.size);
   console.log("Targets:", targets.length);
-  console.log("Succeeded:", successCount);
-  console.log("Failures:", failures.length);
-  for (const failure of failures.slice(0, 50)) {
+  console.log("Succeeded:", result.succeeded);
+  console.log("Failures:", result.failures.length);
+  console.log("Elapsed:", formatDuration(result.elapsed));
+  for (const failure of result.failures.slice(0, 50)) {
     console.log(`- ${failure.ticker} ${failure.docID}: exit ${failure.exitCode ?? "unknown"}`);
   }
 
-  if (failures.length > 0) process.exit(1);
+  if (result.failures.length > 0) process.exit(1);
 }
 
 main().catch((error) => {
