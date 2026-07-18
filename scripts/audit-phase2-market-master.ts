@@ -24,26 +24,57 @@ type Company = {
   last_market_master_update: string | null;
 };
 
-async function loadAllCompanies() {
-  const rows: Company[] = [];
+type Membership = {
+  company_id: string;
+  market_segment: string;
+  is_current: boolean;
+};
+
+async function loadPaged<T>(
+  table: string,
+  columns: string,
+  configure?: (query: any) => any
+): Promise<T[]> {
+  const rows: T[] = [];
   const pageSize = 1000;
+
   for (let from = 0; ; from += pageSize) {
-    const { data, error } = await supabase
-      .from("all_market_companies")
-      .select(
-        "id, ticker, company_name, market_segment, listing_status, edinet_code, industry_name, security_type, last_market_master_update"
-      )
+    let query = supabase
+      .from(table)
+      .select(columns)
       .range(from, from + pageSize - 1);
-    if (error) throw new Error(`会社マスタ取得失敗: ${error.message}`);
-    rows.push(...((data ?? []) as Company[]));
+
+    if (configure) query = configure(query);
+
+    const { data, error } = await query;
+    if (error) throw new Error(`${table}取得失敗: ${error.message}`);
+
+    rows.push(...((data ?? []) as T[]));
     if ((data ?? []).length < pageSize) break;
   }
+
   return rows;
 }
 
 async function main() {
-  const companies = await loadAllCompanies();
-  const listed = companies.filter((company) => company.listing_status === "listed");
+  const [companies, currentMemberships] = await Promise.all([
+    loadPaged<Company>(
+      "all_market_companies",
+      "id, ticker, company_name, market_segment, listing_status, edinet_code, industry_name, security_type, last_market_master_update"
+    ),
+    loadPaged<Membership>(
+      "market_memberships",
+      "company_id, market_segment, is_current",
+      (query) => query.eq("is_current", true)
+    ),
+  ]);
+
+  const listed = companies.filter(
+    (company) =>
+      company.listing_status === "listed" &&
+      ["prime", "standard", "growth"].includes(company.market_segment)
+  );
+
   const byMarket = listed.reduce<Record<string, number>>((result, company) => {
     result[company.market_segment] = (result[company.market_segment] ?? 0) + 1;
     return result;
@@ -67,15 +98,11 @@ async function main() {
   );
   const notUpdated = listed.filter((company) => !company.last_market_master_update);
 
-  const { data: currentMemberships, error: membershipError } = await supabase
-    .from("market_memberships")
-    .select("company_id, market_segment, is_current")
-    .eq("is_current", true)
-    .limit(10000);
-  if (membershipError) throw new Error(`市場履歴取得失敗: ${membershipError.message}`);
-
   const currentMembershipByCompany = new Map(
-    (currentMemberships ?? []).map((membership) => [membership.company_id, membership.market_segment])
+    currentMemberships.map((membership) => [
+      membership.company_id,
+      membership.market_segment,
+    ])
   );
   const missingMemberships = listed.filter(
     (company) => !currentMembershipByCompany.has(company.id)
