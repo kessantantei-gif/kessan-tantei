@@ -34,29 +34,75 @@ const steps: Step[] = [
         },
       ]
     : []),
-  { name: "Phase 1 DB移行監査", command: "npm run audit:phase1-all-markets", required: true },
-  { name: "Phase 2 市場マスタ監査", command: "npm run audit:phase2-market-master", required: true },
-  { name: "Phase 3-6 全市場データ監査", command: "npm run audit:all-markets-data", required: true },
+  {
+    name: "Phase 1 DB移行監査",
+    command: "npm run audit:phase1-all-markets",
+    required: true,
+  },
+  {
+    name: "Phase 2 市場マスタ監査",
+    command: "npm run audit:phase2-market-master",
+    required: true,
+  },
+  {
+    name: "Phase 3-6 全市場データ監査",
+    command: includeRepairs
+      ? "REPAIR_SCORE_MODELS=1 npm run audit:all-markets-data"
+      : "npm run audit:all-markets-data",
+    required: true,
+  },
   ...(includeRepairs
     ? [
-        { name: "財務単位修復", command: "npm run repair:financial-data", required: true },
-        { name: "財務コア修復", command: "npm run repair:core-financial-data", required: true },
+        {
+          name: "財務単位修復",
+          command: "npm run repair:financial-data",
+          required: true,
+        },
+        {
+          name: "財務コア修復",
+          command: "npm run repair:core-financial-data",
+          required: true,
+        },
       ]
     : []),
   { name: "Lint", command: "npm run lint", required: true },
   { name: "Build", command: "npm run build", required: true },
-  { name: "財務整合性監査", command: "npm run audit:financial-integrity", required: true },
-  { name: "履歴期間監査", command: "npm run audit:history-periods", required: true },
+  {
+    name: "財務整合性監査",
+    command: "npm run audit:financial-integrity",
+    required: true,
+  },
+  {
+    name: "履歴期間監査",
+    command: "npm run audit:history-periods",
+    required: true,
+  },
   { name: "Phase 4 監査", command: "npm run audit:phase4", required: true },
   { name: "Phase 7 UI監査", command: "npm run audit:phase7", required: true },
-  { name: "Phase 8 ランキング監査", command: "npm run audit:phase8", required: true },
-  { name: "Phase 9 会社ページ監査", command: "npm run audit:phase9", required: true },
-  { name: "Phase 10 Pro監査", command: "npm run audit:phase10", required: true },
+  {
+    name: "Phase 8 ランキング監査",
+    command: "npm run audit:phase8",
+    required: true,
+  },
+  {
+    name: "Phase 9 会社ページ監査",
+    command: "npm run audit:phase9",
+    required: true,
+  },
+  {
+    name: "Phase 10 Pro監査",
+    command: "npm run audit:phase10",
+    required: true,
+  },
   { name: "Stripe監査", command: "npm run audit:stripe", required: true },
   { name: "SEO監査", command: "npm run audit:seo", required: true },
   { name: "Release監査", command: "npm run audit:release", required: true },
   { name: "最終監査", command: "npm run audit:final", required: true },
-  { name: "Phase 16 全市場受入監査", command: "npm run audit:phase16-all-markets", required: true },
+  {
+    name: "Phase 16 全市場受入監査",
+    command: "npm run audit:phase16-all-markets",
+    required: true,
+  },
 ];
 
 const failures: string[] = [];
