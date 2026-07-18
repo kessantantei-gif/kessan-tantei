@@ -15,6 +15,7 @@ import type {
 import { isProUser, FREE_VISIBLE_S_RANK_LIMIT } from "@/lib/pro-engine";
 
 type MarketPageSlug = Exclude<MarketSlug, "growth">;
+type RankedCompany = RankingCompany & { rankingValue?: number };
 
 const COMPARISON_REQUIRED_SLUGS = new Set([
   "revenue-growth",
@@ -50,7 +51,7 @@ const toneClasses = {
 
 async function loadCompanies(marketSlug: MarketPageSlug) {
   return loadAllSupabaseRows<RankingCompany>(
-    `${marketSlug}ランキング一覧会社取得失敗`,
+    `${marketSlug}ランキング会社取得失敗`,
     (from, to) =>
       supabaseAdmin
         .from("company_analyses")
@@ -80,9 +81,8 @@ function getVisibleRankingsByCategory(
   return rankings.filter((ranking) => ranking.category === categoryId);
 }
 
-function displayRankingValue(company: RankingCompany, ranking: RankingDefinition) {
-  const ranked = rankCompanies([company], ranking)[0];
-  const value = ranked?.rankingValue;
+function displayRankingValue(company: RankedCompany, ranking: RankingDefinition) {
+  const value = company.rankingValue;
   if (typeof value !== "number" || !Number.isFinite(value)) return "—";
 
   if (
@@ -121,13 +121,12 @@ export default async function MarketRankingPage({
   const visibleCategories = rankingCategories.filter(
     (category) => getVisibleRankingsByCategory(visibleRankings, category.id).length > 0
   );
-
   const selectedRanking = rankingSlug
-    ? visibleRankings.find((ranking) => ranking.slug === rankingSlug)
+    ? rankingDefinitions.find((ranking) => ranking.slug === rankingSlug)
     : null;
 
   if (selectedRanking) {
-    const rankedCompanies = rankCompanies(companies, selectedRanking);
+    const rankedCompanies = rankCompanies(companies, selectedRanking) as RankedCompany[];
     const visibleCompanies = pro
       ? rankedCompanies
       : rankedCompanies.slice(0, FREE_VISIBLE_S_RANK_LIMIT);
@@ -164,7 +163,7 @@ export default async function MarketRankingPage({
           <section className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-white/5">
             {visibleCompanies.length === 0 ? (
               <p className="p-8 text-center text-slate-400">
-                このランキングに表示できるデータはまだありません。
+                このランキングは比較データがまだ不足しています。
               </p>
             ) : (
               <>
@@ -179,9 +178,7 @@ export default async function MarketRankingPage({
                         {index + 1}
                       </span>
                       <div className="min-w-0">
-                        <p className="truncate font-black text-white">
-                          {company.company_name}
-                        </p>
+                        <p className="truncate font-black text-white">{company.company_name}</p>
                         <p className="mt-1 text-xs text-slate-500">{company.ticker}</p>
                       </div>
                       <div className="text-right">
@@ -198,12 +195,8 @@ export default async function MarketRankingPage({
 
                 {!pro && lockedCount > 0 ? (
                   <div className="border-t border-yellow-300/20 bg-yellow-400/10 p-6 text-center sm:p-8">
-                    <p className="text-xs font-black tracking-[0.25em] text-yellow-200">
-                      PRO RANKING
-                    </p>
-                    <h2 className="mt-3 text-2xl font-black">
-                      残り{lockedCount}社の順位を見る
-                    </h2>
+                    <p className="text-xs font-black tracking-[0.25em] text-yellow-200">PRO RANKING</p>
+                    <h2 className="mt-3 text-2xl font-black">残り{lockedCount}社の順位を見る</h2>
                     <Link
                       href="/pricing"
                       className="mt-5 inline-flex rounded-full bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300"
@@ -231,13 +224,10 @@ export default async function MarketRankingPage({
           </p>
           <h1 className="mt-4 text-4xl font-black sm:text-5xl">決算ランキング一覧</h1>
           <p className="mt-5 text-base leading-8 text-slate-300 sm:text-lg">
-            {market.name}の企業を、総合評価・成長性・収益性・キャッシュ創出力・安全性・リスクシグナル・業種・テーマから比較できます。気になる切り口から決算を読み解いてみましょう。
+            {market.name}の企業を、総合評価・成長性・収益性・キャッシュ創出力・安全性・リスクシグナル・業種・テーマから比較できます。
           </p>
           <p className="mt-3 text-sm text-slate-500">
             公開中：{visibleRankings.length}ランキング ／ 解析対象：{companies.length}社
-            <span className="ml-2 text-slate-600">
-              成長率系は、2期分以上の比較データが揃い次第ランキングに反映されます。
-            </span>
           </p>
         </section>
 
@@ -263,25 +253,16 @@ export default async function MarketRankingPage({
                 className="scroll-mt-6 rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl sm:p-8"
               >
                 <div className="flex items-start gap-4">
-                  <span className="text-3xl" aria-hidden="true">
-                    {category.icon}
-                  </span>
+                  <span className="text-3xl" aria-hidden="true">{category.icon}</span>
                   <div>
-                    <h2 className="text-2xl font-black sm:text-3xl">
-                      {category.title}ランキング
-                    </h2>
-                    <p className="mt-2 text-sm leading-6 text-slate-400">
-                      {category.description}
-                    </p>
+                    <h2 className="text-2xl font-black sm:text-3xl">{category.title}ランキング</h2>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">{category.description}</p>
                   </div>
                 </div>
 
                 <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {rankings.map((ranking) => {
-                    const isComparisonEmpty =
-                      shouldKeepEmptyRanking(ranking) &&
-                      rankCompanies(companies, ranking).length === 0;
-
+                    const preview = rankCompanies(companies, ranking).slice(0, 3) as RankedCompany[];
                     return (
                       <Link
                         key={ranking.slug}
@@ -290,22 +271,36 @@ export default async function MarketRankingPage({
                       >
                         <div className="flex items-start justify-between gap-3">
                           <h3 className="font-black">{ranking.shortTitle}</h3>
-                          <span
-                            className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-black ${tone.badge}`}
-                          >
+                          <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-black ${tone.badge}`}>
                             TOP3無料
                           </span>
                         </div>
-                        <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">
-                          {ranking.description}
-                        </p>
-                        {isComparisonEmpty ? (
-                          <p className="mt-3 rounded-xl border border-yellow-400/20 bg-yellow-400/10 px-3 py-2 text-xs font-bold leading-5 text-yellow-100">
-                            2期分の比較データ待ち
-                          </p>
-                        ) : null}
+                        <p className="mt-2 text-sm leading-6 text-slate-400">{ranking.description}</p>
+
+                        <div className="mt-4 space-y-2">
+                          {preview.length === 0 ? (
+                            <p className="rounded-xl border border-yellow-400/20 bg-yellow-400/10 px-3 py-2 text-xs font-bold text-yellow-100">
+                              比較データ待ち
+                            </p>
+                          ) : (
+                            preview.map((company, index) => (
+                              <div
+                                key={company.ticker}
+                                className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+                              >
+                                <span className="min-w-0 truncate text-sm font-bold text-white">
+                                  {index + 1}. {company.company_name}
+                                </span>
+                                <span className="shrink-0 text-xs font-black text-slate-300">
+                                  {displayRankingValue(company, ranking)}
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+
                         <span className={`mt-4 inline-block text-sm font-bold ${tone.link}`}>
-                          見る <span className="transition group-hover:translate-x-1">→</span>
+                          詳細順位を見る →
                         </span>
                       </Link>
                     );
@@ -315,28 +310,6 @@ export default async function MarketRankingPage({
             );
           })}
         </div>
-
-        <section className="mt-10 rounded-3xl border border-white/10 bg-[#07111f] p-6 sm:p-8">
-          <h2 className="text-2xl font-black">決算ランキングの見方</h2>
-          <div className="mt-5 grid gap-6 leading-8 text-slate-300 md:grid-cols-3">
-            <p>
-              <strong className={tone.eyebrow}>1. 切り口を選ぶ</strong>
-              <br />知りたい観点に近いカテゴリーと指標を選びます。
-            </p>
-            <p>
-              <strong className={tone.eyebrow}>2. 数字の差を見る</strong>
-              <br />順位だけでなく、企業間で数値がどれだけ違うかを確認します。
-            </p>
-            <p>
-              <strong className={tone.eyebrow}>3. 複数指標で確かめる</strong>
-              <br />企業ページや関連ランキングから、決算を多面的に確認します。
-            </p>
-          </div>
-        </section>
-
-        <p className="mt-8 rounded-2xl border border-white/10 bg-black/20 px-5 py-4 text-xs leading-6 text-slate-400">
-          本ページは決算情報の理解を補助することを目的としており、特定の銘柄の売買を推奨するものではありません。投資判断はご自身の責任で行ってください。
-        </p>
       </div>
     </main>
   );
