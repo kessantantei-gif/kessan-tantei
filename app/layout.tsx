@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   description:
     "決算探偵は、グロース・スタンダード・プライムの日本株を対象にした財務分析ランキングです。EDINET決算データを自動解析し、成長性・収益性・キャッシュ・安全性・リスクシグナルから企業の特徴を可視化します。",
   alternates: {
-    canonical: "/markets",
+    canonical: "/",
   },
   verification: {
     google: "GprsF0U3m9SZj2MJ5AUo9FK-Ame_DGhpPLv5LKiIyqA",
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
     title: "決算探偵 | 日本株全市場の財務分析ランキング",
     description:
       "グロース・スタンダード・プライムの上場企業を、決算データから成長性・収益性・キャッシュ・財務リスクで比較できます。",
-    url: "https://kessan-tantei.jp/markets",
+    url: "https://kessan-tantei.jp/",
     siteName: "決算探偵",
     locale: "ja_JP",
     type: "website",
