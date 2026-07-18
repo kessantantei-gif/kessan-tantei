@@ -74,6 +74,18 @@ function auditEnv(items: Item[]) {
   else if (!appUrl.startsWith("https://")) add(items, "WARNING", "NEXT_PUBLIC_APP_URL should use https:// in production");
 }
 
+function requireContent(items: Item[], filePath: string, keywords: string[], message: string) {
+  if (!exists(filePath)) {
+    add(items, "ERROR", `${filePath} is missing`);
+    return;
+  }
+
+  const content = read(filePath);
+  if (!keywords.some((keyword) => content.includes(keyword))) {
+    add(items, "ERROR", message);
+  }
+}
+
 function auditFiles(items: Item[]) {
   for (const file of requiredFiles) {
     if (!exists(file)) add(items, "ERROR", `${file} is missing`);
@@ -85,18 +97,35 @@ function auditFiles(items: Item[]) {
       if (!webhook.includes(event)) add(items, "WARNING", `webhook does not mention ${event}`);
     }
     if (!webhook.includes("constructEvent")) add(items, "ERROR", "webhook signature verification is missing");
+    if (!webhook.includes("cancel_at_period_end")) add(items, "ERROR", "webhook does not preserve scheduled cancellation state");
+    if (!webhook.includes("current_period_end")) add(items, "ERROR", "webhook does not persist subscription period end");
   }
 
   if (exists("app/pricing/actions.ts")) {
     const actions = read("app/pricing/actions.ts");
     if (!actions.includes("checkout.sessions.create")) add(items, "ERROR", "checkout session creation is missing");
     if (!actions.includes("clerk_user_id")) add(items, "WARNING", "checkout metadata clerk_user_id is missing");
+    if (!/subscriptions\.list|subscription/.test(actions)) add(items, "ERROR", "duplicate subscription prevention is not detected");
   }
 
   if (exists("app/profile/billing-actions.ts")) {
     const billing = read("app/profile/billing-actions.ts");
     if (!billing.includes("billingPortal.sessions.create")) add(items, "ERROR", "billing portal session creation is missing");
   }
+
+  requireContent(
+    items,
+    "components/pro-status-card.tsx",
+    ["cancel_at_period_end", "current_period_end", "解約を受け付けています", "利用終了"],
+    "scheduled cancellation status is not shown on the profile"
+  );
+
+  requireContent(
+    items,
+    "lib/pro.ts",
+    ["current_period_end", "cancel_at_period_end", "active", "trialing"],
+    "Pro entitlement period handling is not detected"
+  );
 }
 
 function score(items: Item[]) {
