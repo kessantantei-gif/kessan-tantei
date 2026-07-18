@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { supabaseAdmin } from "@/lib/supabase";
+import { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -109,14 +110,16 @@ function StatCard({ label, value, note, tone = "slate" }: { label: string; value
 }
 
 export default async function DataQualityPage() {
-  const { data, error } = await supabaseAdmin
-    .from("company_analyses")
-    .select("ticker, company_name, doc_id, history, updated_at")
-    .order("ticker", { ascending: true });
+  const companies = await loadAllSupabaseRows<Company>(
+    "データ品質対象企業の取得失敗",
+    (from, to) =>
+      supabaseAdmin
+        .from("company_analyses")
+        .select("ticker, company_name, doc_id, history, updated_at")
+        .order("ticker", { ascending: true })
+        .range(from, to)
+  );
 
-  if (error) throw error;
-
-  const companies = (data ?? []) as Company[];
   const foreignOrJdr = companies.filter(isForeignOrJdr);
   const domestic = companies.filter((company) => !isForeignOrJdr(company));
   const domesticMissing = domestic.filter(hasMissingPeriod);
@@ -141,8 +144,8 @@ export default async function DataQualityPage() {
             </p>
           </div>
 
-          <Link href="/ranking" className="rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-slate-200 hover:bg-white/10">
-            ランキングへ戻る
+          <Link href="/markets" className="rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-slate-200 hover:bg-white/10">
+            市場を選ぶ
           </Link>
         </div>
 
@@ -156,7 +159,7 @@ export default async function DataQualityPage() {
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="対象企業" value={companies.length} note="集計対象としている企業数です。" tone="cyan" />
+          <StatCard label="対象企業" value={`${companies.length}社`} note="全市場の解析済み企業を集計しています。" tone="cyan" />
           <StatCard label="国内通常企業 正常" value={`${normalDomestic.length}社`} note={`国内通常企業の${pct(normalDomestic.length, domestic.length)}が正常判定です。`} tone="green" />
           <StatCard label="ERROR" value={errorCompanies.length} note="修正が必要なデータ件数です。0件が正常です。" tone={errorCompanies.length === 0 ? "green" : "red"} />
           <StatCard label="WARNING" value={warnings.length} note="年度飛びなど、比較期間に注意が必要な企業です。" tone="yellow" />
