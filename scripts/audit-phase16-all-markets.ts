@@ -30,6 +30,42 @@ const publicPaths = [
   "/sitemap.xml",
 ];
 
+type CompanyRow = {
+  ticker: string;
+  market_segment: "growth" | "standard" | "prime";
+  listing_status: string;
+};
+
+type AnalysisRow = {
+  ticker: string;
+  market_segment: string | null;
+  score: number | null;
+  danger_score: number | null;
+  risk_level: string | null;
+};
+
+async function loadAll<T>(
+  table: string,
+  select: string,
+  configure?: (query: any) => any
+): Promise<T[]> {
+  const rows: T[] = [];
+  const pageSize = 1000;
+
+  for (let from = 0; ; from += pageSize) {
+    let query = supabase.from(table).select(select).range(from, from + pageSize - 1);
+    if (configure) query = configure(query);
+
+    const { data, error } = await query;
+    if (error) throw new Error(`${table}取得失敗: ${error.message}`);
+
+    rows.push(...((data ?? []) as T[]));
+    if ((data ?? []).length < pageSize) break;
+  }
+
+  return rows;
+}
+
 async function checkUrl(path: string) {
   const response = await fetch(`${appUrl}${path}`, {
     redirect: "manual",
@@ -42,23 +78,22 @@ async function checkUrl(path: string) {
 async function main() {
   const failures: string[] = [];
 
-  const { data: companies, error: companiesError } = await supabase
-    .from("all_market_companies")
-    .select("ticker, market_segment, listing_status")
-    .eq("listing_status", "listed")
-    .in("market_segment", ["growth", "standard", "prime"])
-    .limit(10000);
-  if (companiesError) throw new Error(`会社マスタ取得失敗: ${companiesError.message}`);
+  const [companyRows, analysisRows] = await Promise.all([
+    loadAll<CompanyRow>(
+      "all_market_companies",
+      "ticker, market_segment, listing_status",
+      (query) =>
+        query
+          .eq("listing_status", "listed")
+          .in("market_segment", ["growth", "standard", "prime"])
+    ),
+    loadAll<AnalysisRow>(
+      "company_analyses",
+      "ticker, market_segment, score, danger_score, risk_level",
+      (query) => query.neq("risk_level", "EXCLUDED")
+    ),
+  ]);
 
-  const { data: analyses, error: analysesError } = await supabase
-    .from("company_analyses")
-    .select("ticker, market_segment, score, danger_score, risk_level")
-    .neq("risk_level", "EXCLUDED")
-    .limit(10000);
-  if (analysesError) throw new Error(`分析取得失敗: ${analysesError.message}`);
-
-  const companyRows = companies ?? [];
-  const analysisRows = analyses ?? [];
   const analyzedTickers = new Set(analysisRows.map((row) => row.ticker));
 
   console.log("\n=== Phase 16 全市場受入監査 ===");
@@ -66,7 +101,11 @@ async function main() {
     const listed = companyRows.filter((row) => row.market_segment === market);
     const analyzed = listed.filter((row) => analyzedTickers.has(row.ticker));
     const coverage = listed.length > 0 ? analyzed.length / listed.length : 0;
-    console.log(`${market}: listed=${listed.length}, analyzed=${analyzed.length}, coverage=${(coverage * 100).toFixed(1)}%`);
+    console.log(
+      `${market}: listed=${listed.length}, analyzed=${analyzed.length}, coverage=${(
+        coverage * 100
+      ).toFixed(1)}%`
+    );
 
     if (listed.length === 0) failures.push(`${market}: 上場対象が0件`);
     if (coverage < 0.9) failures.push(`${market}: 解析率が90%未満`);
