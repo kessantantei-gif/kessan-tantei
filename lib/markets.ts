@@ -14,7 +14,7 @@ export const marketDefinitions = {
     slug: "standard",
     name: "スタンダード市場",
     englishName: "Standard Market",
-    status: "building",
+    status: "active",
     description:
       "成長性に加えて、割安性・財務安全性・キャッシュ創出力・株主還元を重視して分析します。",
     href: "/standard",
@@ -25,7 +25,7 @@ export const marketDefinitions = {
     slug: "prime",
     name: "プライム市場",
     englishName: "Prime Market",
-    status: "building",
+    status: "active",
     description:
       "収益力・資本効率・安定CF・財務安全性・株主還元を中心に、大企業を多面的に分析します。",
     href: "/prime",
