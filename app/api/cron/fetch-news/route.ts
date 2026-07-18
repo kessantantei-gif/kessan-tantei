@@ -58,7 +58,7 @@ export async function GET(req: Request) {
     const companies = await loadAllListedCompanies();
     const batchSize = Math.max(1, Number(process.env.NEWS_CRON_BATCH_SIZE || 40));
     const concurrency = Math.max(1, Number(process.env.NEWS_CRON_CONCURRENCY || 8));
-    const perCompany = Math.max(1, Number(process.env.NEWS_PER_COMPANY || 1));
+    const perCompany = Math.max(1, Number(process.env.NEWS_CRON_PER_COMPANY || 3));
     const offset = await getNextOffset(companies.length);
     const targets = companies.slice(offset, offset + batchSize);
 
@@ -79,6 +79,7 @@ export async function GET(req: Request) {
       offset,
       nextOffset,
       processed: targets.length,
+      perCompany,
       ...totals,
     });
   } catch (error) {
