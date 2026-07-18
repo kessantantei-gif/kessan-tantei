@@ -4,6 +4,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import CompanySearch from "@/components/company-search";
 import RankingResults from "@/components/ranking-results";
 import { supabaseAdmin } from "@/lib/supabase";
+import { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";
 import { isProUser } from "@/lib/pro-engine";
 import {
   getRankingDefinition,
@@ -76,15 +77,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 async function loadCompanies() {
-  const { data } = await supabaseAdmin
-    .from("company_analyses")
-    .select(
-      "ticker, company_name, score, danger_score, risk_level, financials, history, risk"
-    )
-    .neq("risk_level", "EXCLUDED")
-    .limit(1000);
-
-  return (data ?? []) as RankingCompany[];
+  return loadAllSupabaseRows<RankingCompany>(
+    "グロースランキング会社取得失敗",
+    (from, to) =>
+      supabaseAdmin
+        .from("company_analyses")
+        .select(
+          "ticker, company_name, score, danger_score, risk_level, financials, history, risk"
+        )
+        .eq("market_segment", "growth")
+        .neq("risk_level", "EXCLUDED")
+        .order("ticker", { ascending: true })
+        .range(from, to)
+  );
 }
 
 export default async function RankingPage({ params }: PageProps) {
