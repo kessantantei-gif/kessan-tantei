@@ -4,9 +4,9 @@ import type { marketDefinitions } from "@/lib/markets";
 type MarketDefinition = (typeof marketDefinitions)[keyof typeof marketDefinitions];
 
 const toneClasses = {
-  green: "border-green-400/25 bg-green-500/10 hover:border-green-300/50",
-  cyan: "border-cyan-400/25 bg-cyan-500/10 hover:border-cyan-300/50",
-  violet: "border-violet-400/25 bg-violet-500/10 hover:border-violet-300/50",
+  green: "border-green-400/25 bg-green-500/10",
+  cyan: "border-cyan-400/25 bg-cyan-500/10",
+  violet: "border-violet-400/25 bg-violet-500/10",
 } as const;
 
 const badgeClasses = {
@@ -15,13 +15,20 @@ const badgeClasses = {
   violet: "bg-violet-300 text-slate-950",
 } as const;
 
+const buttonClasses = {
+  green: "bg-green-300 text-slate-950 hover:bg-green-200",
+  cyan: "bg-cyan-300 text-slate-950 hover:bg-cyan-200",
+  violet: "bg-violet-300 text-slate-950 hover:bg-violet-200",
+} as const;
+
 export default function MarketPortalCard({ market }: { market: MarketDefinition }) {
   const active = market.status === "active";
+  const rankingHref =
+    market.slug === "growth" ? "/ranking" : `/${market.slug}/ranking`;
 
   return (
-    <Link
-      href={market.href}
-      className={`group flex min-h-72 flex-col rounded-3xl border p-6 shadow-xl shadow-black/20 transition hover:-translate-y-1 sm:p-8 ${toneClasses[market.accent]}`}
+    <article
+      className={`flex min-h-72 flex-col rounded-3xl border p-6 shadow-xl shadow-black/20 sm:p-8 ${toneClasses[market.accent]}`}
     >
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -37,10 +44,20 @@ export default function MarketPortalCard({ market }: { market: MarketDefinition 
 
       <p className="mt-5 text-sm leading-7 text-slate-300">{market.description}</p>
 
-      <div className="mt-auto pt-8 text-sm font-black text-white">
-        {active ? "分析を見る" : "構築状況を見る"}
-        <span className="ml-2 inline-block transition group-hover:translate-x-1">→</span>
+      <div className="mt-auto grid gap-3 pt-8 sm:grid-cols-2">
+        <Link
+          href={market.href}
+          className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-black text-white transition hover:bg-white/10"
+        >
+          市場トップ
+        </Link>
+        <Link
+          href={rankingHref}
+          className={`inline-flex min-h-12 items-center justify-center rounded-2xl px-4 py-3 text-sm font-black transition ${buttonClasses[market.accent]}`}
+        >
+          ランキング
+        </Link>
       </div>
-    </Link>
+    </article>
   );
 }
