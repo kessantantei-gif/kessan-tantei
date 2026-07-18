@@ -60,19 +60,11 @@ export default async function MarketsPage({ searchParams }: { searchParams: Sear
             決算から企業を見抜く。
           </h1>
           <p className="mt-6 text-base leading-8 text-slate-300 sm:text-lg">
-            市場トップとランキングのどちらへ進むかを選べます。ホームの「順位」から来た場合も、ここでグロース・スタンダード・プライムを選択できます。
+            会社を検索するか、グロース・スタンダード・プライムから市場を選択してください。
           </p>
         </div>
 
-        <section id="market-ranking" className="scroll-mt-24">
-          <div className="mt-10 grid gap-5 lg:grid-cols-3">
-            {marketList.map((market) => (
-              <MarketPortalCard key={market.slug} market={market} />
-            ))}
-          </div>
-        </section>
-
-        <section className="mt-10 rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-8">
+        <section className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-8">
           <h2 className="text-2xl font-black">全市場から会社を検索</h2>
           <p className="mt-3 text-sm leading-7 text-slate-400">
             会社名または証券コードで、3市場を横断して検索できます。
@@ -97,7 +89,9 @@ export default async function MarketsPage({ searchParams }: { searchParams: Sear
           {query ? (
             <div className="mt-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm font-bold text-slate-300">「{query}」の検索結果：{companies.length}社</p>
+                <p className="text-sm font-bold text-slate-300">
+                  「{query}」の検索結果：{companies.length}社
+                </p>
                 <Link href="/markets" className="text-sm font-bold text-cyan-200 hover:text-cyan-100">
                   検索を解除
                 </Link>
@@ -126,6 +120,14 @@ export default async function MarketsPage({ searchParams }: { searchParams: Sear
               </div>
             </div>
           ) : null}
+        </section>
+
+        <section id="market-ranking" className="scroll-mt-24">
+          <div className="mt-10 grid gap-5 lg:grid-cols-3">
+            {marketList.map((market) => (
+              <MarketPortalCard key={market.slug} market={market} />
+            ))}
+          </div>
         </section>
 
         <section className="mt-10 rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-8">
