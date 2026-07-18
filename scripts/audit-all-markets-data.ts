@@ -14,6 +14,7 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
 
 const minimumAnalysisCoverage = Number(process.env.MIN_ANALYSIS_COVERAGE ?? "0.9");
 const minimumEdinetCoverage = Number(process.env.MIN_EDINET_COVERAGE ?? "0.95");
+const repairScoreModels = process.env.REPAIR_SCORE_MODELS === "1";
 
 type Market = "growth" | "standard" | "prime";
 
@@ -75,12 +76,54 @@ function percentText(value: number) {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+async function repairWrongScoreModels(companies: CompanyRow[]) {
+  for (const company of companies) {
+    const expectedModel = `${company.market_segment}_v1`;
+
+    const { error: snapshotError } = await supabase
+      .from("company_score_snapshots")
+      .update({
+        scoring_model: expectedModel,
+        market_segment: company.market_segment,
+      })
+      .eq("company_id", company.id)
+      .eq("is_current", true);
+
+    if (snapshotError) {
+      throw new Error(
+        `スコアモデル修復失敗 ${company.ticker}: ${snapshotError.message}`
+      );
+    }
+
+    const { error: companyError } = await supabase
+      .from("all_market_companies")
+      .update({
+        scoring_model: expectedModel,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", company.id);
+
+    if (companyError) {
+      throw new Error(
+        `会社マスタのスコアモデル修復失敗 ${company.ticker}: ${companyError.message}`
+      );
+    }
+
+    console.log(
+      `スコアモデル修復: ${company.ticker} ${company.scoring_model} -> ${expectedModel}`
+    );
+  }
+}
+
 async function main() {
   const [companies, analyses, periods, scores, risks] = await Promise.all([
     loadAll<CompanyRow>(
       "all_market_companies",
       "id, ticker, market_segment, listing_status, edinet_code, scoring_model, is_financial, is_reit, last_financial_update",
-      (query) => query.eq("listing_status", "listed").in("market_segment", ["growth", "standard", "prime"])
+      (query) =>
+        query
+          .eq("listing_status", "listed")
+          .in("market_segment", ["growth", "standard", "prime"])
     ),
     loadAll<AnalysisRow>(
       "company_analyses",
@@ -122,12 +165,22 @@ async function main() {
   console.log(`現在リスク: ${risks.length}`);
 
   for (const market of ["growth", "standard", "prime"] as const) {
-    const marketCompanies = companies.filter((company) => company.market_segment === market);
+    const marketCompanies = companies.filter(
+      (company) => company.market_segment === market
+    );
     const edinetLinked = marketCompanies.filter((company) => company.edinet_code).length;
-    const analyzed = marketCompanies.filter((company) => latestAnalysisByTicker.has(company.ticker));
-    const periodCovered = marketCompanies.filter((company) => periodCompanyIds.has(company.id)).length;
-    const scoreCovered = marketCompanies.filter((company) => scoreByCompany.has(company.id)).length;
-    const riskCovered = marketCompanies.filter((company) => riskCompanyIds.has(company.id)).length;
+    const analyzed = marketCompanies.filter((company) =>
+      latestAnalysisByTicker.has(company.ticker)
+    );
+    const periodCovered = marketCompanies.filter((company) =>
+      periodCompanyIds.has(company.id)
+    ).length;
+    const scoreCovered = marketCompanies.filter((company) =>
+      scoreByCompany.has(company.id)
+    ).length;
+    const riskCovered = marketCompanies.filter((company) =>
+      riskCompanyIds.has(company.id)
+    ).length;
 
     const edinetCoverage = percentage(edinetLinked, marketCompanies.length);
     const analysisCoverage = percentage(analyzed.length, marketCompanies.length);
@@ -143,23 +196,40 @@ async function main() {
     if (marketCompanies.length === 0) failures.push(`${market}: 対象会社が0件`);
     if (edinetCoverage < minimumEdinetCoverage) {
       failures.push(
-        `${market}: EDINET紐付け率 ${percentText(edinetCoverage)} < ${percentText(minimumEdinetCoverage)}`
+        `${market}: EDINET紐付け率 ${percentText(edinetCoverage)} < ${percentText(
+          minimumEdinetCoverage
+        )}`
       );
     }
     if (analysisCoverage < minimumAnalysisCoverage) {
       failures.push(
-        `${market}: 解析率 ${percentText(analysisCoverage)} < ${percentText(minimumAnalysisCoverage)}`
+        `${market}: 解析率 ${percentText(analysisCoverage)} < ${percentText(
+          minimumAnalysisCoverage
+        )}`
       );
     }
 
-    const analyzedIds = new Set(analyzed.map((analysis) => companyByTicker.get(analysis.ticker)?.id).filter(Boolean));
-    const missingPeriods = [...analyzedIds].filter((id) => !periodCompanyIds.has(id as string));
-    const missingScores = [...analyzedIds].filter((id) => !scoreByCompany.has(id as string));
-    const missingRisks = [...analyzedIds].filter((id) => !riskCompanyIds.has(id as string));
+    const analyzedIds = new Set(
+      analyzed
+        .map((analysis) => companyByTicker.get(analysis.ticker)?.id)
+        .filter(Boolean)
+    );
+    const missingPeriods = [...analyzedIds].filter(
+      (id) => !periodCompanyIds.has(id as string)
+    );
+    const missingScores = [...analyzedIds].filter(
+      (id) => !scoreByCompany.has(id as string)
+    );
+    const missingRisks = [...analyzedIds].filter(
+      (id) => !riskCompanyIds.has(id as string)
+    );
 
-    if (missingPeriods.length > 0) failures.push(`${market}: 解析済みだが財務期間なし ${missingPeriods.length}件`);
-    if (missingScores.length > 0) failures.push(`${market}: 解析済みだが現在スコアなし ${missingScores.length}件`);
-    if (missingRisks.length > 0) failures.push(`${market}: 解析済みだが現在リスクなし ${missingRisks.length}件`);
+    if (missingPeriods.length > 0)
+      failures.push(`${market}: 解析済みだが財務期間なし ${missingPeriods.length}件`);
+    if (missingScores.length > 0)
+      failures.push(`${market}: 解析済みだが現在スコアなし ${missingScores.length}件`);
+    if (missingRisks.length > 0)
+      failures.push(`${market}: 解析済みだが現在リスクなし ${missingRisks.length}件`);
   }
 
   const duplicateAnalysisCounts = new Map<string, number>();
@@ -169,7 +239,9 @@ async function main() {
       (duplicateAnalysisCounts.get(analysis.ticker) ?? 0) + 1
     );
   }
-  const duplicateTickers = [...duplicateAnalysisCounts.entries()].filter(([, count]) => count > 1);
+  const duplicateTickers = [...duplicateAnalysisCounts.entries()].filter(
+    ([, count]) => count > 1
+  );
   if (duplicateTickers.length > 0) {
     warnings.push(`company_analysesに複数行あるticker: ${duplicateTickers.length}件`);
   }
@@ -177,13 +249,23 @@ async function main() {
   const wrongModels = companies.filter((company) => {
     const score = scoreByCompany.get(company.id);
     if (!score) return false;
-    return score.scoring_model !== `${company.market_segment}_v1`;
+    return (
+      score.scoring_model !== `${company.market_segment}_v1` ||
+      score.market_segment !== company.market_segment ||
+      company.scoring_model !== `${company.market_segment}_v1`
+    );
   });
-  if (wrongModels.length > 0) {
+
+  if (wrongModels.length > 0 && repairScoreModels) {
+    await repairWrongScoreModels(wrongModels);
+    console.log(`市場・スコアモデル不一致を修復: ${wrongModels.length}件`);
+  } else if (wrongModels.length > 0) {
     failures.push(`市場とスコアモデル不一致: ${wrongModels.length}件`);
   }
 
-  const unsupported = companies.filter((company) => company.is_financial || company.is_reit);
+  const unsupported = companies.filter(
+    (company) => company.is_financial || company.is_reit
+  );
   if (unsupported.length > 0) {
     warnings.push(`金融・REITの専用モデル確認対象: ${unsupported.length}件`);
   }
