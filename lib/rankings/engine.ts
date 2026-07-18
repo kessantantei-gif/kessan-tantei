@@ -1,11 +1,22 @@
 import { isRankingExcludedByDataQuality } from "@/lib/data-quality-exclusions";
-import type { RankedCompany, RankingCompany, RankingDefinition } from "./types";
+import type {
+  HistoryItem,
+  RankedCompany,
+  RankingCompany,
+  RankingDefinition,
+} from "./types";
 
 type GrowthKey = "revenue" | "grossProfit" | "operatingIncome" | "operatingCF" | "netIncome";
+
+type HistoryPoint = {
+  year: number;
+  value: number;
+};
 
 const MIN_PRIOR_REVENUE_FOR_GROWTH_RANKING = 100_000_000;
 const MAX_REASONABLE_GROSS_MARGIN = 100;
 const MIN_REASONABLE_GROSS_MARGIN = -100;
+const MAX_ALLOWED_YEAR_GAP = 2;
 
 function financialNumber(
   company: RankingCompany,
@@ -15,24 +26,73 @@ function financialNumber(
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function latestHistoryNumber(company: RankingCompany, key: GrowthKey) {
-  const values = historyValues(company, key);
-  return values.length > 0 ? values.at(-1)! : null;
+function historyYear(item: HistoryItem) {
+  const candidates = [
+    item.fiscalYear,
+    item.year,
+    item.fiscalPeriod,
+    item.fiscal_period,
+    item.period,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "number" && Number.isFinite(candidate)) {
+      const year = Math.trunc(candidate);
+      if (year >= 1900 && year <= 2200) return year;
+    }
+
+    if (typeof candidate === "string") {
+      const match = candidate.match(/(?:19|20|21)\d{2}/);
+      if (match) return Number(match[0]);
+    }
+  }
+
+  return null;
 }
 
-function historyValues(company: RankingCompany, key: GrowthKey) {
-  return (company.history ?? [])
-    .map((item) => item[key])
-    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+function historyPoints(company: RankingCompany, key: GrowthKey): HistoryPoint[] {
+  const byYear = new Map<number, number>();
+
+  for (const item of company.history ?? []) {
+    const year = historyYear(item);
+    const value = item[key];
+
+    if (
+      year === null ||
+      typeof value !== "number" ||
+      !Number.isFinite(value)
+    ) {
+      continue;
+    }
+
+    byYear.set(year, value);
+  }
+
+  return [...byYear.entries()]
+    .map(([year, value]) => ({ year, value }))
+    .sort((a, b) => a.year - b.year);
+}
+
+function latestHistoryNumber(company: RankingCompany, key: GrowthKey) {
+  const points = historyPoints(company, key);
+  return points.length > 0 ? points.at(-1)!.value : null;
 }
 
 function latestHistoryPair(company: RankingCompany, key: GrowthKey) {
-  const values = historyValues(company, key);
-  if (values.length < 2) return null;
+  const points = historyPoints(company, key);
+  if (points.length < 2) return null;
+
+  const previous = points.at(-2)!;
+  const current = points.at(-1)!;
+  const yearGap = current.year - previous.year;
+
+  if (yearGap < 1 || yearGap > MAX_ALLOWED_YEAR_GAP) return null;
 
   return {
-    previous: values.at(-2)!,
-    current: values.at(-1)!,
+    previous: previous.value,
+    current: current.value,
+    previousYear: previous.year,
+    currentYear: current.year,
   };
 }
 
@@ -188,10 +248,9 @@ export function latestChange(
   company: RankingCompany,
   key: "revenue" | "operatingIncome" | "operatingCF"
 ) {
-  const values = historyValues(company, key);
-
-  if (values.length < 2) return null;
-  return values.at(-1)! - values.at(-2)!;
+  const pair = latestHistoryPair(company, key);
+  if (!pair) return null;
+  return pair.current - pair.previous;
 }
 
 export function latestGrowthRate(
@@ -202,13 +261,22 @@ export function latestGrowthRate(
 }
 
 export function revenueCagr3(company: RankingCompany) {
-  const values = historyValues(company, "revenue").filter((value) => value > 0);
+  const points = historyPoints(company, "revenue").filter((point) => point.value > 0);
+  if (points.length < 3) return null;
 
-  if (values.length < 3) return null;
-  const periods = Math.min(values.length - 1, 3);
-  const start = values.at(-(periods + 1))!;
-  const end = values.at(-1)!;
-  return (Math.pow(end / start, 1 / periods) - 1) * 100;
+  const selected = points.slice(-4);
+  const start = selected[0];
+  const end = selected.at(-1)!;
+  const periods = end.year - start.year;
+
+  if (periods < 2 || periods > 4) return null;
+
+  for (let index = 1; index < selected.length; index += 1) {
+    const gap = selected[index].year - selected[index - 1].year;
+    if (gap < 1 || gap > MAX_ALLOWED_YEAR_GAP) return null;
+  }
+
+  return (Math.pow(end.value / start.value, 1 / periods) - 1) * 100;
 }
 
 export function hasRiskFlag(company: RankingCompany, keywords: string[]) {
