@@ -7,6 +7,7 @@ import {
 import { rankCompanies } from "@/lib/rankings/engine";
 import type { RankingCategory, RankingCompany, RankingDefinition } from "@/lib/rankings/types";
 import { supabaseAdmin } from "@/lib/supabase";
+import { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";
 
 const canonical = "https://kessan-tantei.jp/ranking";
 const title = "決算ランキング一覧｜グロース企業の財務スコア・成長率・営業CFランキング";
@@ -54,13 +55,17 @@ export const metadata: Metadata = {
 };
 
 async function loadCompanies() {
-  const { data } = await supabaseAdmin
-    .from("company_analyses")
-    .select("ticker, company_name, score, danger_score, risk_level, financials, history, risk")
-    .neq("risk_level", "EXCLUDED")
-    .limit(1000);
-
-  return (data ?? []) as RankingCompany[];
+  return loadAllSupabaseRows<RankingCompany>(
+    "グロースランキング一覧会社取得失敗",
+    (from, to) =>
+      supabaseAdmin
+        .from("company_analyses")
+        .select("ticker, company_name, score, danger_score, risk_level, financials, history, risk")
+        .eq("market_segment", "growth")
+        .neq("risk_level", "EXCLUDED")
+        .order("ticker", { ascending: true })
+        .range(from, to)
+  );
 }
 
 function shouldKeepEmptyRanking(ranking: RankingDefinition) {
@@ -122,7 +127,7 @@ export default async function RankingsPage() {
             グロース企業を、総合評価・成長性・収益性・キャッシュ創出力・安全性・リスクシグナル・業種・テーマから比較できます。気になる切り口から決算を読み解いてみましょう。
           </p>
           <p className="mt-3 text-sm text-slate-500">
-            公開中：{visibleRankings.length}ランキング
+            公開中：{visibleRankings.length}ランキング ／ 解析対象：{companies.length}社
             <span className="ml-2 text-slate-600">成長率系は、2期分以上の比較データが揃い次第ランキングに反映されます。</span>
           </p>
         </section>
