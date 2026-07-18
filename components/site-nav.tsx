@@ -19,11 +19,9 @@ function marketBase(pathname: string) {
 function navItems(pathname: string): NavItem[] {
   const base = marketBase(pathname);
   const rankingHref = base ? `${base}/ranking` : "/ranking";
-  const homeHref = base || "/";
 
   return [
     { href: "/markets", label: "市場を選ぶ", shortLabel: "市場" },
-    { href: homeHref, label: "市場トップ", shortLabel: "トップ" },
     { href: rankingHref, label: "ランキング", shortLabel: "順位" },
     { href: "/updates", label: "今日の更新", shortLabel: "更新" },
     { href: "/watchlist", label: "ウォッチ", shortLabel: "保存" },
