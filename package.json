@@ -10,6 +10,7 @@
     "backfill:history": "tsx scripts/backfill-zero-financials.ts",
     "backfill:edinet-all-markets": "DOTENV_CONFIG_PATH=.env.local tsx scripts/run-edinet-backfill-safe.ts --days=400 --continue-on-error",
     "backfill:news-all-markets": "DOTENV_CONFIG_PATH=.env.local tsx scripts/backfill-all-market-news.ts",
+    "retry:news-missing": "DOTENV_CONFIG_PATH=.env.local tsx scripts/backfill-all-market-news.ts --missing-only",
     "retry:edinet-failures": "DOTENV_CONFIG_PATH=.env.local tsx scripts/retry-edinet-failures.ts",
     "classify:all-markets": "DOTENV_CONFIG_PATH=.env.local tsx scripts/classify-all-market-special-securities.ts",
     "repair:market-memberships": "DOTENV_CONFIG_PATH=.env.local tsx scripts/repair-market-memberships.ts",
