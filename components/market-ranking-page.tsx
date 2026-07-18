@@ -8,6 +8,7 @@ import {
 } from "@/lib/rankings/definitions";
 import { rankCompanies } from "@/lib/rankings/engine";
 import type {
+  RankedCompany,
   RankingCategory,
   RankingCompany,
   RankingDefinition,
@@ -15,7 +16,6 @@ import type {
 import { isProUser, FREE_VISIBLE_S_RANK_LIMIT } from "@/lib/pro-engine";
 
 type MarketPageSlug = Exclude<MarketSlug, "growth">;
-type RankedCompany = RankingCompany & { rankingValue?: number };
 
 const COMPARISON_REQUIRED_SLUGS = new Set([
   "revenue-growth",
@@ -81,26 +81,8 @@ function getVisibleRankingsByCategory(
   return rankings.filter((ranking) => ranking.category === categoryId);
 }
 
-function displayRankingValue(company: RankedCompany, ranking: RankingDefinition) {
-  const value = company.rankingValue;
-  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
-
-  if (
-    ranking.slug.includes("margin") ||
-    ranking.slug.includes("growth") ||
-    ranking.slug.includes("ratio") ||
-    ranking.slug.includes("rule") ||
-    ranking.slug.includes("roe") ||
-    ranking.slug.includes("roa")
-  ) {
-    return `${value.toFixed(1)}%`;
-  }
-
-  if (Math.abs(value) >= 100_000_000) {
-    return `${(value / 100_000_000).toFixed(1)}億円`;
-  }
-
-  return value.toFixed(1);
+function displayRankingValue(result: RankedCompany, ranking: RankingDefinition) {
+  return ranking.formatValue(result.value);
 }
 
 export default async function MarketRankingPage({
@@ -126,7 +108,7 @@ export default async function MarketRankingPage({
     : null;
 
   if (selectedRanking) {
-    const rankedCompanies = rankCompanies(companies, selectedRanking) as RankedCompany[];
+    const rankedCompanies = rankCompanies(companies, selectedRanking);
     const visibleCompanies = pro
       ? rankedCompanies
       : rankedCompanies.slice(0, FREE_VISIBLE_S_RANK_LIMIT);
@@ -168,29 +150,32 @@ export default async function MarketRankingPage({
             ) : (
               <>
                 <div className="divide-y divide-white/10">
-                  {visibleCompanies.map((company, index) => (
-                    <Link
-                      key={company.ticker}
-                      href={`/company/${company.ticker}`}
-                      className="grid grid-cols-[52px_1fr_auto] items-center gap-3 p-4 transition hover:bg-white/10 sm:p-5"
-                    >
-                      <span className="text-center text-lg font-black text-slate-400">
-                        {index + 1}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate font-black text-white">{company.company_name}</p>
-                        <p className="mt-1 text-xs text-slate-500">{company.ticker}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-black text-white">
-                          {displayRankingValue(company, selectedRanking)}
-                        </p>
-                        <p className="mt-1 text-[10px] font-bold text-slate-500">
-                          {selectedRanking.shortTitle}
-                        </p>
-                      </div>
-                    </Link>
-                  ))}
+                  {visibleCompanies.map((result, index) => {
+                    const company = result.company;
+                    return (
+                      <Link
+                        key={company.ticker}
+                        href={`/company/${company.ticker}`}
+                        className="grid grid-cols-[52px_1fr_auto] items-center gap-3 p-4 transition hover:bg-white/10 sm:p-5"
+                      >
+                        <span className="text-center text-lg font-black text-slate-400">
+                          {index + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate font-black text-white">{company.company_name}</p>
+                          <p className="mt-1 text-xs text-slate-500">{company.ticker}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-black text-white">
+                            {displayRankingValue(result, selectedRanking)}
+                          </p>
+                          <p className="mt-1 text-[10px] font-bold text-slate-500">
+                            {selectedRanking.metricLabel}
+                          </p>
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
 
                 {!pro && lockedCount > 0 ? (
@@ -262,7 +247,7 @@ export default async function MarketRankingPage({
 
                 <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {rankings.map((ranking) => {
-                    const preview = rankCompanies(companies, ranking).slice(0, 3) as RankedCompany[];
+                    const preview = rankCompanies(companies, ranking).slice(0, 3);
                     return (
                       <Link
                         key={ranking.slug}
@@ -283,19 +268,22 @@ export default async function MarketRankingPage({
                               比較データ待ち
                             </p>
                           ) : (
-                            preview.map((company, index) => (
-                              <div
-                                key={company.ticker}
-                                className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-                              >
-                                <span className="min-w-0 truncate text-sm font-bold text-white">
-                                  {index + 1}. {company.company_name}
-                                </span>
-                                <span className="shrink-0 text-xs font-black text-slate-300">
-                                  {displayRankingValue(company, ranking)}
-                                </span>
-                              </div>
-                            ))
+                            preview.map((result, index) => {
+                              const company = result.company;
+                              return (
+                                <div
+                                  key={company.ticker}
+                                  className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+                                >
+                                  <span className="min-w-0 truncate text-sm font-bold text-white">
+                                    {index + 1}. {company.company_name}
+                                  </span>
+                                  <span className="shrink-0 text-xs font-black text-slate-300">
+                                    {displayRankingValue(result, ranking)}
+                                  </span>
+                                </div>
+                              );
+                            })
                           )}
                         </div>
 
