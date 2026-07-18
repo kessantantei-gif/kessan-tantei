@@ -32,20 +32,20 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://kessan-tantei.jp"),
-  title: "決算探偵 | グロース市場特化の財務分析ランキング",
+  title: "決算探偵 | 日本株全市場の財務分析ランキング",
   description:
-    "決算探偵は、グロース市場に特化した財務分析ランキングです。EDINET決算データを自動解析し、成長性・収益品質・安全性・リスクシグナルから企業の特徴を可視化します。",
+    "決算探偵は、グロース・スタンダード・プライムの日本株を対象にした財務分析ランキングです。EDINET決算データを自動解析し、成長性・収益性・キャッシュ・安全性・リスクシグナルから企業の特徴を可視化します。",
   alternates: {
-    canonical: "/",
+    canonical: "/markets",
   },
   verification: {
     google: "GprsF0U3m9SZj2MJ5AUo9FK-Ame_DGhpPLv5LKiIyqA",
   },
   openGraph: {
-    title: "決算探偵 | グロース市場特化の財務分析ランキング",
+    title: "決算探偵 | 日本株全市場の財務分析ランキング",
     description:
-      "そのグロース株、本当に買って大丈夫ですか？会計士視点で財務リスクと成長性を可視化。",
-    url: "https://kessan-tantei.jp",
+      "グロース・スタンダード・プライムの上場企業を、決算データから成長性・収益性・キャッシュ・財務リスクで比較できます。",
+    url: "https://kessan-tantei.jp/markets",
     siteName: "決算探偵",
     locale: "ja_JP",
     type: "website",
@@ -60,9 +60,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "決算探偵 | グロース市場特化の財務分析ランキング",
+    title: "決算探偵 | 日本株全市場の財務分析ランキング",
     description:
-      "そのグロース株、本当に買って大丈夫ですか？グロース市場特化の財務分析ランキング。",
+      "グロース・スタンダード・プライムの上場企業を、決算データから比較・分析できます。",
     images: ["https://kessan-tantei.jp/og-image.png"],
   },
 };
