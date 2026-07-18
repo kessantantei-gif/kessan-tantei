@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { MarketSlug } from "@/lib/markets";
 import { marketDefinitions } from "@/lib/markets";
 import { supabaseAdmin } from "@/lib/supabase";
+import { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";
 import { isProUser, FREE_VISIBLE_S_RANK_LIMIT } from "@/lib/pro-engine";
 import RankingCard, { type RankingCompany } from "@/components/RankingCard";
 import CompanySearch from "@/components/company-search";
@@ -37,13 +38,18 @@ function numberValue(value: unknown) {
 }
 
 async function loadMarketData(marketSlug: MarketPageSlug) {
-  const [analysisResult, masterResult] = await Promise.all([
-    supabaseAdmin
-      .from("company_analyses")
-      .select("ticker, company_name, score, danger_score, risk_level, financials")
-      .eq("market_segment", marketSlug)
-      .neq("risk_level", "EXCLUDED")
-      .limit(2500),
+  const [companies, masterResult] = await Promise.all([
+    loadAllSupabaseRows<RankingCompany>(
+      `${marketSlug}分析データ取得失敗`,
+      (from, to) =>
+        supabaseAdmin
+          .from("company_analyses")
+          .select("ticker, company_name, score, danger_score, risk_level, financials")
+          .eq("market_segment", marketSlug)
+          .neq("risk_level", "EXCLUDED")
+          .order("ticker", { ascending: true })
+          .range(from, to)
+    ),
     supabaseAdmin
       .from("all_market_companies")
       .select("ticker", { count: "exact", head: true })
@@ -51,15 +57,12 @@ async function loadMarketData(marketSlug: MarketPageSlug) {
       .eq("listing_status", "listed"),
   ]);
 
-  if (analysisResult.error) {
-    throw new Error(`${marketSlug}分析データ取得失敗: ${analysisResult.error.message}`);
-  }
   if (masterResult.error) {
     throw new Error(`${marketSlug}会社マスタ件数取得失敗: ${masterResult.error.message}`);
   }
 
   return {
-    companies: (analysisResult.data ?? []) as RankingCompany[],
+    companies,
     listedCount: masterResult.count ?? 0,
   };
 }
