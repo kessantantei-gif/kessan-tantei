@@ -246,53 +246,26 @@ export default async function MarketRankingPage({
                 </div>
 
                 <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {rankings.map((ranking) => {
-                    const preview = rankCompanies(companies, ranking).slice(0, 3);
-                    return (
-                      <Link
-                        key={ranking.slug}
-                        href={`/${marketSlug}/ranking?type=${ranking.slug}`}
-                        className={`group rounded-2xl border border-white/10 bg-black/20 p-5 transition hover:-translate-y-0.5 ${tone.hover}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <h3 className="font-black">{ranking.shortTitle}</h3>
-                          <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-black ${tone.badge}`}>
-                            TOP3無料
-                          </span>
-                        </div>
-                        <p className="mt-2 text-sm leading-6 text-slate-400">{ranking.description}</p>
-
-                        <div className="mt-4 space-y-2">
-                          {preview.length === 0 ? (
-                            <p className="rounded-xl border border-yellow-400/20 bg-yellow-400/10 px-3 py-2 text-xs font-bold text-yellow-100">
-                              比較データ待ち
-                            </p>
-                          ) : (
-                            preview.map((result, index) => {
-                              const company = result.company;
-                              return (
-                                <div
-                                  key={company.ticker}
-                                  className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-                                >
-                                  <span className="min-w-0 truncate text-sm font-bold text-white">
-                                    {index + 1}. {company.company_name}
-                                  </span>
-                                  <span className="shrink-0 text-xs font-black text-slate-300">
-                                    {displayRankingValue(result, ranking)}
-                                  </span>
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-
-                        <span className={`mt-4 inline-block text-sm font-bold ${tone.link}`}>
-                          詳細順位を見る →
+                  {rankings.map((ranking) => (
+                    <Link
+                      key={ranking.slug}
+                      href={`/${marketSlug}/ranking?type=${ranking.slug}`}
+                      className={`group rounded-2xl border border-white/10 bg-black/20 p-5 transition hover:-translate-y-0.5 ${tone.hover}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <h3 className="font-black">{ranking.shortTitle}</h3>
+                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-black ${tone.badge}`}>
+                          TOP3無料
                         </span>
-                      </Link>
-                    );
-                  })}
+                      </div>
+                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">
+                        {ranking.description}
+                      </p>
+                      <span className={`mt-4 inline-block text-sm font-bold ${tone.link}`}>
+                        見る <span className="transition group-hover:translate-x-1">→</span>
+                      </span>
+                    </Link>
+                  ))}
                 </div>
               </section>
             );
