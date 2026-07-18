@@ -61,8 +61,11 @@ function auditEnv(items: Item[]) {
   const appUrl = env("NEXT_PUBLIC_APP_URL");
 
   if (!secretKey) add(items, "WARNING", "STRIPE_SECRET_KEY is missing");
-  else if (!secretKey.startsWith("sk_live_") && !secretKey.startsWith("sk_test_")) add(items, "ERROR", "STRIPE_SECRET_KEY format looks invalid");
-  else add(items, "INFO", `STRIPE_SECRET_KEY mode: ${secretKey.startsWith("sk_live_") ? "live" : "test"}`);
+  else if (!secretKey.startsWith("sk_live_") && !secretKey.startsWith("sk_test_")) {
+    add(items, "ERROR", "STRIPE_SECRET_KEY format looks invalid");
+  } else {
+    add(items, "INFO", `STRIPE_SECRET_KEY mode: ${secretKey.startsWith("sk_live_") ? "live" : "test"}`);
+  }
 
   if (!priceId) add(items, "WARNING", "STRIPE_PRO_PRICE_ID is missing");
   else if (!priceId.startsWith("price_")) add(items, "ERROR", "STRIPE_PRO_PRICE_ID must start with price_");
@@ -81,7 +84,7 @@ function requireContent(items: Item[], filePath: string, keywords: string[], mes
   }
 
   const content = read(filePath);
-  if (!keywords.some((keyword) => content.includes(keyword))) {
+  if (!keywords.every((keyword) => content.includes(keyword))) {
     add(items, "ERROR", message);
   }
 }
@@ -96,35 +99,52 @@ function auditFiles(items: Item[]) {
     for (const event of webhookEvents) {
       if (!webhook.includes(event)) add(items, "WARNING", `webhook does not mention ${event}`);
     }
-    if (!webhook.includes("constructEvent")) add(items, "ERROR", "webhook signature verification is missing");
-    if (!webhook.includes("cancel_at_period_end")) add(items, "ERROR", "webhook does not preserve scheduled cancellation state");
-    if (!webhook.includes("current_period_end")) add(items, "ERROR", "webhook does not persist subscription period end");
+    if (!webhook.includes("constructEvent")) {
+      add(items, "ERROR", "webhook signature verification is missing");
+    }
+    if (!webhook.includes("isProStatus(status) ? \"pro\" : \"free\"")) {
+      add(items, "ERROR", "webhook Pro entitlement update is not detected");
+    }
   }
 
   if (exists("app/pricing/actions.ts")) {
     const actions = read("app/pricing/actions.ts");
-    if (!actions.includes("checkout.sessions.create")) add(items, "ERROR", "checkout session creation is missing");
-    if (!actions.includes("clerk_user_id")) add(items, "WARNING", "checkout metadata clerk_user_id is missing");
-    if (!/subscriptions\.list|subscription/.test(actions)) add(items, "ERROR", "duplicate subscription prevention is not detected");
+    if (!actions.includes("checkout.sessions.create")) {
+      add(items, "ERROR", "checkout session creation is missing");
+    }
+    if (!actions.includes("clerk_user_id")) {
+      add(items, "WARNING", "checkout metadata clerk_user_id is missing");
+    }
+    if (!/subscriptions\.list|subscription/.test(actions)) {
+      add(items, "ERROR", "duplicate subscription prevention is not detected");
+    }
   }
 
   if (exists("app/profile/billing-actions.ts")) {
     const billing = read("app/profile/billing-actions.ts");
-    if (!billing.includes("billingPortal.sessions.create")) add(items, "ERROR", "billing portal session creation is missing");
+    if (!billing.includes("billingPortal.sessions.create")) {
+      add(items, "ERROR", "billing portal session creation is missing");
+    }
   }
 
   requireContent(
     items,
     "components/pro-status-card.tsx",
-    ["cancel_at_period_end", "current_period_end", "解約を受け付けています", "利用終了"],
+    ["cancelAtPeriodEnd", "currentPeriodEnd", "解約を受け付けています"],
     "scheduled cancellation status is not shown on the profile"
   );
 
   requireContent(
     items,
     "lib/pro.ts",
-    ["current_period_end", "cancel_at_period_end", "active", "trialing"],
-    "Pro entitlement period handling is not detected"
+    [
+      "stripe.subscriptions.retrieve",
+      "cancel_at_period_end",
+      "current_period_end",
+      "active",
+      "trialing",
+    ],
+    "live subscription cancellation and entitlement handling is not detected"
   );
 }
 
