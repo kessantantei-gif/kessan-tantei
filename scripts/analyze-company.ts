@@ -41,6 +41,13 @@ type HistoryRow = {
   operatingIncome: number;
   operatingCF: number;
   docID: string;
+  inferredPeriod?: boolean;
+};
+
+type PeriodFallback = {
+  periodEnd: string;
+  fiscalYear: number;
+  fiscalMonth: number;
 };
 
 const ticker = process.env.TICKER || "";
@@ -51,6 +58,15 @@ if (!ticker) throw new Error("TICKER がありません");
 if (!docID) throw new Error("DOC_ID がありません");
 
 const masterPath = path.join(process.cwd(), "data", "growth-companies.json");
+
+// 外国会社・JDRのうち、日本企業向けXBRL contextでは決算期を取得できない
+// 現在の対象書類だけを明示的に補完する。将来書類へ推測で流用しない。
+const PERIOD_FALLBACK_BY_DOC_ID: Record<string, PeriodFallback> = {
+  S100XC1A: { periodEnd: "2025-06-30", fiscalYear: 2025, fiscalMonth: 6 },
+  S100YCTT: { periodEnd: "2025-12-31", fiscalYear: 2025, fiscalMonth: 12 },
+  S100VU1R: { periodEnd: "2024-12-31", fiscalYear: 2024, fiscalMonth: 12 },
+  S100YB3Z: { periodEnd: "2025-12-31", fiscalYear: 2025, fiscalMonth: 12 },
+};
 
 function loadGrowthCompany(): GrowthCompany | null {
   if (!fs.existsSync(masterPath)) return null;
@@ -107,26 +123,34 @@ function calculateOcfNegativeStreak(items: { operatingCF: number }[]) {
 function buildHistoryRow(id: string): HistoryRow {
   downloadIfNeeded(id);
   const financials = parseEdinetFinancials(id);
+  const fallback = PERIOD_FALLBACK_BY_DOC_ID[id];
 
-  if (
-    !financials.periodEnd ||
-    !financials.fiscalYear ||
-    !financials.fiscalMonth ||
-    !financials.fiscalPeriod
-  ) {
+  const periodEnd = financials.periodEnd || fallback?.periodEnd;
+  const fiscalYear = financials.fiscalYear || fallback?.fiscalYear;
+  const fiscalMonth = financials.fiscalMonth || fallback?.fiscalMonth;
+  const fiscalPeriod =
+    financials.fiscalPeriod ||
+    (fallback ? `${fallback.fiscalYear}年${fallback.fiscalMonth}月期` : "");
+
+  if (!periodEnd || !fiscalYear || !fiscalMonth || !fiscalPeriod) {
     throw new Error(`決算期をXBRL contextから取得できません: ${id}`);
   }
 
+  if (fallback && !financials.periodEnd) {
+    console.log(`外国会社決算期を明示補完: ${id} -> ${periodEnd}`);
+  }
+
   return {
-    year: String(financials.fiscalYear),
-    fiscalYear: financials.fiscalYear,
-    fiscalMonth: financials.fiscalMonth,
-    fiscalPeriod: financials.fiscalPeriod,
-    periodEnd: financials.periodEnd,
+    year: String(fiscalYear),
+    fiscalYear,
+    fiscalMonth,
+    fiscalPeriod,
+    periodEnd,
     revenue: financials.revenue,
     operatingIncome: financials.operatingIncome,
     operatingCF: financials.operatingCF,
     docID: id,
+    inferredPeriod: Boolean(fallback && !financials.periodEnd),
   };
 }
 
@@ -176,7 +200,7 @@ async function saveNormalizedData(args: {
         financials: row.docID === docID ? financials : row,
         source_payload: row,
         source_position: sourcePosition,
-        data_quality: "unreviewed",
+        data_quality: row.inferredPeriod ? "warning" : "unreviewed",
         updated_at: now,
       });
     if (insertError) {
@@ -238,7 +262,10 @@ async function saveNormalizedData(args: {
     });
   if (riskInsertError) throw new Error(`リスク保存失敗: ${riskInsertError.message}`);
 
-  const dataQuality = company.is_financial || company.is_reit ? "warning" : "unreviewed";
+  const dataQuality =
+    company.is_financial || company.is_reit || history.some((row) => row.inferredPeriod)
+      ? "warning"
+      : "unreviewed";
   const { error: companyUpdateError } = await supabaseAdmin
     .from("all_market_companies")
     .update({
@@ -283,9 +310,14 @@ async function main() {
     }
   }
 
-  const history = Array.from(
-    new Map(parsedHistory.map((row) => [row.periodEnd, row])).values()
-  )
+  // HISTORY_DOC_IDSは新しい順。最初に現れた書類を保持することで、
+  // 同一決算期では最新書類・訂正有報を古い書類で上書きしない。
+  const latestByPeriod = new Map<string, HistoryRow>();
+  for (const row of parsedHistory) {
+    if (!latestByPeriod.has(row.periodEnd)) latestByPeriod.set(row.periodEnd, row);
+  }
+
+  const history = Array.from(latestByPeriod.values())
     .sort((a, b) => a.periodEnd.localeCompare(b.periodEnd))
     .slice(-3);
 
