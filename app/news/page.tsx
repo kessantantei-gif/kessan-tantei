@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { supabaseAdmin } from "@/lib/supabase";
 import { isBlockedNews } from "@/lib/news-filter";
-import { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -96,42 +95,138 @@ function buildNewsHref({
   return suffix ? `/news?${suffix}` : "/news";
 }
 
-async function loadNewsData() {
-  const [news, companies] = await Promise.all([
-    loadAllSupabaseRows<NewsItem>(
-      "ニュース一覧取得失敗",
-      (from, to) =>
-        supabaseAdmin
-          .from("growth_news")
-          .select("id, ticker, title, summary, url, source, published_at, created_at")
-          .not("url", "is", null)
-          .order("published_at", { ascending: false, nullsFirst: false })
-          .range(from, to)
-    ),
-    loadAllSupabaseRows<CompanyMaster>(
-      "会社マスタ取得失敗",
-      (from, to) =>
-        supabaseAdmin
-          .from("all_market_companies")
-          .select("ticker, company_name, market_segment")
-          .eq("listing_status", "listed")
-          .order("ticker", { ascending: true })
-          .range(from, to)
-    ),
-  ]);
+function safeSearchTerm(value: string) {
+  return value.replace(/[,%()"']/g, " ").trim();
+}
 
-  const companyMap = new Map(companies.map((company) => [company.ticker, company]));
+async function loadMarketTickers(market: MarketSlug) {
+  if (market === "all") return null;
 
-  return news
-    .filter((item) => !isBlockedNews(item))
-    .map((item): EnrichedNewsItem => {
-      const company = item.ticker ? companyMap.get(item.ticker) : null;
-      return {
-        ...item,
-        companyName: company?.company_name ?? "会社名未登録",
-        marketSegment: company?.market_segment ?? "other",
-      };
-    });
+  const { data, error } = await supabaseAdmin
+    .from("all_market_companies")
+    .select("ticker")
+    .eq("listing_status", "listed")
+    .eq("market_segment", market)
+    .order("ticker", { ascending: true });
+
+  if (error) throw new Error(`市場企業取得失敗: ${error.message}`);
+  return (data ?? []).map((row) => row.ticker as string);
+}
+
+async function loadCompanySearchTickers(query: string, market: MarketSlug) {
+  if (!query) return null;
+
+  const term = safeSearchTerm(query);
+  if (!term) return null;
+
+  let companyQuery = supabaseAdmin
+    .from("all_market_companies")
+    .select("ticker")
+    .eq("listing_status", "listed")
+    .or(`ticker.ilike.%${term}%,company_name.ilike.%${term}%`)
+    .limit(300);
+
+  if (market !== "all") {
+    companyQuery = companyQuery.eq("market_segment", market);
+  }
+
+  const { data, error } = await companyQuery;
+  if (error) throw new Error(`会社検索失敗: ${error.message}`);
+
+  const tickers = (data ?? []).map((row) => row.ticker as string);
+  return tickers.length > 0 ? tickers : null;
+}
+
+async function loadNewsPage({
+  marketTickers,
+  companySearchTickers,
+  query,
+  page,
+}: {
+  marketTickers: string[] | null;
+  companySearchTickers: string[] | null;
+  query: string;
+  page: number;
+}) {
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
+
+  let newsQuery = supabaseAdmin
+    .from("growth_news")
+    .select("id, ticker, title, summary, url, source, published_at, created_at", {
+      count: "exact",
+    })
+    .not("url", "is", null);
+
+  if (companySearchTickers) {
+    newsQuery = newsQuery.in("ticker", companySearchTickers);
+  } else if (marketTickers) {
+    newsQuery = newsQuery.in("ticker", marketTickers);
+  }
+
+  if (query && !companySearchTickers) {
+    const term = safeSearchTerm(query);
+    if (term) {
+      newsQuery = newsQuery.or(
+        `ticker.ilike.%${term}%,title.ilike.%${term}%,summary.ilike.%${term}%,source.ilike.%${term}%`
+      );
+    }
+  }
+
+  const { data, error, count } = await newsQuery
+    .order("published_at", { ascending: false, nullsFirst: false })
+    .range(from, to);
+
+  if (error) throw new Error(`ニュース一覧取得失敗: ${error.message}`);
+
+  return {
+    rows: ((data ?? []) as NewsItem[]).filter((item) => !isBlockedNews(item)),
+    count: count ?? 0,
+  };
+}
+
+async function enrichNews(rows: NewsItem[]): Promise<EnrichedNewsItem[]> {
+  const tickers = Array.from(
+    new Set(rows.map((item) => item.ticker).filter((ticker): ticker is string => Boolean(ticker)))
+  );
+
+  if (tickers.length === 0) {
+    return rows.map((item) => ({
+      ...item,
+      companyName: "会社名未登録",
+      marketSegment: "other",
+    }));
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("all_market_companies")
+    .select("ticker, company_name, market_segment")
+    .in("ticker", tickers);
+
+  if (error) throw new Error(`会社情報取得失敗: ${error.message}`);
+
+  const companyMap = new Map(
+    ((data ?? []) as CompanyMaster[]).map((company) => [company.ticker, company])
+  );
+
+  return rows.map((item) => {
+    const company = item.ticker ? companyMap.get(item.ticker) : null;
+    return {
+      ...item,
+      companyName: company?.company_name ?? "会社名未登録",
+      marketSegment: company?.market_segment ?? "other",
+    };
+  });
+}
+
+async function loadTotalNewsCount() {
+  const { count, error } = await supabaseAdmin
+    .from("growth_news")
+    .select("id", { count: "exact", head: true })
+    .not("url", "is", null);
+
+  if (error) return 0;
+  return count ?? 0;
 }
 
 export default async function NewsPage({ searchParams }: PageProps) {
@@ -141,38 +236,48 @@ export default async function NewsPage({ searchParams }: PageProps) {
   const requestedPage = Math.max(1, Number(params.page ?? 1) || 1);
 
   let loadError = "";
-  let allNews: EnrichedNewsItem[] = [];
+  let visibleNews: EnrichedNewsItem[] = [];
+  let resultCount = 0;
+  let currentPage = requestedPage;
+  let totalNewsCount = 0;
 
   try {
-    allNews = await loadNewsData();
+    const [marketTickers, companySearchTickers, totalCount] = await Promise.all([
+      loadMarketTickers(selectedMarket),
+      loadCompanySearchTickers(query, selectedMarket),
+      loadTotalNewsCount(),
+    ]);
+
+    totalNewsCount = totalCount;
+
+    let result = await loadNewsPage({
+      marketTickers,
+      companySearchTickers,
+      query,
+      page: requestedPage,
+    });
+
+    resultCount = result.count;
+    const totalPages = Math.max(1, Math.ceil(resultCount / PAGE_SIZE));
+
+    if (requestedPage > totalPages) {
+      currentPage = totalPages;
+      result = await loadNewsPage({
+        marketTickers,
+        companySearchTickers,
+        query,
+        page: currentPage,
+      });
+    }
+
+    visibleNews = await enrichNews(result.rows);
   } catch (error) {
     loadError = error instanceof Error ? error.message : "ニュース取得でエラーが発生しました。";
   }
 
-  const normalizedQuery = query.toLowerCase();
-  const filteredNews = allNews.filter((item) => {
-    if (selectedMarket !== "all" && item.marketSegment !== selectedMarket) return false;
-    if (!normalizedQuery) return true;
-
-    return [item.ticker, item.companyName, item.title, item.summary, item.source]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(normalizedQuery));
-  });
-
-  const totalPages = Math.max(1, Math.ceil(filteredNews.length / PAGE_SIZE));
-  const currentPage = Math.min(requestedPage, totalPages);
-  const pageStart = (currentPage - 1) * PAGE_SIZE;
-  const visibleNews = filteredNews.slice(pageStart, pageStart + PAGE_SIZE);
-
-  const marketCounts = {
-    all: allNews.length,
-    growth: allNews.filter((item) => item.marketSegment === "growth").length,
-    standard: allNews.filter((item) => item.marketSegment === "standard").length,
-    prime: allNews.filter((item) => item.marketSegment === "prime").length,
-  };
-
-  const firstVisible = filteredNews.length === 0 ? 0 : pageStart + 1;
-  const lastVisible = Math.min(pageStart + PAGE_SIZE, filteredNews.length);
+  const totalPages = Math.max(1, Math.ceil(resultCount / PAGE_SIZE));
+  const firstVisible = resultCount === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const lastVisible = Math.min(currentPage * PAGE_SIZE, resultCount);
 
   return (
     <main className="min-h-screen bg-[#050816] text-white">
@@ -187,7 +292,7 @@ export default async function NewsPage({ searchParams }: PageProps) {
             会社名、証券コード、市場で絞り込み、各社の決算・開示・IR関連ニュースを確認できます。
           </p>
           <p className="mt-4 text-sm font-bold text-cyan-100">
-            保存済みニュース：{allNews.length.toLocaleString("ja-JP")}件
+            保存済みニュース：{totalNewsCount.toLocaleString("ja-JP")}件
           </p>
         </div>
 
@@ -204,16 +309,13 @@ export default async function NewsPage({ searchParams }: PageProps) {
               <Link
                 key={slug}
                 href={buildNewsHref({ market: slug, query, page: 1 })}
-                className={`rounded-2xl border px-4 py-4 transition ${
+                className={`rounded-2xl border px-4 py-4 font-black transition ${
                   selectedMarket === slug
                     ? "border-cyan-300/60 bg-cyan-400/15 text-white"
                     : "border-white/10 bg-black/20 text-slate-300 hover:bg-white/10"
                 }`}
               >
-                <p className="font-black">{label}</p>
-                <p className="mt-1 text-sm text-slate-400">
-                  {marketCounts[slug].toLocaleString("ja-JP")}件
-                </p>
+                {label}
               </Link>
             ))}
           </div>
@@ -252,7 +354,7 @@ export default async function NewsPage({ searchParams }: PageProps) {
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-400">
           <p>
-            {filteredNews.length.toLocaleString("ja-JP")}件中 {firstVisible.toLocaleString("ja-JP")}〜
+            {resultCount.toLocaleString("ja-JP")}件中 {firstVisible.toLocaleString("ja-JP")}〜
             {lastVisible.toLocaleString("ja-JP")}件を表示
           </p>
           <p>
@@ -302,7 +404,8 @@ export default async function NewsPage({ searchParams }: PageProps) {
                     <p className="mt-3 leading-7 text-slate-300">{item.summary}</p>
                   ) : null}
                   <p className="mt-3 text-sm text-slate-500">
-                    {item.source || "Google News"}　<span className="text-cyan-300">記事を開く →</span>
+                    {item.source || "Google News"}　
+                    <span className="text-cyan-300">記事を開く →</span>
                   </p>
                 </a>
               </article>
