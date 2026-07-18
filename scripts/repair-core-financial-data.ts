@@ -1,6 +1,7 @@
 import { config } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import { calculateScores } from "../lib/scoring-engine";
+import { loadAllSupabaseRows } from "../lib/load-all-supabase-rows";
 
 config({ path: ".env.local" });
 
@@ -160,14 +161,16 @@ function sanitizeFinancials(source: JsonObject, history: HistoryRow[], repairs: 
 }
 
 async function main() {
-  const { data, error } = await supabase
-    .from("company_analyses")
-    .select("ticker, company_name, financials, history, score, score_breakdown")
-    .order("ticker", { ascending: true });
+  const companies = await loadAllSupabaseRows<CompanyRow>(
+    "コア財務修復対象取得失敗",
+    (from, to) =>
+      supabase
+        .from("company_analyses")
+        .select("ticker, company_name, financials, history, score, score_breakdown")
+        .order("ticker", { ascending: true })
+        .range(from, to)
+  );
 
-  if (error) throw error;
-
-  const companies = (data ?? []) as CompanyRow[];
   let updated = 0;
   const repairLog: Array<{ ticker: string; repairs: string[] }> = [];
 
@@ -211,7 +214,11 @@ async function main() {
   }
 
   console.log("=== core financial repair ===");
-  console.log({ totalCompanies: companies.length, updatedCompanies: updated, repairedCompanies: repairLog.length });
+  console.log({
+    totalCompanies: companies.length,
+    updatedCompanies: updated,
+    repairedCompanies: repairLog.length,
+  });
   for (const item of repairLog) console.log(JSON.stringify(item));
 }
 
