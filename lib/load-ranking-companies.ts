@@ -8,6 +8,29 @@ type SpecialSecurityRow = {
   is_foreign: boolean | null;
 };
 
+const CORE_FINANCIAL_KEYS = [
+  "revenue",
+  "operatingIncome",
+  "operatingCF",
+  "assets",
+  "netAssets",
+] as const;
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function hasMinimumFinancialData(company: RankingCompany) {
+  const financials = company.financials;
+  if (!financials) return false;
+
+  const availableCoreFields = CORE_FINANCIAL_KEYS.filter((key) =>
+    isFiniteNumber(financials[key])
+  ).length;
+
+  return availableCoreFields >= 2;
+}
+
 export async function loadRankingCompanies(marketSegment: string) {
   const [companies, specialSecurities] = await Promise.all([
     loadAllSupabaseRows<RankingCompany>(
@@ -42,5 +65,8 @@ export async function loadRankingCompanies(marketSegment: string) {
       .map((company) => company.ticker)
   );
 
-  return companies.filter((company) => !excludedTickers.has(company.ticker));
+  return companies.filter(
+    (company) =>
+      !excludedTickers.has(company.ticker) && hasMinimumFinancialData(company)
+  );
 }
