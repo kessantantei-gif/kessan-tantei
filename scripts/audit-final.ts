@@ -2,6 +2,7 @@ import { config } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import fs from "node:fs";
 import path from "node:path";
+import { loadAllSupabaseRows } from "../lib/load-all-supabase-rows";
 
 config({ path: ".env.local" });
 
@@ -137,18 +138,28 @@ async function auditDb(items: Item[]) {
   if (!url || !key) return;
 
   const supabase = createClient(url, key);
-  const { data, error } = await supabase
-    .from("company_analyses")
-    .select("ticker, company_name, score, risk_level, history")
-    .neq("risk_level", "EXCLUDED")
-    .order("ticker", { ascending: true });
+  let companies: Company[];
 
-  if (error) {
-    add(items, "ERROR", "DB", `company_analyses fetch failed: ${error.message}`);
+  try {
+    companies = await loadAllSupabaseRows<Company>(
+      "company_analyses fetch failed",
+      (from, to) =>
+        supabase
+          .from("company_analyses")
+          .select("ticker, company_name, score, risk_level, history")
+          .neq("risk_level", "EXCLUDED")
+          .order("ticker", { ascending: true })
+          .range(from, to)
+    );
+  } catch (error) {
+    add(
+      items,
+      "ERROR",
+      "DB",
+      error instanceof Error ? error.message : "company_analyses fetch failed"
+    );
     return;
   }
-
-  const companies = (data ?? []) as Company[];
   if (companies.length < 500) add(items, "ERROR", "DB", `company count is too low: ${companies.length}`);
   else add(items, "INFO", "DB", `company count: ${companies.length}`);
 
