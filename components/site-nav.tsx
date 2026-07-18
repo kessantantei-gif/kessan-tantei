@@ -13,12 +13,20 @@ type NavItem = {
 function marketBase(pathname: string) {
   if (pathname === "/standard" || pathname.startsWith("/standard/")) return "/standard";
   if (pathname === "/prime" || pathname.startsWith("/prime/")) return "/prime";
+  if (pathname === "/" || pathname === "/growth" || pathname.startsWith("/ranking")) return "/growth";
   return "";
 }
 
 function navItems(pathname: string): NavItem[] {
   const base = marketBase(pathname);
-  const rankingHref = base ? `${base}/ranking` : "/ranking";
+  const rankingHref =
+    base === "/standard"
+      ? "/standard/ranking"
+      : base === "/prime"
+        ? "/prime/ranking"
+        : pathname === "/" || pathname === "/markets"
+          ? "/markets#market-ranking"
+          : "/ranking";
 
   return [
     { href: "/markets", label: "市場を選ぶ", shortLabel: "市場" },
@@ -33,8 +41,9 @@ function navItems(pathname: string): NavItem[] {
 }
 
 function isActivePath(pathname: string, href: string) {
-  if (href === "/") return pathname === "/" || pathname === "/growth";
-  return pathname === href || pathname.startsWith(`${href}/`);
+  const cleanHref = href.split("#")[0];
+  if (cleanHref === "/") return pathname === "/" || pathname === "/growth";
+  return pathname === cleanHref || pathname.startsWith(`${cleanHref}/`);
 }
 
 export default function SiteNav() {
