@@ -1,6 +1,7 @@
 import { config } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import { calculateScores } from "../lib/scoring-engine";
+import { loadAllSupabaseRows } from "../lib/load-all-supabase-rows";
 
 config({ path: ".env.local" });
 
@@ -253,15 +254,17 @@ function sanitizeFinancials(
 }
 
 async function main() {
-  const { data, error } = await supabase
-    .from("company_analyses")
-    .select("ticker, company_name, financials, history, score, score_breakdown")
-    .neq("risk_level", "EXCLUDED")
-    .order("ticker", { ascending: true });
+  const companies = await loadAllSupabaseRows<CompanyRow>(
+    "財務異常修復対象取得失敗",
+    (from, to) =>
+      supabase
+        .from("company_analyses")
+        .select("ticker, company_name, financials, history, score, score_breakdown")
+        .neq("risk_level", "EXCLUDED")
+        .order("ticker", { ascending: true })
+        .range(from, to)
+  );
 
-  if (error) throw error;
-
-  const companies = (data ?? []) as CompanyRow[];
   const logs: RepairLog[] = [];
   let updated = 0;
 
