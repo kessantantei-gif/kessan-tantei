@@ -8,8 +8,12 @@ async function fetchHistory() {
     .filter((value) => /^S100[A-Z0-9]+$/.test(value));
 
   if (suppliedDocIds.length > 0) {
-    console.log("バックフィル走査済み履歴を使用:", suppliedDocIds.join(", "));
-    for (const docID of suppliedDocIds) console.log(docID);
+    // バックフィル側は新しい順で渡す。
+    // analyze-company.ts は同一決算期を Map で後勝ちにするため、
+    // 古い順へ反転し、訂正有報など最新の書類が最後に残るようにする。
+    const oldestToNewest = Array.from(new Set(suppliedDocIds)).reverse();
+    console.log("バックフィル走査済み履歴を使用（古い順）:", oldestToNewest.join(", "));
+    for (const docID of oldestToNewest) console.log(docID);
     return;
   }
 
