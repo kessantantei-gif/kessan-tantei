@@ -3,24 +3,45 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const navItems = [
-  { href: "/markets", label: "市場を選ぶ", shortLabel: "市場" },
-  { href: "/updates", label: "今日の更新", shortLabel: "更新" },
-  { href: "/ranking", label: "ランキング", shortLabel: "順位" },
-  { href: "/watchlist", label: "ウォッチ", shortLabel: "保存" },
-  { href: "/alerts", label: "アラート", shortLabel: "通知" },
-  { href: "/news", label: "ニュース", shortLabel: "ニュース" },
-  { href: "/data-quality", label: "データ品質", shortLabel: "品質" },
-  { href: "/pricing", label: "初月100円Pro", shortLabel: "Pro", accent: true },
-];
+type NavItem = {
+  href: string;
+  label: string;
+  shortLabel: string;
+  accent?: boolean;
+};
+
+function marketBase(pathname: string) {
+  if (pathname === "/standard" || pathname.startsWith("/standard/")) return "/standard";
+  if (pathname === "/prime" || pathname.startsWith("/prime/")) return "/prime";
+  return "";
+}
+
+function navItems(pathname: string): NavItem[] {
+  const base = marketBase(pathname);
+  const rankingHref = base ? `${base}/ranking` : "/ranking";
+  const homeHref = base || "/";
+
+  return [
+    { href: "/markets", label: "市場を選ぶ", shortLabel: "市場" },
+    { href: homeHref, label: "市場トップ", shortLabel: "トップ" },
+    { href: rankingHref, label: "ランキング", shortLabel: "順位" },
+    { href: "/updates", label: "今日の更新", shortLabel: "更新" },
+    { href: "/watchlist", label: "ウォッチ", shortLabel: "保存" },
+    { href: "/alerts", label: "アラート", shortLabel: "通知" },
+    { href: "/news", label: "ニュース", shortLabel: "ニュース" },
+    { href: "/data-quality", label: "データ品質", shortLabel: "品質" },
+    { href: "/pricing", label: "初月100円Pro", shortLabel: "Pro", accent: true },
+  ];
+}
 
 function isActivePath(pathname: string, href: string) {
-  if (href === "/") return pathname === "/";
+  if (href === "/") return pathname === "/" || pathname === "/growth";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export default function SiteNav() {
   const pathname = usePathname();
+  const items = navItems(pathname);
 
   return (
     <nav
@@ -37,7 +58,7 @@ export default function SiteNav() {
         </Link>
 
         <div className="no-scrollbar -mr-3 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain pr-3 text-[11px] font-bold sm:mr-0 sm:gap-2 sm:pr-0 sm:text-sm">
-          {navItems.map((item) => {
+          {items.map((item) => {
             const active = isActivePath(pathname, item.href);
             const baseClass =
               "flex min-h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-2 py-2 transition duration-150 ease-out active:scale-95 sm:min-h-11 sm:px-4";
@@ -50,7 +71,7 @@ export default function SiteNav() {
 
             return (
               <Link
-                key={item.href}
+                key={`${item.label}-${item.href}`}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={`${baseClass} ${active ? activeClass : normalClass}`}
