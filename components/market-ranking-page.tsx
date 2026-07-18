@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { supabaseAdmin } from "@/lib/supabase";
-import { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";
+import { loadRankingCompanies } from "@/lib/load-ranking-companies";
 import { marketDefinitions, type MarketSlug } from "@/lib/markets";
 import {
   rankingCategories,
@@ -49,19 +48,6 @@ const toneClasses = {
   },
 } as const;
 
-async function loadCompanies(marketSlug: MarketPageSlug) {
-  return loadAllSupabaseRows<RankingCompany>(
-    `${marketSlug}ランキング会社取得失敗`,
-    (from, to) =>
-      supabaseAdmin
-        .from("company_analyses")
-        .select("ticker, company_name, score, danger_score, risk_level, financials, history, risk")
-        .eq("market_segment", marketSlug)
-        .neq("risk_level", "EXCLUDED")
-        .order("ticker", { ascending: true })
-        .range(from, to)
-  );
-}
 
 function shouldKeepEmptyRanking(ranking: RankingDefinition) {
   return COMPARISON_REQUIRED_SLUGS.has(ranking.slug);
@@ -95,7 +81,7 @@ export default async function MarketRankingPage({
   const market = marketDefinitions[marketSlug];
   const tone = toneClasses[marketSlug];
   const [companies, pro] = await Promise.all([
-    loadCompanies(marketSlug),
+    loadRankingCompanies(marketSlug),
     isProUser(),
   ]);
 

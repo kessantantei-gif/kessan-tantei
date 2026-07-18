@@ -3,8 +3,7 @@ import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import CompanySearch from "@/components/company-search";
 import RankingResults from "@/components/ranking-results";
-import { supabaseAdmin } from "@/lib/supabase";
-import { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";
+import { loadRankingCompanies } from "@/lib/load-ranking-companies";
 import { isProUser } from "@/lib/pro-engine";
 import {
   getRankingDefinition,
@@ -76,21 +75,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-async function loadCompanies() {
-  return loadAllSupabaseRows<RankingCompany>(
-    "グロースランキング会社取得失敗",
-    (from, to) =>
-      supabaseAdmin
-        .from("company_analyses")
-        .select(
-          "ticker, company_name, score, danger_score, risk_level, financials, history, risk"
-        )
-        .eq("market_segment", "growth")
-        .neq("risk_level", "EXCLUDED")
-        .order("ticker", { ascending: true })
-        .range(from, to)
-  );
-}
 
 export default async function RankingPage({ params }: PageProps) {
   const { type } = await params;
@@ -101,7 +85,7 @@ export default async function RankingPage({ params }: PageProps) {
   const definition = getRankingDefinition(slug);
   if (!definition) notFound();
 
-  const companies = await loadCompanies();
+  const companies = await loadRankingCompanies("growth");
   const rankings = rankCompanies(companies, definition);
   const relatedRankings = getRelatedRankings(definition);
   const isPro = await isProUser();

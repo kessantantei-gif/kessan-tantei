@@ -6,8 +6,7 @@ import {
 } from "@/lib/rankings/definitions";
 import { rankCompanies } from "@/lib/rankings/engine";
 import type { RankingCategory, RankingCompany, RankingDefinition } from "@/lib/rankings/types";
-import { supabaseAdmin } from "@/lib/supabase";
-import { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";
+import { loadRankingCompanies } from "@/lib/load-ranking-companies";
 
 const canonical = "https://kessan-tantei.jp/ranking";
 const title = "決算ランキング一覧｜グロース企業の財務スコア・成長率・営業CFランキング";
@@ -54,19 +53,6 @@ export const metadata: Metadata = {
   },
 };
 
-async function loadCompanies() {
-  return loadAllSupabaseRows<RankingCompany>(
-    "グロースランキング一覧会社取得失敗",
-    (from, to) =>
-      supabaseAdmin
-        .from("company_analyses")
-        .select("ticker, company_name, score, danger_score, risk_level, financials, history, risk")
-        .eq("market_segment", "growth")
-        .neq("risk_level", "EXCLUDED")
-        .order("ticker", { ascending: true })
-        .range(from, to)
-  );
-}
 
 function shouldKeepEmptyRanking(ranking: RankingDefinition) {
   return COMPARISON_REQUIRED_SLUGS.has(ranking.slug);
@@ -87,7 +73,7 @@ function getVisibleRankingsByCategory(
 }
 
 export default async function RankingsPage() {
-  const companies = await loadCompanies();
+  const companies = await loadRankingCompanies("growth");
   const visibleRankings = getVisibleRankings(companies);
   const visibleCategories = rankingCategories.filter(
     (category) => getVisibleRankingsByCategory(visibleRankings, category.id).length > 0
