@@ -1,3 +1,4 @@
+import { isRankingExcludedByDataQuality } from "@/lib/data-quality-exclusions";
 import type { RankedCompany, RankingCompany, RankingDefinition } from "./types";
 
 type GrowthKey = "revenue" | "grossProfit" | "operatingIncome" | "operatingCF" | "netIncome";
@@ -163,7 +164,11 @@ export function rankCompanies(
   definition: RankingDefinition
 ): RankedCompany[] {
   return companies
-    .filter((company) => company.risk_level !== "EXCLUDED")
+    .filter(
+      (company) =>
+        company.risk_level !== "EXCLUDED" &&
+        !isRankingExcludedByDataQuality(company.ticker)
+    )
     .map((company) => ({ company, value: computedRankingValue(company, definition) }))
     .filter((item): item is { company: RankingCompany; value: number } =>
       item.value !== null && Number.isFinite(item.value)
