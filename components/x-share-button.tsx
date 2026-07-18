@@ -15,15 +15,15 @@ export default function XShareButton({
 }) {
   const url = `https://kessan-tantei.jp/company/${ticker}`;
 
-  const text = `決算探偵で ${companyName}(${ticker}) を分析
+  const text = `決算探偵で ${companyName}（${ticker}）を分析
 
-Score: ${score}
-Danger: ${dangerScore}
-判定: ${riskLabel}
+財務スコア：${score}
+Danger Score：${dangerScore}
+判定：${riskLabel}
 
-買う銘柄を探す前に、買ってはいけない銘柄を除外する。
+成長性・収益性・キャッシュ・財務リスクを決算データから確認できます。
 
-#決算探偵 #日本株 #グロース株`;
+#決算探偵 #日本株 #決算分析`;
 
   const shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
     text
