@@ -45,16 +45,10 @@ async function loadPaged<T>(table: string, columns: string): Promise<T[]> {
 }
 
 async function main() {
-  const [companies, memberships] = await Promise.all([
-    loadPaged<Company>(
-      "all_market_companies",
-      "id, ticker, market_segment, listing_status"
-    ),
-    loadPaged<Membership>(
-      "market_memberships",
-      "id, company_id, market_segment, effective_from"
-    ),
-  ]);
+  const companies = await loadPaged<Company>(
+    "all_market_companies",
+    "id, ticker, market_segment, listing_status"
+  );
 
   const listed = companies.filter(
     (company) =>
@@ -62,71 +56,76 @@ async function main() {
       ["growth", "standard", "prime"].includes(company.market_segment)
   );
 
-  const currentResult = await supabase
-    .from("market_memberships")
-    .select("id, company_id, market_segment, effective_from")
-    .eq("is_current", true)
-    .limit(10000);
+  const currentRows = await loadPaged<Membership>(
+    "market_memberships",
+    "id, company_id, market_segment, effective_from, is_current"
+  );
 
-  if (currentResult.error) {
-    throw new Error(`現在市場履歴の取得に失敗しました: ${currentResult.error.message}`);
-  }
-
-  const currentByCompany = new Map<string, Membership[]>();
-  for (const membership of (currentResult.data ?? []) as Membership[]) {
-    const rows = currentByCompany.get(membership.company_id) ?? [];
-    rows.push(membership);
-    currentByCompany.set(membership.company_id, rows);
+  const currentByCompany = new Map<string, Membership>();
+  for (const membership of currentRows) {
+    const row = membership as Membership & { is_current?: boolean };
+    if (row.is_current === true) {
+      currentByCompany.set(row.company_id, membership);
+    }
   }
 
   const today = new Date().toISOString().slice(0, 10);
   let inserted = 0;
-  let closed = 0;
+  let updated = 0;
   let unchanged = 0;
 
   for (const company of listed) {
-    const currentRows = currentByCompany.get(company.id) ?? [];
-    const matching = currentRows.filter(
-      (membership) => membership.market_segment === company.market_segment
-    );
+    const current = currentByCompany.get(company.id);
 
-    if (matching.length === 1 && currentRows.length === 1) {
+    if (!current) {
+      const { error } = await supabase.from("market_memberships").insert({
+        company_id: company.id,
+        market_segment: company.market_segment,
+        effective_from: today,
+        effective_to: null,
+        is_current: true,
+        source: "jpx_market_master_repair",
+        source_reference: "all_market_companies",
+      });
+
+      if (error) {
+        throw new Error(`市場履歴追加失敗 ${company.ticker}: ${error.message}`);
+      }
+
+      inserted += 1;
+      continue;
+    }
+
+    if (current.market_segment === company.market_segment) {
       unchanged += 1;
       continue;
     }
 
-    if (currentRows.length > 0) {
-      const { error } = await supabase
-        .from("market_memberships")
-        .update({ is_current: false, effective_to: today })
-        .eq("company_id", company.id)
-        .eq("is_current", true);
-
-      if (error) {
-        throw new Error(`市場履歴終了失敗 ${company.ticker}: ${error.message}`);
-      }
-      closed += currentRows.length;
-    }
-
-    const { error } = await supabase.from("market_memberships").insert({
-      company_id: company.id,
-      market_segment: company.market_segment,
-      effective_from: today,
-      is_current: true,
-      source: "jpx_market_master_repair",
-      source_reference: "all_market_companies",
-    });
+    // 現行行は会社ごとに1件という一意制約があるため、
+    // 終了して新規追加するのではなく現行行を直接補正する。
+    const { error } = await supabase
+      .from("market_memberships")
+      .update({
+        market_segment: company.market_segment,
+        effective_from: today,
+        effective_to: null,
+        is_current: true,
+        source: "jpx_market_master_repair",
+        source_reference: "all_market_companies",
+      })
+      .eq("id", current.id);
 
     if (error) {
-      throw new Error(`市場履歴追加失敗 ${company.ticker}: ${error.message}`);
+      throw new Error(`市場履歴更新失敗 ${company.ticker}: ${error.message}`);
     }
-    inserted += 1;
+
+    updated += 1;
   }
 
   console.log("=== 市場履歴補正完了 ===");
   console.log(`上場会社: ${listed.length}`);
   console.log(`追加: ${inserted}`);
-  console.log(`終了: ${closed}`);
+  console.log(`更新: ${updated}`);
   console.log(`変更なし: ${unchanged}`);
 }
 
