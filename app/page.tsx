@@ -6,6 +6,7 @@ import {
   FREE_VISIBLE_S_RANK_LIMIT,
   isProUser,
 } from "@/lib/pro-engine";
+import { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";
 
 type NewsItem = {
   id: string | number;
@@ -70,30 +71,67 @@ function focusToneClasses(tone: FocusGroup["tone"]) {
 }
 
 async function loadCompanies() {
-  const { data } = await supabaseAdmin
-    .from("company_analyses")
-    .select("ticker, company_name, score, danger_score, risk_level, financials")
-    .neq("risk_level", "EXCLUDED")
-    .limit(1000);
+  const companies = await loadAllSupabaseRows<RankingCompany>(
+    "グロース市場ホーム会社取得失敗",
+    (from, to) =>
+      supabaseAdmin
+        .from("company_analyses")
+        .select("ticker, company_name, score, danger_score, risk_level, financials")
+        .eq("market_segment", "growth")
+        .neq("risk_level", "EXCLUDED")
+        .order("ticker", { ascending: true })
+        .range(from, to)
+  );
 
-  return ((data ?? []) as RankingCompany[]).filter(isActiveCompany);
+  return companies.filter(isActiveCompany);
 }
 
-async function loadNews() {
-  const { data } = await supabaseAdmin
-    .from("growth_news")
-    .select("id, ticker, title, summary, url, source, published_at, created_at")
-    .not("url", "is", null)
-    .order("published_at", { ascending: false })
-    .limit(3);
+function chunkTickers(tickers: string[], size = 100) {
+  const chunks: string[][] = [];
+  for (let index = 0; index < tickers.length; index += size) {
+    chunks.push(tickers.slice(index, index + size));
+  }
+  return chunks;
+}
 
-  return data ?? [];
+async function loadNews(growthTickers: string[]) {
+  if (growthTickers.length === 0) return [];
+
+  const batches = await Promise.all(
+    chunkTickers(growthTickers).map(async (tickers) => {
+      const { data, error } = await supabaseAdmin
+        .from("growth_news")
+        .select("id, ticker, title, summary, url, source, published_at, created_at")
+        .in("ticker", tickers)
+        .not("url", "is", null)
+        .order("published_at", { ascending: false })
+        .limit(3);
+
+      if (error) {
+        console.error("グロースニュース取得失敗", error);
+        return [];
+      }
+
+      return (data ?? []) as NewsItem[];
+    })
+  );
+
+  return batches
+    .flat()
+    .sort((a, b) => {
+      const aTime = a.published_at ? new Date(a.published_at).getTime() : 0;
+      const bTime = b.published_at ? new Date(b.published_at).getTime() : 0;
+      return bTime - aTime;
+    })
+    .slice(0, 3);
 }
 
 export default async function HomePage() {
   const companies = await loadCompanies();
-  const news = await loadNews();
-  const isPro = await isProUser();
+  const [news, isPro] = await Promise.all([
+    loadNews(companies.map((company) => company.ticker)),
+    isProUser(),
+  ]);
 
   const searchCompanies = companies.map((company) => ({
     ticker: company.ticker,
@@ -204,7 +242,7 @@ export default async function HomePage() {
           </h1>
 
           <p className="mt-5 max-w-4xl text-sm leading-7 text-slate-300 sm:mt-6 sm:text-lg sm:leading-9">
-            決算探偵は、グロース市場に特化した財務分析ダッシュボードです。
+            このページでは、グロース市場の企業を決算データから分析します。
             売上成長、営業利益、営業CF、資金繰り、リスクシグナルを横断的に整理し、
             「伸びている会社」と「注意すべき会社」を見える化します。
           </p>
