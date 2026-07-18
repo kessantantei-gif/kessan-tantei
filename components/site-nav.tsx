@@ -10,27 +10,9 @@ type NavItem = {
   accent?: boolean;
 };
 
-function marketBase(pathname: string) {
-  if (pathname === "/standard" || pathname.startsWith("/standard/")) return "/standard";
-  if (pathname === "/prime" || pathname.startsWith("/prime/")) return "/prime";
-  if (pathname === "/" || pathname === "/growth" || pathname.startsWith("/ranking")) return "/growth";
-  return "";
-}
-
-function navItems(pathname: string): NavItem[] {
-  const base = marketBase(pathname);
-  const rankingHref =
-    base === "/standard"
-      ? "/standard/ranking"
-      : base === "/prime"
-        ? "/prime/ranking"
-        : pathname === "/" || pathname === "/markets"
-          ? "/markets#market-ranking"
-          : "/ranking";
-
+function navItems(): NavItem[] {
   return [
     { href: "/markets", label: "市場を選ぶ", shortLabel: "市場" },
-    { href: rankingHref, label: "ランキング", shortLabel: "順位" },
     { href: "/updates", label: "今日の更新", shortLabel: "更新" },
     { href: "/watchlist", label: "ウォッチ", shortLabel: "保存" },
     { href: "/alerts", label: "アラート", shortLabel: "通知" },
@@ -41,14 +23,12 @@ function navItems(pathname: string): NavItem[] {
 }
 
 function isActivePath(pathname: string, href: string) {
-  const cleanHref = href.split("#")[0];
-  if (cleanHref === "/") return pathname === "/" || pathname === "/growth";
-  return pathname === cleanHref || pathname.startsWith(`${cleanHref}/`);
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export default function SiteNav() {
   const pathname = usePathname();
-  const items = navItems(pathname);
+  const items = navItems();
 
   return (
     <nav
