@@ -9,6 +9,7 @@
     "lint": "eslint",
     "backfill:history": "tsx scripts/backfill-zero-financials.ts",
     "backfill:edinet-all-markets": "DOTENV_CONFIG_PATH=.env.local tsx scripts/run-edinet-backfill-safe.ts --days=400 --continue-on-error",
+    "retry:edinet-failures": "DOTENV_CONFIG_PATH=.env.local tsx scripts/retry-edinet-failures.ts",
     "classify:all-markets": "DOTENV_CONFIG_PATH=.env.local tsx scripts/classify-all-market-special-securities.ts",
     "repair:market-memberships": "DOTENV_CONFIG_PATH=.env.local tsx scripts/repair-market-memberships.ts",
     "repair:financial-data": "tsx scripts/repair-financial-anomalies.ts",
