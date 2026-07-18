@@ -4,13 +4,13 @@ export default function TermsPage() {
   return (
     <main className="min-h-screen bg-[#050816] px-4 py-8 text-white sm:px-8">
       <div className="mx-auto max-w-4xl">
-        <Link href="/" className="text-2xl font-black">決算探偵</Link>
+        <Link href="/markets" className="text-2xl font-black">決算探偵</Link>
 
         <h1 className="mt-8 text-4xl font-black">利用規約</h1>
 
         <div className="mt-8 space-y-6 leading-8 text-slate-300">
           <p>
-            本利用規約は、決算探偵が提供するグロース市場特化の財務分析サービスの利用条件を定めるものです。
+            本利用規約は、決算探偵が提供する日本株全市場対応の財務分析サービスの利用条件を定めるものです。
           </p>
 
           <section>
