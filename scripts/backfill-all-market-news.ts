@@ -9,7 +9,7 @@ import {
 
 const batchSize = Math.max(1, Number(process.env.NEWS_BACKFILL_BATCH_SIZE || 50));
 const concurrency = Math.max(1, Number(process.env.NEWS_BACKFILL_CONCURRENCY || 8));
-const perCompany = Math.max(1, Number(process.env.NEWS_PER_COMPANY || 1));
+const perCompany = Math.max(1, Number(process.env.NEWS_PER_COMPANY || 5));
 const stateKey = "backfill_all_market_news_offset";
 const missingOnly = process.argv.includes("--missing-only");
 
@@ -83,9 +83,10 @@ async function main() {
 
   if (process.argv.includes("--restart")) await saveOffset(0);
 
-  console.log(missingOnly ? "=== ニュース未取得会社の再取得 ===" : "=== 全市場ニュース初回取得 ===");
+  console.log(missingOnly ? "=== ニュース未取得会社の再取得 ===" : "=== 全市場ニュース複数件取得 ===");
   console.log(`全上場会社: ${allCompanies.length}`);
   console.log(`今回の対象会社: ${companies.length}`);
+  console.log(`1社あたり最大取得件数: ${perCompany}`);
   console.log(`開始位置: ${offset}`);
   console.log(`1回の処理件数: ${batchSize}`);
   console.log(`同時処理数: ${concurrency}`);
@@ -119,7 +120,7 @@ async function main() {
     );
   }
 
-  console.log(missingOnly ? "=== ニュース未取得会社の再取得完了 ===" : "=== 全市場ニュース初回取得完了 ===");
+  console.log(missingOnly ? "=== ニュース未取得会社の再取得完了 ===" : "=== 全市場ニュース複数件取得完了 ===");
   console.log(`追加: ${grandTotal.inserted}`);
   console.log(`重複: ${grandTotal.skipped}`);
   console.log(`除外: ${grandTotal.blocked}`);
