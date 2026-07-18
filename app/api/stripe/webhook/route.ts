@@ -48,8 +48,12 @@ async function upsertProfile(update: ProfileUpdate) {
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const clerkUserId = session.metadata?.clerk_user_id;
-  const stripeCustomerId = customerId(session.customer as string | Stripe.Customer | Stripe.DeletedCustomer | null);
-  const currentSubscriptionId = subscriptionId(session.subscription as string | Stripe.Subscription | null | undefined);
+  const stripeCustomerId = customerId(
+    session.customer as string | Stripe.Customer | Stripe.DeletedCustomer | null
+  );
+  const currentSubscriptionId = subscriptionId(
+    session.subscription as string | Stripe.Subscription | null | undefined
+  );
 
   let status: string | null = null;
   if (currentSubscriptionId) {
@@ -68,7 +72,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   if (isProStatus(status)) {
     await supabaseAdmin.from("acquisition_events").insert({
-      event_name: "checkout_complete",
+      event_name: "pro_conversion",
       path: "/pricing",
       clerk_user_id: clerkUserId || null,
       utm_source: session.metadata?.utm_source || null,
@@ -79,13 +83,16 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       metadata: {
         stripe_customer_id: stripeCustomerId,
         stripe_subscription_id: currentSubscriptionId,
+        stripe_event: "checkout.session.completed",
       },
     });
   }
 }
 
 async function handleSubscription(subscription: Stripe.Subscription) {
-  const stripeCustomerId = customerId(subscription.customer as string | Stripe.Customer | Stripe.DeletedCustomer | null);
+  const stripeCustomerId = customerId(
+    subscription.customer as string | Stripe.Customer | Stripe.DeletedCustomer | null
+  );
   const clerkUserId = subscription.metadata?.clerk_user_id;
   const status = subscription.status;
 
@@ -104,7 +111,10 @@ export async function POST(req: Request) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!signature || !webhookSecret) {
-    return NextResponse.json({ error: "missing stripe webhook configuration" }, { status: 400 });
+    return NextResponse.json(
+      { error: "missing stripe webhook configuration" },
+      { status: 400 }
+    );
   }
 
   const body = await req.text();
@@ -130,7 +140,9 @@ export async function POST(req: Request) {
       case "invoice.payment_failed": {
         const invoice = event.data.object as InvoiceWithSubscription;
         const currentSubscriptionId = subscriptionId(invoice.subscription);
-        const stripeCustomerId = customerId(invoice.customer as string | Stripe.Customer | Stripe.DeletedCustomer | null);
+        const stripeCustomerId = customerId(
+          invoice.customer as string | Stripe.Customer | Stripe.DeletedCustomer | null
+        );
         if (currentSubscriptionId) {
           const subscription = await stripe.subscriptions.retrieve(currentSubscriptionId);
           await handleSubscription(subscription);
