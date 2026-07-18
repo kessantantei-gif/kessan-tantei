@@ -1,6 +1,11 @@
 import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
+const SAME_PERIOD_CORRECTION_ONLY_DOC_IDS = new Set([
+  "S100XANE",
+  "S100YDH5",
+]);
+
 async function fetchHistory() {
   const latestDocID = (process.env.DOC_ID ?? "").trim();
   const suppliedDocIds = (process.env.HISTORY_DOC_IDS ?? "")
@@ -9,6 +14,14 @@ async function fetchHistory() {
     .filter((value) => /^S100[A-Z0-9]+$/.test(value));
 
   if (suppliedDocIds.length > 0) {
+    // この2件は候補がすべて同一決算期の訂正系列。
+    // 最新書類だけを履歴入力へ渡し、古い訂正系列で代表書類が落ちるのを防ぐ。
+    if (latestDocID && SAME_PERIOD_CORRECTION_ONLY_DOC_IDS.has(latestDocID)) {
+      console.log("同一決算期の訂正系列につき最新書類のみ使用:", latestDocID);
+      console.log(latestDocID);
+      return;
+    }
+
     // analyze-company.ts は同一決算期で最初に現れた書類を保持する。
     // 最新書類を必ず先頭に置き、その後に残りの候補を渡す。
     const newestFirst = Array.from(
