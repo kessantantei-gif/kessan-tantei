@@ -94,8 +94,8 @@ function auditFiles(items: Item[]) {
     if (!exists(file)) add(items, "ERROR", "PAGES", `${file} is missing`);
   }
 
-  if (!exists("public/og-image.png")) {
-    add(items, "WARNING", "SEO", "public/og-image.png is missing or not tracked");
+  if (!exists("public/og-image-all-markets.png")) {
+    add(items, "WARNING", "SEO", "public/og-image-all-markets.png is missing or not tracked");
   }
 }
 

@@ -151,8 +151,8 @@ function auditFiles(items: AuditItem[]) {
     if (!exists(seoFile)) add(items, "SEO", "ERROR", `${seoFile} is missing`);
   }
 
-  if (!exists("public/og-image.png")) {
-    add(items, "SEO", "WARNING", "public/og-image.png is missing or not tracked");
+  if (!exists("public/og-image-all-markets.png")) {
+    add(items, "SEO", "WARNING", "public/og-image-all-markets.png is missing or not tracked");
   }
 }
 

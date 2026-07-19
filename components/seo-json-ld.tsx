@@ -30,7 +30,7 @@ export function organizationJsonLd() {
     "@type": "Organization",
     name: "決算探偵",
     url: "https://kessan-tantei.jp",
-    logo: "https://kessan-tantei.jp/og-image.png",
+    logo: "https://kessan-tantei.jp/og-image-all-markets.png",
   };
 }
 

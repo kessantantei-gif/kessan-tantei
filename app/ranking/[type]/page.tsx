@@ -64,13 +64,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       siteName: "決算探偵",
       locale: "ja_JP",
       type: "website",
-      images: [{ url: `${siteUrl}/og-image.png`, width: 1200, height: 630, alt: definition.title }],
+      images: [{ url: `${siteUrl}/og-image-all-markets.png`, width: 1200, height: 630, alt: definition.title }],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description: definition.description,
-      images: [`${siteUrl}/og-image.png`],
+      images: [`${siteUrl}/og-image-all-markets.png`],
     },
   };
 }

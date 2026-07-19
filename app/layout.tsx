@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "https://kessan-tantei.jp/og-image.png",
+        url: "https://kessan-tantei.jp/og-image-all-markets.png",
         width: 1200,
         height: 630,
         alt: "決算探偵 OGP",
@@ -64,7 +64,7 @@ export const metadata: Metadata = {
     title: "決算探偵 | 日本株全市場の財務分析ランキング",
     description:
       "グロース・スタンダード・プライムの上場企業を、決算データから比較・分析できます。",
-    images: ["https://kessan-tantei.jp/og-image.png"],
+    images: ["https://kessan-tantei.jp/og-image-all-markets.png"],
   },
 };
 

@@ -144,7 +144,7 @@ export async function generateMetadata({
       type: "website",
       images: [
         {
-          url: "https://kessan-tantei.jp/og-image.png",
+          url: "https://kessan-tantei.jp/og-image-all-markets.png",
           width: 1200,
           height: 630,
           alt: "決算探偵",
@@ -155,7 +155,7 @@ export async function generateMetadata({
       card: "summary_large_image",
       title,
       description,
-      images: ["https://kessan-tantei.jp/og-image.png"],
+      images: ["https://kessan-tantei.jp/og-image-all-markets.png"],
     },
   };
 }

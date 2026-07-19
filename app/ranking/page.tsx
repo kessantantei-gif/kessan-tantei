@@ -43,13 +43,13 @@ export const metadata: Metadata = {
     siteName: "決算探偵",
     locale: "ja_JP",
     type: "website",
-    images: [{ url: "https://kessan-tantei.jp/og-image.png", width: 1200, height: 630, alt: "決算ランキング一覧" }],
+    images: [{ url: "https://kessan-tantei.jp/og-image-all-markets.png", width: 1200, height: 630, alt: "決算ランキング一覧" }],
   },
   twitter: {
     card: "summary_large_image",
     title,
     description,
-    images: ["https://kessan-tantei.jp/og-image.png"],
+    images: ["https://kessan-tantei.jp/og-image-all-markets.png"],
   },
 };
 

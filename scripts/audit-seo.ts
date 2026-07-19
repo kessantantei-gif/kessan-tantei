@@ -22,7 +22,7 @@ const files = {
   companyLayout: "app/company/[ticker]/layout.tsx",
   marketRanking: "components/market-ranking-page.tsx",
   jsonLd: "components/seo-json-ld.tsx",
-  og: "public/og-image.png",
+  og: "public/og-image-all-markets.png",
 };
 
 const sourceRoots = ["app", "components", "lib"];
