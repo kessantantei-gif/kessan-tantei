@@ -13,8 +13,8 @@ type CompanyResult = {
 };
 
 const siteUrl = "https://kessan-tantei.jp";
-const shareUrl = `${siteUrl}/markets?share=all-markets-v2`;
-const shareImage = `${siteUrl}/og-image-all-markets.png?v=2`;
+const shareUrl = `${siteUrl}/markets`;
+const shareImage = `${siteUrl}/markets/opengraph-image`;
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
