@@ -282,13 +282,15 @@ export default async function NewsPage({ searchParams }: PageProps) {
   let resultCount = 0;
   let currentPage = requestedPage;
   let totalNewsCount = 0;
+  let listedCompanies: CompanyMaster[] = [];
 
   try {
-    const [marketTickers, listedCompanies, totalCount] = await Promise.all([
+    const [marketTickers, loadedCompanies, totalCount] = await Promise.all([
       loadMarketTickers(selectedMarket),
       loadListedCompanies(),
       loadTotalNewsCount(),
     ]);
+    listedCompanies = loadedCompanies;
     const companySearchTickers = await loadCompanySearchTickers(
       query,
       selectedMarket,
