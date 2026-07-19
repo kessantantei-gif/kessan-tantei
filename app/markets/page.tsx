@@ -12,6 +12,10 @@ type CompanyResult = {
   market_segment: string | null;
 };
 
+const siteUrl = "https://kessan-tantei.jp";
+const shareUrl = `${siteUrl}/markets?share=all-markets-v2`;
+const shareImage = `${siteUrl}/og-image-all-markets.png?v=2`;
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -20,6 +24,30 @@ export const metadata: Metadata = {
   description:
     "グロース・スタンダード・プライムの市場別に、決算ランキングと財務分析を確認できます。",
   alternates: { canonical: "/markets" },
+  openGraph: {
+    title: "決算探偵 | 日本株全市場の財務分析ランキング",
+    description:
+      "グロース・スタンダード・プライムの上場企業を、決算データから成長性・収益性・キャッシュ・財務リスクで比較できます。",
+    url: shareUrl,
+    siteName: "決算探偵",
+    locale: "ja_JP",
+    type: "website",
+    images: [
+      {
+        url: shareImage,
+        width: 1200,
+        height: 630,
+        alt: "決算探偵 日本株全市場の財務分析",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "決算探偵 | 日本株全市場の財務分析ランキング",
+    description:
+      "グロース・スタンダード・プライムの上場企業を、決算データから比較・分析できます。",
+    images: [shareImage],
+  },
 };
 
 const marketLabels: Record<string, string> = {
