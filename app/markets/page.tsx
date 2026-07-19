@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import AllMarketCompanySearch from "@/components/all-market-company-search";
 import MarketPortalCard from "@/components/market-portal-card";
+import { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";
 import { marketList } from "@/lib/markets";
 import { supabaseAdmin } from "@/lib/supabase";
-
-type SearchParams = Promise<{ q?: string }>;
 
 type CompanyResult = {
   ticker: string;
@@ -50,30 +49,22 @@ export const metadata: Metadata = {
   },
 };
 
-const marketLabels: Record<string, string> = {
-  growth: "グロース",
-  standard: "スタンダード",
-  prime: "プライム",
-};
+async function loadCompanies() {
+  return loadAllSupabaseRows<CompanyResult>(
+    "全市場検索会社取得失敗",
+    (from, to) =>
+      supabaseAdmin
+        .from("all_market_companies")
+        .select("ticker, company_name, market_segment")
+        .eq("listing_status", "listed")
+        .in("market_segment", ["growth", "standard", "prime"])
+        .order("ticker", { ascending: true })
+        .range(from, to)
+  );
+}
 
-export default async function MarketsPage({ searchParams }: { searchParams: SearchParams }) {
-  const params = await searchParams;
-  const query = (params.q ?? "").trim();
-  let companies: CompanyResult[] = [];
-
-  if (query) {
-    const escaped = query.replace(/[%_,()]/g, " ").trim();
-    const { data } = await supabaseAdmin
-      .from("all_market_companies")
-      .select("ticker, company_name, market_segment")
-      .eq("listing_status", "listed")
-      .in("market_segment", ["growth", "standard", "prime"])
-      .or(`ticker.ilike.%${escaped}%,company_name.ilike.%${escaped}%`)
-      .order("ticker", { ascending: true })
-      .limit(30);
-
-    companies = (data ?? []) as CompanyResult[];
-  }
+export default async function MarketsPage() {
+  const companies = await loadCompanies();
 
   return (
     <main className="min-h-screen bg-[#050816] text-white">
@@ -95,59 +86,9 @@ export default async function MarketsPage({ searchParams }: { searchParams: Sear
         <section className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-8">
           <h2 className="text-2xl font-black">全市場から会社を検索</h2>
           <p className="mt-3 text-sm leading-7 text-slate-400">
-            会社名または証券コードで、3市場を横断して検索できます。
+            会社名の一部、ひらがな・カタカナ、英字、証券コードで3市場を横断検索できます。
           </p>
-
-          <form action="/markets" method="get" className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]">
-            <input
-              type="search"
-              name="q"
-              defaultValue={query}
-              placeholder="会社名・証券コードを入力"
-              className="min-h-12 rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none placeholder:text-slate-500 focus:border-cyan-400/60"
-            />
-            <button
-              type="submit"
-              className="min-h-12 rounded-2xl bg-cyan-300 px-6 font-black text-slate-950 transition hover:bg-cyan-200"
-            >
-              検索
-            </button>
-          </form>
-
-          {query ? (
-            <div className="mt-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm font-bold text-slate-300">
-                  「{query}」の検索結果：{companies.length}社
-                </p>
-                <Link href="/markets" className="text-sm font-bold text-cyan-200 hover:text-cyan-100">
-                  検索を解除
-                </Link>
-              </div>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {companies.length === 0 ? (
-                  <p className="rounded-2xl border border-white/10 bg-black/20 p-4 text-slate-400 sm:col-span-2 lg:col-span-3">
-                    一致する上場会社はありません。
-                  </p>
-                ) : (
-                  companies.map((company) => (
-                    <Link
-                      key={company.ticker}
-                      href={`/company/${company.ticker}`}
-                      className="rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:border-cyan-400/40 hover:bg-white/10"
-                    >
-                      <p className="text-xs font-black text-cyan-200">
-                        {marketLabels[company.market_segment ?? ""] ?? "市場未登録"}
-                      </p>
-                      <p className="mt-2 font-black text-white">{company.company_name}</p>
-                      <p className="mt-1 text-sm text-slate-500">{company.ticker}</p>
-                    </Link>
-                  ))
-                )}
-              </div>
-            </div>
-          ) : null}
+          <AllMarketCompanySearch companies={companies} />
         </section>
 
         <section id="market-ranking" className="scroll-mt-24">
