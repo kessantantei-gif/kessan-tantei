@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import NewsSearchForm from "@/components/news-search-form";
 import { supabaseAdmin } from "@/lib/supabase";
 import { isBlockedNews } from "@/lib/news-filter";
+import { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -113,27 +115,67 @@ async function loadMarketTickers(market: MarketSlug) {
   return (data ?? []).map((row) => row.ticker as string);
 }
 
-async function loadCompanySearchTickers(query: string, market: MarketSlug) {
-  if (!query) return null;
+async function loadListedCompanies() {
+  return loadAllSupabaseRows<CompanyMaster>(
+    "ニュース検索会社マスタ取得失敗",
+    (from, to) =>
+      supabaseAdmin
+        .from("all_market_companies")
+        .select("ticker, company_name, market_segment")
+        .eq("listing_status", "listed")
+        .in("market_segment", ["growth", "standard", "prime"])
+        .order("ticker", { ascending: true })
+        .range(from, to)
+  );
+}
 
-  const term = safeSearchTerm(query);
-  if (!term) return null;
+function toKatakana(value: string) {
+  return value.replace(/[ぁ-ゖ]/g, (char) =>
+    String.fromCharCode(char.charCodeAt(0) + 0x60)
+  );
+}
 
-  let companyQuery = supabaseAdmin
-    .from("all_market_companies")
-    .select("ticker")
-    .eq("listing_status", "listed")
-    .or(`ticker.ilike.%${term}%,company_name.ilike.%${term}%`)
-    .limit(300);
+function normalizeCompanySearch(value: string) {
+  return toKatakana(value)
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[‐‑‒–—―ーｰ]/g, "")
+    .replace(/[・,，.．/／()（）\[\]【】「」『』'’`´\s　]/g, "")
+    .replace(/株式会社|有限会社|合同会社|ホールディングス|グループ/g, "");
+}
 
-  if (market !== "all") {
-    companyQuery = companyQuery.eq("market_segment", market);
+function isSubsequence(query: string, target: string) {
+  if (!query) return true;
+  let index = 0;
+  for (const char of target) {
+    if (char === query[index]) index += 1;
+    if (index === query.length) return true;
   }
+  return false;
+}
 
-  const { data, error } = await companyQuery;
-  if (error) throw new Error(`会社検索失敗: ${error.message}`);
+function companyMatches(company: CompanyMaster, query: string) {
+  const normalizedQuery = normalizeCompanySearch(query);
+  if (!normalizedQuery) return false;
+  const ticker = normalizeCompanySearch(company.ticker);
+  const name = normalizeCompanySearch(company.company_name);
+  return (
+    ticker.includes(normalizedQuery) ||
+    name.includes(normalizedQuery) ||
+    (normalizedQuery.length >= 2 && isSubsequence(normalizedQuery, name))
+  );
+}
 
-  const tickers = (data ?? []).map((row) => row.ticker as string);
+async function loadCompanySearchTickers(
+  query: string,
+  market: MarketSlug,
+  companies: CompanyMaster[]
+) {
+  if (!query) return null;
+  const tickers = companies
+    .filter((company) => market === "all" || company.market_segment === market)
+    .filter((company) => companyMatches(company, query))
+    .map((company) => company.ticker);
   return tickers.length > 0 ? tickers : null;
 }
 
@@ -242,11 +284,16 @@ export default async function NewsPage({ searchParams }: PageProps) {
   let totalNewsCount = 0;
 
   try {
-    const [marketTickers, companySearchTickers, totalCount] = await Promise.all([
+    const [marketTickers, listedCompanies, totalCount] = await Promise.all([
       loadMarketTickers(selectedMarket),
-      loadCompanySearchTickers(query, selectedMarket),
+      loadListedCompanies(),
       loadTotalNewsCount(),
     ]);
+    const companySearchTickers = await loadCompanySearchTickers(
+      query,
+      selectedMarket,
+      listedCompanies
+    );
 
     totalNewsCount = totalCount;
 
@@ -320,24 +367,11 @@ export default async function NewsPage({ searchParams }: PageProps) {
             ))}
           </div>
 
-          <form action="/news" method="get" className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]">
-            {selectedMarket !== "all" ? (
-              <input type="hidden" name="market" value={selectedMarket} />
-            ) : null}
-            <input
-              type="search"
-              name="q"
-              defaultValue={query}
-              placeholder="会社名・証券コード・ニュース見出しで検索"
-              className="min-h-12 rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none placeholder:text-slate-500 focus:border-cyan-400/60"
-            />
-            <button
-              type="submit"
-              className="min-h-12 rounded-2xl bg-cyan-300 px-6 font-black text-slate-950 transition hover:bg-cyan-200"
-            >
-              検索
-            </button>
-          </form>
+          <NewsSearchForm
+            companies={listedCompanies}
+            market={selectedMarket}
+            initialQuery={query}
+          />
 
           {query ? (
             <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-400">

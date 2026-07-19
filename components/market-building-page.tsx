@@ -98,16 +98,34 @@ async function loadMarketData(marketSlug: MarketPageSlug) {
     throw new Error(`${marketSlug}会社マスタ件数取得失敗: ${masterResult.error.message}`);
   }
 
-  const tickerSet = new Set(companies.map((company) => company.ticker));
-  const { data: recentNews } = await supabaseAdmin
-    .from("growth_news")
-    .select("id, ticker, title, url, source, published_at")
-    .not("url", "is", null)
-    .order("published_at", { ascending: false, nullsFirst: false })
-    .limit(300);
+  const tickers = companies.map((company) => company.ticker);
+  const tickerChunks: string[][] = [];
+  for (let index = 0; index < tickers.length; index += 100) {
+    tickerChunks.push(tickers.slice(index, index + 100));
+  }
 
-  const news = ((recentNews ?? []) as NewsItem[])
-    .filter((item) => item.ticker && tickerSet.has(item.ticker))
+  const newsBatches = await Promise.all(
+    tickerChunks.map(async (tickerChunk) => {
+      const { data, error } = await supabaseAdmin
+        .from("growth_news")
+        .select("id, ticker, title, url, source, published_at")
+        .in("ticker", tickerChunk)
+        .not("url", "is", null)
+        .order("published_at", { ascending: false, nullsFirst: false })
+        .limit(10);
+
+      if (error) throw new Error(`${marketSlug}ニュース取得失敗: ${error.message}`);
+      return (data ?? []) as NewsItem[];
+    })
+  );
+
+  const news = newsBatches
+    .flat()
+    .sort((a, b) => {
+      const aTime = a.published_at ? new Date(a.published_at).getTime() : 0;
+      const bTime = b.published_at ? new Date(b.published_at).getTime() : 0;
+      return bTime - aTime;
+    })
     .slice(0, 3);
 
   return {
