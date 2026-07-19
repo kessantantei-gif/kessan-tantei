@@ -1,0 +1,221 @@
+name: Apply news search and market news fix
+
+on:
+  push:
+    paths:
+      - ".github/workflows/apply-news-search-and-market-news-fix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          market_path = Path("components/market-building-page.tsx")
+          text = market_path.read_text()
+          anchor = '''function formatNewsDate(value?: string | null) {
+            if (!value) return "日付不明";
+            return new Date(value).toLocaleDateString("ja-JP", {
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            });
+          }
+          '''
+          replacement = anchor + '''
+          function chunkTickers(tickers: string[], size = 100) {
+            const chunks: string[][] = [];
+            for (let index = 0; index < tickers.length; index += size) {
+              chunks.push(tickers.slice(index, index + size));
+            }
+            return chunks;
+          }
+          '''
+          text = text.replace(anchor, replacement)
+          old = '''  const tickerSet = new Set(companies.map((company) => company.ticker));
+            const { data: recentNews } = await supabaseAdmin
+              .from("growth_news")
+              .select("id, ticker, title, url, source, published_at")
+              .not("url", "is", null)
+              .order("published_at", { ascending: false, nullsFirst: false })
+              .limit(300);
+
+            const news = ((recentNews ?? []) as NewsItem[])
+              .filter((item) => item.ticker && tickerSet.has(item.ticker))
+              .slice(0, 3);
+          '''
+          new = '''  const newsBatches = await Promise.all(
+              chunkTickers(companies.map((company) => company.ticker)).map(async (tickers) => {
+                const { data, error } = await supabaseAdmin
+                  .from("growth_news")
+                  .select("id, ticker, title, url, source, published_at")
+                  .in("ticker", tickers)
+                  .not("url", "is", null)
+                  .order("published_at", { ascending: false, nullsFirst: false })
+                  .limit(3);
+
+                if (error) return [];
+                return (data ?? []) as NewsItem[];
+              })
+            );
+
+            const news = newsBatches
+              .flat()
+              .sort((a, b) => {
+                const aTime = a.published_at ? new Date(a.published_at).getTime() : 0;
+                const bTime = b.published_at ? new Date(b.published_at).getTime() : 0;
+                return bTime - aTime;
+              })
+              .slice(0, 3);
+          '''
+          if old not in text:
+            raise SystemExit("market news block not found")
+          market_path.write_text(text.replace(old, new))
+
+          news_path = Path("app/news/page.tsx")
+          text = news_path.read_text()
+          text = text.replace(
+            'import { isBlockedNews } from "@/lib/news-filter";\n',
+            'import { isBlockedNews } from "@/lib/news-filter";\nimport { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";\nimport NewsSearch from "@/components/news-search";\n'
+          )
+
+          insert_after = '''function safeSearchTerm(value: string) {
+            return value.replace(/[,%()"']/g, " ").trim();
+          }
+          '''
+          helpers = insert_after + '''
+          function toKatakana(value: string) {
+            return value.replace(/[ぁ-ゖ]/g, (char) =>
+              String.fromCharCode(char.charCodeAt(0) + 0x60)
+            );
+          }
+
+          function normalizeCompanySearch(value: string) {
+            return toKatakana(value)
+              .toLowerCase()
+              .normalize("NFKC")
+              .replace(/株式会社|有限会社|合同会社|ホールディングス|グループ/g, "")
+              .replace(/[‐‑‒–—―ーｰ・,，.．/／()（）\\[\\]【】「」『』'’`´\\s　]/g, "");
+          }
+
+          async function loadAllListedCompanies() {
+            return loadAllSupabaseRows<CompanyMaster>(
+              "ニュース検索会社取得失敗",
+              (from, to) =>
+                supabaseAdmin
+                  .from("all_market_companies")
+                  .select("ticker, company_name, market_segment")
+                  .eq("listing_status", "listed")
+                  .in("market_segment", ["growth", "standard", "prime"])
+                  .order("ticker", { ascending: true })
+                  .range(from, to)
+            );
+          }
+          '''
+          text = text.replace(insert_after, helpers)
+
+          old_func = '''async function loadCompanySearchTickers(query: string, market: MarketSlug) {
+            if (!query) return null;
+
+            const term = safeSearchTerm(query);
+            if (!term) return null;
+
+            let companyQuery = supabaseAdmin
+              .from("all_market_companies")
+              .select("ticker")
+              .eq("listing_status", "listed")
+              .or(`ticker.ilike.%${term}%,company_name.ilike.%${term}%`)
+              .limit(300);
+
+            if (market !== "all") {
+              companyQuery = companyQuery.eq("market_segment", market);
+            }
+
+            const { data, error } = await companyQuery;
+            if (error) throw new Error(`会社検索失敗: ${error.message}`);
+
+            const tickers = (data ?? []).map((row) => row.ticker as string);
+            return tickers.length > 0 ? tickers : null;
+          }
+          '''
+          new_func = '''async function loadCompanySearchTickers(
+            query: string,
+            market: MarketSlug,
+            companies: CompanyMaster[]
+          ) {
+            if (!query) return null;
+
+            const normalizedQuery = normalizeCompanySearch(query);
+            if (!normalizedQuery) return null;
+
+            const tickers = companies
+              .filter((company) => market === "all" || company.market_segment === market)
+              .filter((company) => {
+                const ticker = normalizeCompanySearch(company.ticker);
+                const name = normalizeCompanySearch(company.company_name);
+                return ticker.includes(normalizedQuery) || name.includes(normalizedQuery);
+              })
+              .map((company) => company.ticker);
+
+            return tickers.length > 0 ? tickers : null;
+          }
+          '''
+          if old_func not in text:
+            raise SystemExit("company search function not found")
+          text = text.replace(old_func, new_func)
+
+          text = text.replace(
+            '  let totalNewsCount = 0;\n\n  try {\n    const [marketTickers, companySearchTickers, totalCount] = await Promise.all([\n      loadMarketTickers(selectedMarket),\n      loadCompanySearchTickers(query, selectedMarket),\n      loadTotalNewsCount(),\n    ]);\n',
+            '  let totalNewsCount = 0;\n  let searchCompanies: CompanyMaster[] = [];\n\n  try {\n    searchCompanies = await loadAllListedCompanies();\n    const [marketTickers, companySearchTickers, totalCount] = await Promise.all([\n      loadMarketTickers(selectedMarket),\n      loadCompanySearchTickers(query, selectedMarket, searchCompanies),\n      loadTotalNewsCount(),\n    ]);\n'
+          )
+
+          old_form = '''          <form action="/news" method="get" className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]">
+                    {selectedMarket !== "all" ? (
+                      <input type="hidden" name="market" value={selectedMarket} />
+                    ) : null}
+                    <input
+                      type="search"
+                      name="q"
+                      defaultValue={query}
+                      placeholder="会社名・証券コード・ニュース見出しで検索"
+                      className="min-h-12 rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none placeholder:text-slate-500 focus:border-cyan-400/60"
+                    />
+                    <button
+                      type="submit"
+                      className="min-h-12 rounded-2xl bg-cyan-300 px-6 font-black text-slate-950 transition hover:bg-cyan-200"
+                    >
+                      検索
+                    </button>
+                  </form>
+          '''
+          new_form = '''          <NewsSearch
+                    companies={searchCompanies}
+                    market={selectedMarket}
+                    initialQuery={query}
+                  />
+          '''
+          if old_form not in text:
+            raise SystemExit("news search form not found")
+          news_path.write_text(text.replace(old_form, new_form))
+          PY
+
+      - name: Remove one-time workflow
+        run: rm .github/workflows/apply-news-search-and-market-news-fix.yml
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/market-building-page.tsx app/news/page.tsx .github/workflows/apply-news-search-and-market-news-fix.yml
+          git commit -m "Fix market news coverage and news search"
+          git push
