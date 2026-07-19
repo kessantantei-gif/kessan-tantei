@@ -1,0 +1,56 @@
+name: Secure Pro boundaries
+
+on:
+  push:
+    paths:
+      - ".github/workflows/secure-pro-boundaries.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  secure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Protect Pro analysis API and add audit
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          route = Path('app/api/company/[ticker]/pro-analysis/route.ts')
+          text = route.read_text()
+          if 'import { isProUser } from "@/lib/pro-engine";' not in text:
+              text = text.replace(
+                  'import { supabaseAdmin } from "@/lib/supabase";',
+                  'import { supabaseAdmin } from "@/lib/supabase";\nimport { isProUser } from "@/lib/pro-engine";'
+              )
+          marker = 'export async function GET(_req: Request, { params }: RouteProps) {\n'
+          guard = '''export async function GET(_req: Request, { params }: RouteProps) {\n  if (!(await isProUser())) {\n    return NextResponse.json({ error: "Pro subscription required" }, { status: 403 });\n  }\n\n'''
+          if guard not in text:
+              if marker not in text:
+                  raise SystemExit('GET marker not found')
+              text = text.replace(marker, guard, 1)
+          route.write_text(text)
+
+          audit = Path('scripts/audit-pro-boundaries.ts')
+          audit.write_text('''import fs from "node:fs";\n\nconst errors: string[] = [];\nconst route = fs.readFileSync("app/api/company/[ticker]/pro-analysis/route.ts", "utf8");\nconst component = fs.readFileSync("components/company-pro-analysis.tsx", "utf8");\n\nif (!route.includes("await isProUser()")) errors.push("Pro analysis API lacks server-side Pro check");\nif (!route.includes("status: 403")) errors.push("Pro analysis API lacks 403 response");\nif (!component.includes('fetch("/api/pro-status"')) errors.push("Pro analysis UI lacks pre-render Pro check");\nif (!component.includes('access === "locked"')) errors.push("Pro analysis UI lacks locked state");\n\nif (errors.length) {\n  console.error(errors.join("\\n"));\n  process.exit(1);\n}\nconsole.log("Pro boundaries: protected");\n''')
+
+          package = Path('package.json')
+          import json
+          data = json.loads(package.read_text())
+          data.setdefault('scripts', {})['audit:pro-boundaries'] = 'tsx scripts/audit-pro-boundaries.ts'
+          package.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+          PY
+
+      - name: Remove workflow and commit
+        run: |
+          rm .github/workflows/secure-pro-boundaries.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Enforce Pro access on server and client"
+          git push
