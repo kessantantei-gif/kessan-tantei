@@ -1,0 +1,152 @@
+name: Fix peer comparison coverage
+
+on:
+  push:
+    paths:
+      - ".github/workflows/fix-peer-comparison-coverage.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Expand peer comparison coverage
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('app/api/company/[ticker]/peer-comparison/route.ts')
+          text = path.read_text()
+
+          text = text.replace(
+            'import { supabaseAdmin } from "@/lib/supabase";\n',
+            'import { supabaseAdmin } from "@/lib/supabase";\nimport { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";\n'
+          )
+
+          old = '''  const { data: peers, error: peerError } = await supabaseAdmin
+    .from("company_analyses")
+    .select("ticker, company_name, score, danger_score, financials, risk_level")
+    .neq("ticker", ticker)
+    .neq("risk_level", "EXCLUDED")
+    .order("score", { ascending: false, nullsFirst: false })
+    .limit(300);
+
+  if (peerError) {
+    return NextResponse.json({ error: "peer fetch failed" }, { status: 500 });
+  }
+
+  const targetCompany = target as CompanyRow;
+  const candidatePeers = (peers ?? []) as CompanyRow[];
+'''
+          new = '''  let candidatePeers: CompanyRow[] = [];
+  try {
+    candidatePeers = await loadAllSupabaseRows<CompanyRow>(
+      "比較候補会社取得失敗",
+      (from, to) =>
+        supabaseAdmin
+          .from("company_analyses")
+          .select("ticker, company_name, score, danger_score, financials, risk_level")
+          .neq("ticker", ticker)
+          .neq("risk_level", "EXCLUDED")
+          .order("ticker", { ascending: true })
+          .range(from, to)
+    );
+  } catch {
+    return NextResponse.json({ error: "peer fetch failed" }, { status: 500 });
+  }
+
+  const targetCompany = target as CompanyRow;
+'''
+          if old not in text:
+            raise SystemExit('peer query block not found')
+          text = text.replace(old, new)
+
+          old2 = '''  if (!Number.isFinite(financial) && !Number.isFinite(growth)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const dangerGap = comparableGap(
+'''
+          new2 = '''  const scoreGap = comparableGap(num(target.score), num(peer.score));
+  const dangerGap = comparableGap(
+    num(target.danger_score),
+    num(peer.danger_score)
+  );
+
+  if (!Number.isFinite(financial) && !Number.isFinite(growth)) {
+    if (scoreGap === null && dangerGap === null) return Number.POSITIVE_INFINITY;
+    return (scoreGap ?? 40) + (dangerGap ?? 20) * 0.5;
+  }
+
+  const dangerGapForBroad = dangerGap;
+'''
+          if old2 not in text:
+            raise SystemExit('broad distance block not found')
+          text = text.replace(old2, new2)
+          text = text.replace('(dangerGap ?? 0) * 0.2 +\n    (dangerGap === null ? 10 : 0)', '(dangerGapForBroad ?? 0) * 0.2 +\n    (dangerGapForBroad === null ? 10 : 0)')
+
+          old3 = '''  const businessCandidates =
+    themeCandidates.length >= 2
+      ? themeCandidates
+      : sectorFallback(targetCompany, candidatePeers);
+'''
+          new3 = '''  const sectorCandidates = sectorFallback(targetCompany, candidatePeers);
+  const businessCandidates =
+    themeCandidates.length >= 2
+      ? uniqueCompanies([...themeCandidates, ...sectorCandidates])
+      : sectorCandidates;
+'''
+          if old3 not in text:
+            raise SystemExit('business candidates block not found')
+          text = text.replace(old3, new3)
+
+          path.write_text(text)
+          PY
+
+      - name: Add comparison coverage audit
+        run: |
+          cat > scripts/audit-peer-comparison.ts <<'EOF'
+          import fs from "node:fs";
+
+          const route = fs.readFileSync("app/api/company/[ticker]/peer-comparison/route.ts", "utf8");
+          const errors: string[] = [];
+
+          if (!route.includes("loadAllSupabaseRows<CompanyRow>")) {
+            errors.push("比較候補が全社取得になっていません");
+          }
+          if (route.includes(".limit(300)")) {
+            errors.push("比較候補に300社上限が残っています");
+          }
+          if (!route.includes("scoreGap") || !route.includes("dangerGap")) {
+            errors.push("財務データ不足時の比較フォールバックがありません");
+          }
+
+          if (errors.length) {
+            console.error(errors.join("\n"));
+            process.exit(1);
+          }
+          console.log("peer comparison coverage: OK");
+          EOF
+
+          node - <<'NODE'
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          pkg.scripts ||= {};
+          pkg.scripts['audit:peer-comparison'] = 'tsx scripts/audit-peer-comparison.ts';
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          NODE
+
+      - name: Remove workflow and commit
+        run: |
+          rm .github/workflows/fix-peer-comparison-coverage.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Expand peer comparison to all companies"
+          git push
