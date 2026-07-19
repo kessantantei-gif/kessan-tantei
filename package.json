@@ -42,7 +42,8 @@
     "cleanup:duplicate-tickers": "tsx scripts/cleanup-duplicate-tickers.ts",
     "normalize:history-periods": "tsx scripts/normalize-history-periods.ts",
     "check:fiscal-periods": "tsx scripts/check-fiscal-period-extraction.ts",
-    "audit:market-order": "tsx scripts/audit-market-display-order.ts"
+    "audit:market-order": "tsx scripts/audit-market-display-order.ts",
+    "audit:pro-boundaries": "tsx scripts/audit-pro-boundaries.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.5.9",

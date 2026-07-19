@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { isProUser } from "@/lib/pro-engine";
 
 type RouteProps = {
   params: Promise<{ ticker: string }>;
@@ -164,6 +165,10 @@ function buildTrendInsight(history: HistoryRow[]) {
 }
 
 export async function GET(_req: Request, { params }: RouteProps) {
+  if (!(await isProUser())) {
+    return NextResponse.json({ error: "Pro subscription required" }, { status: 403 });
+  }
+
   const { ticker } = await params;
 
   const { data, error } = await supabaseAdmin
