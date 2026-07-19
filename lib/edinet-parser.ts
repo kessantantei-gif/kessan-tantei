@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import AdmZip from "adm-zip";
 
-type Financials = {
+export type Financials = {
   revenue: number;
   operatingIncome: number;
   operatingCF: number;
@@ -31,6 +31,103 @@ type NumericFact = {
   name: string;
   contextRef: string;
   value: number;
+};
+
+type MetricDefinition = {
+  exact: string[];
+  contains?: string[];
+  excludes?: string[];
+};
+
+const METRICS: Record<keyof Pick<Financials,
+  | "revenue"
+  | "operatingIncome"
+  | "operatingCF"
+  | "cash"
+  | "currentAssets"
+  | "currentLiabilities"
+  | "assets"
+  | "netAssets"
+>, MetricDefinition> = {
+  revenue: {
+    exact: [
+      "NetSales",
+      "Sales",
+      "Revenue",
+      "Revenues",
+      "RevenueIFRS",
+      "OperatingRevenue",
+      "OperatingRevenueIFRS",
+      "BusinessRevenue",
+      "SalesRevenueNet",
+      "SalesRevenueGoodsNet",
+      "SalesRevenueServicesNet",
+      "RevenueFromContractsWithCustomers",
+      "RevenueFromContractsWithCustomersExcludingAssessedTax",
+    ],
+    contains: ["revenue", "netsales", "salesrevenue"],
+    excludes: ["cost", "segment", "geographic", "perShare", "forecast"],
+  },
+  operatingIncome: {
+    exact: [
+      "OperatingIncome",
+      "OperatingProfit",
+      "OperatingProfitLoss",
+      "OperatingProfitLossIFRS",
+      "OperatingIncomeLoss",
+    ],
+    contains: ["operatingincome", "operatingprofit", "operatingloss"],
+    excludes: ["segment", "forecast", "perShare"],
+  },
+  operatingCF: {
+    exact: [
+      "NetCashProvidedByUsedInOperatingActivities",
+      "NetCashFlowsFromUsedInOperatingActivities",
+      "CashFlowsFromUsedInOperatingActivities",
+      "CashFlowsFromUsedInOperatingActivitiesIFRS",
+    ],
+    contains: ["cashprovidedbyusedinoperatingactivities", "cashflowsfromusedinoperatingactivities"],
+    excludes: ["continuingOperations", "discontinuedOperations"],
+  },
+  cash: {
+    exact: [
+      "CashAndCashEquivalents",
+      "CashAndCashEquivalentsIFRS",
+      "CashAndCashEquivalentsAtCarryingValue",
+      "CashAndDeposits",
+      "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+    ],
+    contains: ["cashandcashequivalents", "cashanddeposits"],
+    excludes: ["increase", "decrease", "change", "effect", "beginning", "endingBalanceSheet"],
+  },
+  currentAssets: {
+    exact: ["CurrentAssets", "CurrentAssetsIFRS", "AssetsCurrent"],
+    contains: ["currentassets", "assetscurrent"],
+    excludes: ["noncurrent", "segment"],
+  },
+  currentLiabilities: {
+    exact: ["CurrentLiabilities", "CurrentLiabilitiesIFRS", "LiabilitiesCurrent"],
+    contains: ["currentliabilities", "liabilitiescurrent"],
+    excludes: ["noncurrent", "segment"],
+  },
+  assets: {
+    exact: ["Assets", "AssetsIFRS", "TotalAssets"],
+    contains: ["totalassets"],
+    excludes: ["current", "noncurrent", "segment", "average", "returnOn"],
+  },
+  netAssets: {
+    exact: [
+      "NetAssets",
+      "Equity",
+      "EquityIFRS",
+      "StockholdersEquity",
+      "PartnersCapital",
+      "EquityAttributableToOwnersOfParent",
+      "EquityAttributableToOwnersOfParentIFRS",
+    ],
+    contains: ["netassets", "stockholdersequity", "equityattributabletoownersofparent"],
+    excludes: ["ratio", "perShare", "segment", "average", "returnOn"],
+  },
 };
 
 export function parseEdinetFinancials(docID: string): Financials {
@@ -65,6 +162,19 @@ export function parseEdinetFinancials(docID: string): Financials {
   }, emptyFinancials());
 
   return mergeFinancials(fromXbrl, fromInline);
+}
+
+export function zeroFinancialFields(financials: Financials): string[] {
+  return [
+    "revenue",
+    "operatingIncome",
+    "operatingCF",
+    "cash",
+    "currentAssets",
+    "currentLiabilities",
+    "assets",
+    "netAssets",
+  ].filter((key) => financials[key as keyof Financials] === 0);
 }
 
 function emptyFinancials(): Financials {
@@ -182,14 +292,17 @@ function parseContexts(text: string): Map<string, ContextInfo> {
       instant,
       consolidated:
         normalizedId.includes("consolidated") ||
-        normalizedBody.includes("consolidatedmember"),
+        normalizedBody.includes("consolidatedmember") ||
+        normalizedBody.includes("consolidated"),
       currentYear:
         normalizedId.includes("currentyear") ||
-        normalizedId.includes("currentperiod"),
+        normalizedId.includes("currentperiod") ||
+        normalizedId.includes("currentfiscalyear"),
       priorYear:
         normalizedId.includes("prioryear") ||
         normalizedId.includes("previousyear") ||
-        normalizedId.includes("priorperiod"),
+        normalizedId.includes("priorperiod") ||
+        normalizedId.includes("previousfiscalyear"),
     });
   }
 
@@ -201,28 +314,14 @@ function buildFinancials(facts: NumericFact[], contexts: Map<string, ContextInfo
   const instantContext = bestContext(contexts, "instant");
 
   const result: Financials = {
-    revenue: extractFact(facts, contexts, durationContext, [
-      "NetSales",
-      "Sales",
-      "Revenue",
-      "OperatingRevenue",
-      "BusinessRevenue",
-    ]),
-    operatingIncome: extractFact(facts, contexts, durationContext, [
-      "OperatingIncome",
-      "OperatingProfit",
-    ]),
-    operatingCF: extractFact(facts, contexts, durationContext, [
-      "NetCashProvidedByUsedInOperatingActivities",
-    ]),
-    cash: extractFact(facts, contexts, instantContext, [
-      "CashAndCashEquivalents",
-      "CashAndDeposits",
-    ]),
-    currentAssets: extractFact(facts, contexts, instantContext, ["CurrentAssets"]),
-    currentLiabilities: extractFact(facts, contexts, instantContext, ["CurrentLiabilities"]),
-    assets: extractFact(facts, contexts, instantContext, ["Assets", "TotalAssets"]),
-    netAssets: extractFact(facts, contexts, instantContext, ["NetAssets", "Equity"]),
+    revenue: extractMetric(facts, contexts, durationContext, METRICS.revenue),
+    operatingIncome: extractMetric(facts, contexts, durationContext, METRICS.operatingIncome),
+    operatingCF: extractMetric(facts, contexts, durationContext, METRICS.operatingCF),
+    cash: extractMetric(facts, contexts, instantContext, METRICS.cash),
+    currentAssets: extractMetric(facts, contexts, instantContext, METRICS.currentAssets),
+    currentLiabilities: extractMetric(facts, contexts, instantContext, METRICS.currentLiabilities),
+    assets: extractMetric(facts, contexts, instantContext, METRICS.assets),
+    netAssets: extractMetric(facts, contexts, instantContext, METRICS.netAssets),
   };
 
   const periodEnd = durationContext?.endDate ?? instantContext?.instant;
@@ -261,22 +360,41 @@ function contextScore(context: ContextInfo) {
   return score;
 }
 
-function extractFact(
+function extractMetric(
   facts: NumericFact[],
   contexts: Map<string, ContextInfo>,
   preferredContext: ContextInfo | undefined,
-  suffixes: string[]
+  definition: MetricDefinition
 ): number {
+  const exactNames = new Set(definition.exact.map(normalizeName));
+  const contains = (definition.contains ?? []).map(normalizeName);
+  const excludes = (definition.excludes ?? []).map(normalizeName);
+
   const candidates = facts
-    .filter((fact) => suffixes.some((suffix) => localName(fact.name) === suffix))
-    .map((fact) => ({ fact, context: contexts.get(fact.contextRef) }))
-    .sort((a, b) => {
-      const aPreferred = preferredContext && a.fact.contextRef === preferredContext.id ? 1000 : 0;
-      const bPreferred = preferredContext && b.fact.contextRef === preferredContext.id ? 1000 : 0;
-      return bPreferred + contextScoreSafe(b.context) - (aPreferred + contextScoreSafe(a.context));
-    });
+    .map((fact) => {
+      const normalized = normalizeName(localName(fact.name));
+      const exact = exactNames.has(normalized);
+      const fuzzy = !exact && contains.some((token) => normalized.includes(token));
+      if (!exact && !fuzzy) return null;
+      if (excludes.some((token) => normalized.includes(token))) return null;
+
+      const context = contexts.get(fact.contextRef);
+      const preferred = preferredContext && fact.contextRef === preferredContext.id ? 1000 : 0;
+      const nameScore = exact ? 500 : 100;
+      const nonZeroScore = fact.value !== 0 ? 20 : 0;
+      return {
+        fact,
+        score: preferred + nameScore + nonZeroScore + contextScoreSafe(context),
+      };
+    })
+    .filter((candidate): candidate is { fact: NumericFact; score: number } => Boolean(candidate))
+    .sort((a, b) => b.score - a.score);
 
   return candidates[0]?.fact.value ?? 0;
+}
+
+function normalizeName(value: string) {
+  return value.replace(/[^a-z0-9]/gi, "").toLowerCase();
 }
 
 function contextScoreSafe(context: ContextInfo | undefined) {
