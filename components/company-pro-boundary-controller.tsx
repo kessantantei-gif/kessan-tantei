@@ -8,13 +8,25 @@ function textOf(node: Element | null) {
 }
 
 function findHeading(labels: string[]) {
-  return Array.from(document.querySelectorAll("main[data-company-page='true'] h2, main[data-company-page='true'] h3, main[data-company-page='true'] p"))
-    .find((node) => labels.some((label) => textOf(node).includes(label))) as HTMLElement | undefined;
+  return Array.from(
+    document.querySelectorAll(
+      "main[data-company-page='true'] h2, main[data-company-page='true'] h3, main[data-company-page='true'] p"
+    )
+  ).find(
+    (node) =>
+      !node.closest("[data-pro-boundary-lock='true']") &&
+      labels.some((label) => textOf(node).includes(label))
+  ) as HTMLElement | undefined;
 }
 
 function findCard(labels: string[]) {
   const heading = findHeading(labels);
-  return heading?.closest("div.rounded-3xl, section.rounded-3xl, div.rounded-2xl, section.rounded-2xl") as HTMLElement | null;
+  const card = heading?.closest(
+    "div.rounded-3xl, section.rounded-3xl, div.rounded-2xl, section.rounded-2xl"
+  ) as HTMLElement | null;
+
+  if (card?.matches("[data-pro-boundary-lock='true']")) return null;
+  return card;
 }
 
 function lockMarkup(title: string, message: string) {
@@ -33,8 +45,23 @@ function lockMarkup(title: string, message: string) {
   `;
 }
 
-function replaceCardBody(card: HTMLElement | null, title: string, message: string, preview?: string) {
-  if (!card || card.dataset.proBoundaryApplied === "true") return;
+function removeDuplicateLocks(card: HTMLElement) {
+  const locks = Array.from(
+    card.querySelectorAll(":scope > [data-pro-boundary-lock='true']")
+  );
+  locks.slice(1).forEach((lock) => lock.remove());
+}
+
+function replaceCardBody(
+  card: HTMLElement | null,
+  title: string,
+  message: string,
+  preview?: string
+) {
+  if (!card) return;
+
+  removeDuplicateLocks(card);
+  if (card.dataset.proBoundaryApplied === "true") return;
   card.dataset.proBoundaryApplied = "true";
 
   const heading = card.querySelector("h2, h3") as HTMLElement | null;
@@ -48,7 +75,8 @@ function replaceCardBody(card: HTMLElement | null, title: string, message: strin
 
   if (preview) {
     const previewBox = document.createElement("p");
-    previewBox.className = "mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-7 text-slate-300";
+    previewBox.className =
+      "mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-7 text-slate-300";
     previewBox.textContent = preview;
     card.appendChild(previewBox);
   }
@@ -58,7 +86,10 @@ function replaceCardBody(card: HTMLElement | null, title: string, message: strin
 
 function lockTrend(labels: string[], title: string) {
   const card = findCard(labels);
-  if (!card || card.dataset.proBoundaryApplied === "true") return;
+  if (!card) return;
+
+  removeDuplicateLocks(card);
+  if (card.dataset.proBoundaryApplied === "true") return;
   card.dataset.proBoundaryApplied = "true";
 
   const heading = card.querySelector("h2, h3, p") as HTMLElement | null;
@@ -70,13 +101,21 @@ function lockTrend(labels: string[], title: string) {
 
   card.insertAdjacentHTML(
     "beforeend",
-    lockMarkup(title, "売上推移は無料で確認できます。営業利益・営業CFの推移と変化分析はPro限定です。")
+    lockMarkup(
+      title,
+      "売上推移は無料で確認できます。営業利益・営業CFの推移と変化分析はPro限定です。"
+    )
   );
 }
 
 function gateScoreExplanation() {
-  const card = document.querySelector("[data-score-explanation='true']") as HTMLElement | null;
-  if (!card || card.dataset.proBoundaryApplied === "true") return;
+  const card = document.querySelector(
+    "[data-score-explanation='true']"
+  ) as HTMLElement | null;
+  if (!card) return;
+
+  removeDuplicateLocks(card);
+  if (card.dataset.proBoundaryApplied === "true") return;
   card.dataset.proBoundaryApplied = "true";
 
   const scoreText = Array.from(card.querySelectorAll("p"))
@@ -90,9 +129,16 @@ function gateScoreExplanation() {
         <h2 class="mt-2 text-xl font-black text-white">スコア根拠</h2>
         <p class="mt-2 text-sm leading-7 text-slate-400">無料版では総合スコアのみ表示しています。</p>
       </div>
-      ${scoreText ? `<div class="rounded-2xl border border-cyan-300/20 bg-cyan-500/10 px-5 py-3 text-center"><p class="text-xs font-bold text-cyan-200">総合</p><p class="text-2xl font-black text-cyan-100">${scoreText}</p></div>` : ""}
+      ${
+        scoreText
+          ? `<div class="rounded-2xl border border-cyan-300/20 bg-cyan-500/10 px-5 py-3 text-center"><p class="text-xs font-bold text-cyan-200">総合</p><p class="text-2xl font-black text-cyan-100">${scoreText}</p></div>`
+          : ""
+      }
     </div>
-    ${lockMarkup("スコアの内訳はPro限定", "成長性・収益品質・安全性・リスク控除の内訳と、各判定の根拠を確認できます。")}
+    ${lockMarkup(
+      "スコアの内訳はPro限定",
+      "成長性・収益品質・安全性・リスク控除の内訳と、各判定の根拠を確認できます。"
+    )}
   `;
 }
 
@@ -138,9 +184,14 @@ export default function CompanyProBoundaryController() {
         const run = () => applyFreeBoundaries();
         run();
         requestAnimationFrame(run);
-        const timers = [300, 800, 1600, 2600].map((delay) => window.setTimeout(run, delay));
+        const timers = [300, 800, 1600, 2600].map((delay) =>
+          window.setTimeout(run, delay)
+        );
 
-        window.setTimeout(() => timers.forEach((timer) => window.clearTimeout(timer)), 3200);
+        window.setTimeout(
+          () => timers.forEach((timer) => window.clearTimeout(timer)),
+          3200
+        );
       })
       .catch(() => undefined);
 
