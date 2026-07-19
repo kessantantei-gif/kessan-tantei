@@ -21,12 +21,12 @@ export const revalidate = 0;
 export const metadata: Metadata = {
   title: "市場を選ぶ | 決算探偵",
   description:
-    "グロース・スタンダード・プライムの市場別に、決算ランキングと財務分析を確認できます。",
+    "プライム・スタンダード・グロースの市場別に、決算ランキングと財務分析を確認できます。",
   alternates: { canonical: "/markets" },
   openGraph: {
     title: "決算探偵 | 日本株全市場の財務分析ランキング",
     description:
-      "グロース・スタンダード・プライムの上場企業を、決算データから成長性・収益性・キャッシュ・財務リスクで比較できます。",
+      "プライム・スタンダード・グロースの上場企業を、決算データから成長性・収益性・キャッシュ・財務リスクで比較できます。",
     url: shareUrl,
     siteName: "決算探偵",
     locale: "ja_JP",
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "決算探偵 | 日本株全市場の財務分析ランキング",
     description:
-      "グロース・スタンダード・プライムの上場企業を、決算データから比較・分析できます。",
+      "プライム・スタンダード・グロースの上場企業を、決算データから比較・分析できます。",
     images: [shareImage],
   },
 };
@@ -57,7 +57,7 @@ async function loadCompanies() {
         .from("all_market_companies")
         .select("ticker, company_name, market_segment")
         .eq("listing_status", "listed")
-        .in("market_segment", ["growth", "standard", "prime"])
+        .in("market_segment", ["prime", "standard", "growth"])
         .order("ticker", { ascending: true })
         .range(from, to)
   );
@@ -79,7 +79,7 @@ export default async function MarketsPage() {
             決算から企業を見抜く。
           </h1>
           <p className="mt-6 text-base leading-8 text-slate-300 sm:text-lg">
-            会社を検索するか、グロース・スタンダード・プライムから市場を選択してください。
+            会社を検索するか、プライム・スタンダード・グロースから市場を選択してください。
           </p>
         </div>
 

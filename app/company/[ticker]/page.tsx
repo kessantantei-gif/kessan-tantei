@@ -130,7 +130,7 @@ export async function generateMetadata({
 
   const description = data
     ? `Score ${data.score} / Danger ${data.danger_score}｜決算データから成長性・収益性・キャッシュ・財務リスクを確認できます。`
-    : "グロース・スタンダード・プライム対応の財務分析ランキング。";
+    : "プライム・スタンダード・グロース対応の財務分析ランキング。";
 
   return {
     title,

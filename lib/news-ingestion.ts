@@ -75,7 +75,7 @@ export async function loadAllListedCompanies(): Promise<ListedCompany[]> {
       .from("all_market_companies")
       .select("ticker, company_name, market_segment")
       .eq("listing_status", "listed")
-      .in("market_segment", ["growth", "standard", "prime"])
+      .in("market_segment", ["prime", "standard", "growth"])
       .order("ticker", { ascending: true })
       .range(from, from + pageSize - 1);
 

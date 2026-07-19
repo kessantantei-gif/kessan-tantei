@@ -191,7 +191,7 @@ Vercelで最新mainのDeploymentが`Ready`であることを確認します。
 
 ### Pro
 
-- 1契約でGrowth / Standard / Primeの全ランキングを閲覧できる
+- 1契約でPrime / Standard / Growthの全ランキングを閲覧できる
 - 詳細分析、比較、ウォッチ、アラートが既存仕様どおり動く
 
 ### 管理者

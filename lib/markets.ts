@@ -1,14 +1,14 @@
 export const marketDefinitions = {
-  growth: {
-    slug: "growth",
-    name: "グロース市場",
-    englishName: "Growth",
+  prime: {
+    slug: "prime",
+    name: "プライム市場",
+    englishName: "Prime",
     status: "active",
     description:
-      "高い成長可能性を持つ企業を、売上成長・収益品質・営業CF・資金繰り・リスクから分析します。",
-    href: "/",
-    rankingHref: "/ranking",
-    accent: "green",
+      "収益力・資本効率・安定CF・財務安全性・株主還元を中心に、大企業を多面的に分析します。",
+    href: "/prime",
+    rankingHref: "/prime/ranking",
+    accent: "violet",
   },
   standard: {
     slug: "standard",
@@ -21,16 +21,16 @@ export const marketDefinitions = {
     rankingHref: "/standard/ranking",
     accent: "cyan",
   },
-  prime: {
-    slug: "prime",
-    name: "プライム市場",
-    englishName: "Prime",
+  growth: {
+    slug: "growth",
+    name: "グロース市場",
+    englishName: "Growth",
     status: "active",
     description:
-      "収益力・資本効率・安定CF・財務安全性・株主還元を中心に、大企業を多面的に分析します。",
-    href: "/prime",
-    rankingHref: "/prime/ranking",
-    accent: "violet",
+      "高い成長可能性を持つ企業を、売上成長・収益品質・営業CF・資金繰り・リスクから分析します。",
+    href: "/",
+    rankingHref: "/ranking",
+    accent: "green",
   },
 } as const;
 

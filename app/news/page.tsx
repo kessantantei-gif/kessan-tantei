@@ -11,7 +11,7 @@ export const revalidate = 0;
 export const metadata: Metadata = {
   title: "上場企業ニュース | 決算探偵",
   description:
-    "グロース・スタンダード・プライム市場の上場企業ニュースを、会社名・証券コード・市場別に検索できます。",
+    "プライム・スタンダード・グロース市場の上場企業ニュースを、会社名・証券コード・市場別に検索できます。",
   alternates: { canonical: "/news" },
 };
 
@@ -123,7 +123,7 @@ async function loadListedCompanies() {
         .from("all_market_companies")
         .select("ticker, company_name, market_segment")
         .eq("listing_status", "listed")
-        .in("market_segment", ["growth", "standard", "prime"])
+        .in("market_segment", ["prime", "standard", "growth"])
         .order("ticker", { ascending: true })
         .range(from, to)
   );
@@ -337,7 +337,7 @@ export default async function NewsPage({ searchParams }: PageProps) {
           <p className="text-xs font-black tracking-[0.3em] text-cyan-300">ALL MARKET NEWS</p>
           <h1 className="mt-4 text-3xl font-black sm:text-5xl">上場企業ニュース</h1>
           <p className="mt-4 max-w-4xl leading-8 text-slate-300">
-            グロース・スタンダード・プライム市場の企業ニュースを自動収集しています。
+            プライム・スタンダード・グロース市場の企業ニュースを自動収集しています。
             会社名、証券コード、市場で絞り込み、各社の決算・開示・IR関連ニュースを確認できます。
           </p>
           <p className="mt-4 text-sm font-bold text-cyan-100">
@@ -350,9 +350,9 @@ export default async function NewsPage({ searchParams }: PageProps) {
             {(
               [
                 ["all", "全市場"],
-                ["growth", "グロース"],
-                ["standard", "スタンダード"],
                 ["prime", "プライム"],
+                ["standard", "スタンダード"],
+                ["growth", "グロース"],
               ] as const
             ).map(([slug, label]) => (
               <Link

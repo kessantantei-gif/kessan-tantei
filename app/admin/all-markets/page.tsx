@@ -98,7 +98,7 @@ export default async function AdminAllMarketsPage() {
   const issues = (issuesResult.data ?? []) as QualityIssue[];
   const analyzedTickers = new Set(analyses.map((row) => row.ticker));
 
-  const marketStats = ["growth", "standard", "prime"].map((market) => {
+  const marketStats = ["prime", "standard", "growth"].map((market) => {
     const listed = companies.filter(
       (company) => company.market_segment === market && company.listing_status === "listed"
     );
@@ -131,7 +131,7 @@ export default async function AdminAllMarketsPage() {
             </p>
             <h1 className="mt-3 text-3xl font-black sm:text-5xl">全市場運用ダッシュボード</h1>
             <p className="mt-4 max-w-4xl leading-8 text-slate-300">
-              グロース・スタンダード・プライムの会社マスタ、EDINET紐付け、解析進捗、インポート履歴、品質問題を一画面で確認します。
+              プライム・スタンダード・グロースの会社マスタ、EDINET紐付け、解析進捗、インポート履歴、品質問題を一画面で確認します。
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

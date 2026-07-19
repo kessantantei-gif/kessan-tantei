@@ -41,7 +41,8 @@
     "inspect:duplicate-tickers": "tsx scripts/inspect-duplicate-tickers.ts",
     "cleanup:duplicate-tickers": "tsx scripts/cleanup-duplicate-tickers.ts",
     "normalize:history-periods": "tsx scripts/normalize-history-periods.ts",
-    "check:fiscal-periods": "tsx scripts/check-fiscal-period-extraction.ts"
+    "check:fiscal-periods": "tsx scripts/check-fiscal-period-extraction.ts",
+    "audit:market-order": "tsx scripts/audit-market-display-order.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.5.9",

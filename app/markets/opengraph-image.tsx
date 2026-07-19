@@ -103,7 +103,7 @@ export default function OpenGraphImage() {
                   color: "#cbd5e1",
                 }}
               >
-                グロース・スタンダード・プライム対応
+                プライム・スタンダード・グロース対応
               </div>
 
               <div style={{ display: "flex", gap: 18, marginTop: 34 }}>
