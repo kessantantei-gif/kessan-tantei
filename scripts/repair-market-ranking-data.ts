@@ -71,6 +71,65 @@ function finite(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+function firstFinite(...values: unknown[]) {
+  for (const value of values) {
+    if (finite(value)) return value;
+  }
+  return null;
+}
+
+function mergedCurrentFacts(
+  extracted: Partial<FinancialFacts>,
+  stored: Record<string, unknown>
+): FinancialFacts {
+  return {
+    revenue: firstFinite(extracted.revenue, stored.revenue),
+    grossProfit: firstFinite(extracted.grossProfit, stored.grossProfit),
+    netIncome: firstFinite(extracted.netIncome, stored.netIncome),
+    operatingIncome: firstFinite(
+      extracted.operatingIncome,
+      stored.operatingIncome
+    ),
+    operatingCF: firstFinite(extracted.operatingCF, stored.operatingCF),
+    cash: firstFinite(extracted.cash, stored.cash, stored.cashAndDeposits),
+    currentLiabilities: firstFinite(
+      extracted.currentLiabilities,
+      stored.currentLiabilities
+    ),
+    assets: firstFinite(extracted.assets, stored.assets),
+    netAssets: firstFinite(
+      extracted.netAssets,
+      stored.netAssets,
+      stored.equityAmount
+    ),
+  };
+}
+
+function mergedPriorFacts(
+  extracted: Partial<FinancialFacts>,
+  history: HistoryRow[] | null
+): FinancialFacts {
+  const rows = Array.isArray(history)
+    ? [...history].sort((left, right) => historyKey(left).localeCompare(historyKey(right)))
+    : [];
+  const prior = rows.at(-2) ?? {};
+
+  return {
+    revenue: firstFinite(extracted.revenue, prior.revenue),
+    grossProfit: firstFinite(extracted.grossProfit, prior.grossProfit),
+    netIncome: firstFinite(extracted.netIncome, prior.netIncome),
+    operatingIncome: firstFinite(
+      extracted.operatingIncome,
+      prior.operatingIncome
+    ),
+    operatingCF: firstFinite(extracted.operatingCF, prior.operatingCF),
+    cash: null,
+    currentLiabilities: null,
+    assets: null,
+    netAssets: null,
+  };
+}
+
 function historyYear(row: HistoryRow) {
   const value = Number(row.fiscalYear ?? row.year);
   return Number.isFinite(value) ? value : null;
@@ -88,11 +147,24 @@ function rankingDataMissing(analysis: AnalysisRow) {
   const grossHistoryCount = history.filter((row) => finite(row.grossProfit)).length;
   const netHistoryCount = history.filter((row) => finite(row.netIncome)).length;
 
+  const grossMargin = finite(financials.grossMargin)
+    ? financials.grossMargin
+    : null;
+  const netMargin = finite(financials.netMargin)
+    ? financials.netMargin
+    : null;
+  const needsIfrsCorrection =
+    financials.financialProfile === "ifrs" &&
+    financials.marketRankingMetricsVersion !== 2;
+
   return (
+    needsIfrsCorrection ||
     !finite(financials.grossProfit) ||
     !finite(financials.netIncome) ||
-    !finite(financials.grossMargin) ||
-    !finite(financials.netMargin) ||
+    grossMargin === null ||
+    netMargin === null ||
+    grossMargin > 105 ||
+    netMargin > 300 ||
     grossHistoryCount < 2 ||
     netHistoryCount < 2
   );
@@ -153,17 +225,25 @@ async function fetchCsvZip(docID: string) {
   const url = `${EDINET_BASE}/documents/${docID}?type=5&Subscription-Key=${apiKey}`;
   let lastError: unknown;
 
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
     try {
       const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) {
         throw new Error(`EDINET CSV fetch failed: ${docID} ${response.status}`);
       }
-      return Buffer.from(await response.arrayBuffer());
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (buffer.length < 4 || buffer.subarray(0, 2).toString() !== "PK") {
+        throw new Error(
+          `EDINET CSV response is not ZIP: ${docID}, content-type=${response.headers.get("content-type")}, bytes=${buffer.length}`
+        );
+      }
+      return buffer;
     } catch (error) {
       lastError = error;
-      if (attempt < 3) {
-        await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+      if (attempt < 5) {
+        const delay = attempt * 1500 + Math.floor(Math.random() * 500);
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
   }
@@ -203,7 +283,13 @@ async function repairCompany(
     const rows = extractRowsFromEdinetCsvZip(zip);
     const extracted = extractFinancials(rows);
 
-    if (!hasRankingFacts(extracted.current, extracted.prior)) {
+    const current = mergedCurrentFacts(
+      extracted.current,
+      analysis.financials ?? {}
+    );
+    const prior = mergedPriorFacts(extracted.prior, analysis.history);
+
+    if (!hasRankingFacts(current, prior)) {
       return {
         ticker: company.ticker,
         companyName: company.company_name,
@@ -213,17 +299,14 @@ async function repairCompany(
       };
     }
 
-    const metrics = calculateFinancialMetrics(extracted.current, extracted.prior);
+    const metrics = calculateFinancialMetrics(current, prior);
     const financials = {
       ...(analysis.financials ?? {}),
       ...extracted.metadata,
       ...metrics,
+      marketRankingMetricsVersion: 2,
     };
-    const history = mergeHistory(
-      analysis.history,
-      extracted.current,
-      extracted.prior
-    );
+    const history = mergeHistory(analysis.history, current, prior);
 
     const { error } = await supabaseAdmin
       .from("company_analyses")
@@ -255,7 +338,7 @@ async function repairCompany(
 }
 
 async function main() {
-  const concurrency = Math.min(12, parsePositiveInteger("concurrency", 8));
+  const concurrency = Math.min(8, parsePositiveInteger("concurrency", 4));
   const limit = parsePositiveInteger("limit", Number.MAX_SAFE_INTEGER);
   const market = selectedMarket();
   const force = process.argv.includes("--force");

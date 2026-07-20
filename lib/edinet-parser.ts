@@ -83,7 +83,16 @@ const PROFILE_DEFINITIONS: Record<FinancialMetricProfile, ProfileDefinition> = {
   },
   ifrs: {
     revenueElements: [
+      "SalesAndFinancialServicesRevenueIFRSKeyFinancialData",
+      "OperatingRevenuesIFRSKeyFinancialData",
+      "NetSalesIFRSKeyFinancialData",
+      "RevenueIFRSKeyFinancialData",
       "RevenueIFRSSummaryOfBusinessResults",
+      "NetSalesSummaryOfBusinessResults",
+      "OperatingRevenueSummaryOfBusinessResults",
+      "TotalNetRevenuesIFRS",
+      "NetSalesIFRS",
+      "SalesRevenuesIFRS",
       "Revenue2IFRS",
       "RevenueIFRS",
       "RevenueFromExternalCustomers2IFRS",
@@ -132,6 +141,10 @@ const PROFILE_DEFINITIONS: Record<FinancialMetricProfile, ProfileDefinition> = {
       "OperatingRevenueIVT",
       "OperatingRevenues",
       "OperatingRevenue",
+      "NetSalesSummaryOfBusinessResults",
+      "RevenueSummaryOfBusinessResults",
+      "NetSales",
+      "Revenue",
     ],
     operatingIncomeElements: [
       "OperatingIncome",
@@ -449,10 +462,10 @@ function buildFinancials(
       [
         "GrossProfitSummaryOfBusinessResults",
         "GrossProfitLossSummaryOfBusinessResults",
-        "GrossProfit",
-        "GrossProfitLoss",
         "GrossProfitIFRS",
         "GrossProfitLossIFRS",
+        "GrossProfit",
+        "GrossProfitLoss",
       ]
     ),
     netIncome: extractNullableFact(
@@ -561,6 +574,10 @@ function detectFinancialProfile(facts: NumericFact[]): FinancialMetricProfile {
   if (elements.has("OperatingRevenueCMD")) return "commodity";
 
   if (
+    elements.has("SalesAndFinancialServicesRevenueIFRSKeyFinancialData") ||
+    elements.has("OperatingRevenuesIFRSKeyFinancialData") ||
+    elements.has("NetSalesIFRSKeyFinancialData") ||
+    elements.has("RevenueIFRSKeyFinancialData") ||
     elements.has("RevenueIFRSSummaryOfBusinessResults") ||
     elements.has("Revenue2IFRS") ||
     elements.has("RevenueIFRS") ||
