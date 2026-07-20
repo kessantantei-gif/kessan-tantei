@@ -6,6 +6,7 @@ on:
       - agent/fix-market-rankings-global-search
     paths:
       - "lib/edinet-parser.ts"
+      - "lib/edinet-financial-parser.ts"
       - "scripts/analyze-company.ts"
       - "scripts/repair-market-ranking-data.ts"
       - "scripts/audit-market-ranking-data.ts"
@@ -14,6 +15,7 @@ on:
   pull_request:
     paths:
       - "lib/edinet-parser.ts"
+      - "lib/edinet-financial-parser.ts"
       - "scripts/analyze-company.ts"
       - "scripts/repair-market-ranking-data.ts"
       - "scripts/audit-market-ranking-data.ts"
@@ -53,9 +55,9 @@ jobs:
       - name: Repair Prime and Standard ranking data
         id: repair
         continue-on-error: true
-        run: npm run repair:market-ranking-data -- --concurrency=8
+        run: npm run repair:market-ranking-data -- --concurrency=4
 
-      - name: Audit ranking availability
+      - name: Audit ranking availability and value quality
         run: npm run audit:market-ranking-data
 
       - name: Upload ranking repair reports
@@ -68,3 +70,7 @@ jobs:
             reports/market-ranking-data-audit.json
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Fail when any company repair failed
+        if: steps.repair.outcome == 'failure'
+        run: exit 1
