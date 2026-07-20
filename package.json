@@ -18,6 +18,7 @@
     "repair:financial-data": "tsx scripts/repair-financial-anomalies.ts",
     "repair:core-financial-data": "tsx scripts/repair-core-financial-data.ts",
     "repair:financial-sector-data": "DOTENV_CONFIG_PATH=.env.local tsx scripts/reprocess-financial-sector-data.ts",
+    "repair:market-ranking-data": "DOTENV_CONFIG_PATH=.env.local tsx scripts/repair-market-ranking-data.ts",
     "sync:jpx-markets": "DOTENV_CONFIG_PATH=.env.local tsx scripts/sync-jpx-all-markets.ts && DOTENV_CONFIG_PATH=.env.local tsx scripts/repair-market-memberships.ts",
     "sync:edinet-daily": "DOTENV_CONFIG_PATH=.env.local tsx scripts/sync-daily-edinet.ts",
     "complete:all-markets": "DOTENV_CONFIG_PATH=.env.local tsx scripts/run-all-markets-completion.ts",
@@ -25,6 +26,7 @@
     "complete:all-markets:no-sync": "DOTENV_CONFIG_PATH=.env.local tsx scripts/run-all-markets-completion.ts --skip-sync",
     "audit:financial-data": "tsx scripts/audit-financial-data.ts",
     "audit:financial-sector-data": "DOTENV_CONFIG_PATH=.env.local tsx scripts/audit-financial-sector-data.ts",
+    "audit:market-ranking-data": "DOTENV_CONFIG_PATH=.env.local tsx scripts/audit-market-ranking-data.ts",
     "diagnose:financial-sector-tags": "DOTENV_CONFIG_PATH=.env.local tsx scripts/diagnose-financial-sector-tags.ts",
     "audit:financial-integrity": "tsx scripts/audit-financial-integrity.ts",
     "audit:history-periods": "tsx scripts/audit-history-periods.ts",
@@ -46,6 +48,7 @@
     "normalize:history-periods": "tsx scripts/normalize-history-periods.ts",
     "check:fiscal-periods": "tsx scripts/check-fiscal-period-extraction.ts",
     "check:financial-sector-parser": "tsx scripts/check-financial-sector-parser.ts",
+    "check:market-ranking-parser": "tsx scripts/check-market-ranking-parser.ts",
     "audit:market-order": "tsx scripts/audit-market-display-order.ts",
     "audit:pro-boundaries": "tsx scripts/audit-pro-boundaries.ts"
   },
