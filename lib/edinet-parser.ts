@@ -62,6 +62,9 @@ type ProfileDefinition = {
 const PROFILE_DEFINITIONS: Record<FinancialMetricProfile, ProfileDefinition> = {
   general: {
     revenueElements: [
+      "NetSalesSummaryOfBusinessResults",
+      "RevenueSummaryOfBusinessResults",
+      "OperatingRevenueSummaryOfBusinessResults",
       "NetSales",
       "Sales",
       "Revenue",
