@@ -26,7 +26,20 @@ type MarketRow = {
   market_segment: string | null;
 };
 
+type AuditResult = {
+  ticker: string;
+  companyName: string | null;
+  market: string;
+  historyPeriods: number;
+  httpStatus: number | null;
+  missing: string[];
+  rendered: boolean;
+  error?: string;
+};
+
 const namedTickers = new Set(["285A", "8360"]);
+const concurrency = 20;
+const timeoutMs = 15000;
 
 function periodLabel(row: HistoryRow) {
   if (row.fiscalPeriod) return row.fiscalPeriod;
@@ -48,43 +61,52 @@ function yenOku(value: unknown) {
 
 async function checkCompany(
   analysis: AnalysisRow,
-  market: string,
-  index: number,
-  total: number
-) {
+  market: string
+): Promise<AuditResult> {
   const history = Array.isArray(analysis.history) ? analysis.history.slice(-3) : [];
-  const response = await fetch(`https://kessan-tantei.jp/company/${analysis.ticker}`, {
-    cache: "no-store",
-    headers: { "user-agent": "kessan-tantei-all-market-history-audit/1.0" },
-  });
-  const html = await response.text();
 
-  const expectedStrings = history.flatMap((row) =>
-    [periodLabel(row), yenOku(row.revenue), yenOku(row.operatingIncome), yenOku(row.operatingCF)].filter(
-      (value): value is string => Boolean(value)
-    )
-  );
-  const missing = expectedStrings.filter((value) => !html.includes(value));
-  const rendered = response.ok && history.length >= 3 && missing.length === 0;
+  try {
+    const response = await fetch(`https://kessan-tantei.jp/company/${analysis.ticker}`, {
+      cache: "no-store",
+      headers: { "user-agent": "kessan-tantei-all-market-history-audit/1.1" },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const html = await response.text();
 
-  const result = {
-    ticker: analysis.ticker,
-    companyName: analysis.company_name,
-    market,
-    historyPeriods: history.length,
-    httpStatus: response.status,
-    missing,
-    rendered,
-  };
+    const expectedStrings = history.flatMap((row) =>
+      [periodLabel(row), yenOku(row.revenue), yenOku(row.operatingIncome), yenOku(row.operatingCF)].filter(
+        (value): value is string => Boolean(value)
+      )
+    );
+    const missing = expectedStrings.filter((value) => !html.includes(value));
 
-  if (!rendered || namedTickers.has(analysis.ticker)) {
-    console.dir({ progress: `${index + 1}/${total}`, ...result }, { depth: null });
+    return {
+      ticker: analysis.ticker,
+      companyName: analysis.company_name,
+      market,
+      historyPeriods: history.length,
+      httpStatus: response.status,
+      missing,
+      rendered: response.ok && history.length >= 3 && missing.length === 0,
+    };
+  } catch (error) {
+    return {
+      ticker: analysis.ticker,
+      companyName: analysis.company_name,
+      market,
+      historyPeriods: history.length,
+      httpStatus: null,
+      missing: [],
+      rendered: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
-
-  return result;
 }
 
 async function main() {
+  console.log("===== プライム・スタンダード 3期表示監査 開始 =====");
+  console.log("DBから対象銘柄を取得中...");
+
   const [analyses, markets] = await Promise.all([
     loadAllSupabaseRows<AnalysisRow>("company_analyses取得失敗", (from, to) =>
       supabaseAdmin
@@ -109,22 +131,28 @@ async function main() {
     return Boolean(market && Array.isArray(row.history) && row.history.length >= 3);
   });
 
-  const results: Awaited<ReturnType<typeof checkCompany>>[] = [];
-  const concurrency = 8;
+  console.log({ targets: targets.length, concurrency, timeoutMs });
+
+  const results: AuditResult[] = [];
 
   for (let start = 0; start < targets.length; start += concurrency) {
     const chunk = targets.slice(start, start + concurrency);
     const chunkResults = await Promise.all(
-      chunk.map((analysis, offset) =>
-        checkCompany(
-          analysis,
-          marketMap.get(analysis.ticker) ?? "unknown",
-          start + offset,
-          targets.length
-        )
+      chunk.map((analysis) =>
+        checkCompany(analysis, marketMap.get(analysis.ticker) ?? "unknown")
       )
     );
     results.push(...chunkResults);
+
+    const processed = results.length;
+    const failuresSoFar = results.filter((row) => !row.rendered).length;
+    console.log(`[進捗] ${processed}/${targets.length} 失敗候補=${failuresSoFar}`);
+
+    for (const row of chunkResults) {
+      if (!row.rendered || namedTickers.has(row.ticker)) {
+        console.dir(row, { depth: null });
+      }
+    }
   }
 
   const named = results.filter((row) => namedTickers.has(row.ticker));
