@@ -137,12 +137,13 @@ const PROFILE_DEFINITIONS: Record<FinancialMetricProfile, ProfileDefinition> = {
   "operating-revenue": {
     revenueElements: [
       "OperatingRevenue1SummaryOfBusinessResults",
+      "OperatingRevenueSummaryOfBusinessResults",
+      "NetSalesSummaryOfBusinessResults",
+      "RevenueSummaryOfBusinessResults",
       "OperatingRevenue1",
       "OperatingRevenueIVT",
       "OperatingRevenues",
       "OperatingRevenue",
-      "NetSalesSummaryOfBusinessResults",
-      "RevenueSummaryOfBusinessResults",
       "NetSales",
       "Revenue",
     ],
@@ -586,11 +587,18 @@ function detectFinancialProfile(facts: NumericFact[]): FinancialMetricProfile {
     return "ifrs";
   }
 
+  const hasConsolidatedNetSalesSummary = facts.some(
+    (fact) =>
+      localName(fact.name) === "NetSalesSummaryOfBusinessResults" &&
+      !fact.contextRef.includes("NonConsolidatedMember")
+  );
+
   if (
-    elements.has("OperatingRevenue1SummaryOfBusinessResults") ||
-    elements.has("OperatingRevenue1") ||
-    elements.has("OperatingRevenueIVT") ||
-    elements.has("OperatingRevenues")
+    !hasConsolidatedNetSalesSummary &&
+    (elements.has("OperatingRevenue1SummaryOfBusinessResults") ||
+      elements.has("OperatingRevenue1") ||
+      elements.has("OperatingRevenueIVT") ||
+      elements.has("OperatingRevenues"))
   ) {
     return "operating-revenue";
   }
