@@ -23,6 +23,7 @@ type Period = {
   company_id: string;
   fiscal_year: number | null;
   period_end: string | null;
+  document_id: string | null;
   financials: Json | null;
 };
 
@@ -36,6 +37,8 @@ const SUPPORTED_FIELDS = [
   "assets",
   "liabilities",
   "netAssets",
+  "ordinaryIncome",
+  "ordinaryProfit",
   "loans",
   "deposits",
   "securities",
@@ -47,53 +50,64 @@ function finite(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function profile(company: Company): "bank" | "insurance" | "general" {
-  const source = `${company.company_name} ${company.industry_name ?? ""}`;
-  if (/銀行|信用金庫|bank/i.test(source)) return "bank";
-  if (/保険|生命|損害|insurance/i.test(source)) return "insurance";
-  return "general";
+function explicitZeroFields(row: Json | null | undefined) {
+  if (!row) return [];
+  return SUPPORTED_FIELDS.filter((key) => key in row && finite(row[key]) && row[key] === 0);
 }
 
-function latestRequired(company: Company) {
-  const kind = profile(company);
-  if (kind === "bank") {
-    return ["revenue", "operatingIncome", "cash", "assets", "liabilities", "netAssets", "loans", "deposits"];
-  }
-  if (kind === "insurance") {
-    return ["revenue", "operatingIncome", "cash", "assets", "liabilities", "netAssets", "policyReserves"];
-  }
-  return ["revenue", "operatingIncome", "operatingCF", "cash", "currentAssets", "currentLiabilities", "assets", "liabilities", "netAssets"];
-}
-
-function zeroOrMissingLatest(company: Company, row: Json | null) {
-  const source = row ?? {};
-  return latestRequired(company).filter((key) => !finite(source[key]) || source[key] === 0);
+function periodKey(row: Json | Period) {
+  return String(
+    (row as Json).periodEnd ??
+      (row as Period).period_end ??
+      (row as Json).fiscalYear ??
+      (row as Period).fiscal_year ??
+      (row as Json).year ??
+      ""
+  );
 }
 
 function zeroFieldsInHistory(history: Json[] | null) {
   if (!Array.isArray(history)) return [];
   return history.flatMap((row) => {
-    const period = String(row.periodEnd ?? row.fiscalYear ?? row.year ?? "unknown");
-    const fields = SUPPORTED_FIELDS.filter((key) => key in row && finite(row[key]) && row[key] === 0);
-    return fields.length ? [{ period, fields }] : [];
+    const fields = explicitZeroFields(row);
+    return fields.length ? [{ period: periodKey(row), fields }] : [];
   });
 }
 
-function uniquePeriodCount(rows: Period[]) {
-  const keys = new Set<string>();
+function uniquePeriods(rows: Period[]) {
+  const map = new Map<string, Period>();
   for (const row of rows) {
     const key = row.period_end ?? (row.fiscal_year ? String(row.fiscal_year) : "");
-    if (key) keys.add(key);
+    if (!key) continue;
+    const current = map.get(key);
+    if (!current || (!current.document_id && row.document_id)) map.set(key, row);
   }
-  return keys.size;
+  return [...map.values()].sort((a, b) => periodKey(a).localeCompare(periodKey(b)));
 }
 
-function listedAtLeastThreeYears(listingDate: string | null) {
-  if (!listingDate) return false;
-  const cutoff = new Date();
-  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 3);
-  const date = new Date(`${listingDate}T00:00:00Z`);
-  return Number.isFinite(date.getTime()) && date <= cutoff;
+function latestPeriod(rows: Period[]) {
+  return uniquePeriods(rows).at(-1) ?? null;
+}
+
+function missingOnlyInAnalysis(analysis: Json | null, normalized: Json | null) {
+  if (!analysis || !normalized) return [];
+  return SUPPORTED_FIELDS.filter((key) => {
+    const normalizedValue = normalized[key];
+    if (!finite(normalizedValue) || normalizedValue === 0) return false;
+    const analysisValue = analysis[key];
+    return !finite(analysisValue);
+  });
+}
+
+function materiallyDifferentFields(analysis: Json | null, normalized: Json | null) {
+  if (!analysis || !normalized) return [];
+  return SUPPORTED_FIELDS.filter((key) => {
+    const left = analysis[key];
+    const right = normalized[key];
+    if (!finite(left) || !finite(right)) return false;
+    const scale = Math.max(Math.abs(left), Math.abs(right), 1);
+    return Math.abs(left - right) / scale > 0.000001;
+  });
 }
 
 async function main() {
@@ -116,7 +130,7 @@ async function main() {
     loadAllSupabaseRows<Period>("期間取得失敗", (from, to) =>
       supabaseAdmin
         .from("company_financial_periods")
-        .select("company_id, fiscal_year, period_end, financials")
+        .select("company_id, fiscal_year, period_end, document_id, financials")
         .eq("period_type", "annual")
         .order("fiscal_year", { ascending: true })
         .range(from, to)
@@ -138,28 +152,46 @@ async function main() {
     const analysis = analysisMap.get(company.ticker);
     if (!analysis) continue;
 
-    const latestIssues = zeroOrMissingLatest(company, analysis.financials);
-    const historyIssues = zeroFieldsInHistory(analysis.history);
-    if (latestIssues.length || historyIssues.length) {
+    const companyPeriods = uniquePeriods(periodsByCompany.get(company.id) ?? []);
+    const normalizedLatest = latestPeriod(companyPeriods)?.financials ?? null;
+
+    const latestZeroFields = explicitZeroFields(analysis.financials);
+    const normalizedLatestZeroFields = explicitZeroFields(normalizedLatest);
+    const historyZeroPeriods = zeroFieldsInHistory(analysis.history);
+    const missingInAnalysis = missingOnlyInAnalysis(analysis.financials, normalizedLatest);
+    const differingFields = materiallyDifferentFields(analysis.financials, normalizedLatest);
+
+    if (
+      latestZeroFields.length > 0 ||
+      normalizedLatestZeroFields.length > 0 ||
+      historyZeroPeriods.length > 0 ||
+      missingInAnalysis.length > 0 ||
+      differingFields.length > 0
+    ) {
       incorrectValues.push({
         ticker: company.ticker,
         companyName: company.company_name,
-        profile: profile(company),
-        latestIssues,
-        historyIssues,
+        latestZeroFields,
+        normalizedLatestZeroFields,
+        historyZeroPeriods,
+        missingInAnalysis,
+        differingFields,
       });
     }
 
-    const historyCount = Array.isArray(analysis.history) ? analysis.history.filter(Boolean).length : 0;
-    const sourcePeriods = uniquePeriodCount(periodsByCompany.get(company.id) ?? []);
-    const eligible = listedAtLeastThreeYears(company.listing_date) || sourcePeriods >= 3;
-    if (eligible && historyCount < 3) {
+    const analysisHistoryCount = Array.isArray(analysis.history)
+      ? new Set(analysis.history.filter(Boolean).map(periodKey).filter(Boolean)).size
+      : 0;
+    const sourcePeriods = companyPeriods.length;
+
+    if (sourcePeriods >= 3 && analysisHistoryCount < 3) {
       threePeriodShortage.push({
         ticker: company.ticker,
         companyName: company.company_name,
         listingDate: company.listing_date,
-        historyCount,
+        analysisHistoryCount,
         sourcePeriods,
+        documentIds: companyPeriods.map((row) => row.document_id).filter(Boolean),
       });
     }
   }
@@ -172,25 +204,35 @@ async function main() {
   const reportPath = path.join(
     process.cwd(),
     "logs",
-    `targeted-financial-repair-audit-${new Date().toISOString().replace(/[:.]/g, "-")}.json`
+    `targeted-financial-repair-audit-v3-${new Date().toISOString().replace(/[:.]/g, "-")}.json`
   );
   fs.mkdirSync(path.dirname(reportPath), { recursive: true });
   fs.writeFileSync(
     reportPath,
-    JSON.stringify({
-      generatedAt: new Date().toISOString(),
-      readOnly: true,
-      summary: {
-        incorrectValues: incorrectValues.length,
-        threePeriodShortage: threePeriodShortage.length,
-        uniqueTargets: targetTickers.size,
+    JSON.stringify(
+      {
+        generatedAt: new Date().toISOString(),
+        readOnly: true,
+        rules: {
+          zero: "保存済みの対象項目が明示的に0",
+          missing: "正規化最新期には非ゼロ値があるが分析最新期に値がない",
+          mismatch: "同じ最新期の両テーブルで非ゼロ数値が不一致",
+          history: "正規化年次データが3期以上あるのに分析履歴が3期未満",
+        },
+        summary: {
+          incorrectValues: incorrectValues.length,
+          threePeriodShortage: threePeriodShortage.length,
+          uniqueTargets: targetTickers.size,
+        },
+        incorrectValues,
+        threePeriodShortage,
       },
-      incorrectValues,
-      threePeriodShortage,
-    }, null, 2)
+      null,
+      2
+    )
   );
 
-  console.log("===== 修復対象限定・読取専用監査 =====");
+  console.log("===== 修復対象限定・読取専用監査 v3 =====");
   console.log({
     readOnly: true,
     incorrectValues: incorrectValues.length,
