@@ -58,6 +58,8 @@ jobs:
         run: npm run check:market-ranking-parser
 
       - name: Validate holding-company revenue profile
+        id: holding-profile
+        continue-on-error: true
         run: npx tsx scripts/check-operating-revenue-profile.ts
 
       - name: Repair Prime and Standard ranking data
@@ -80,9 +82,10 @@ jobs:
             reports/market-ranking-data-repair.json
             reports/market-ranking-data-audit.json
             reports/global-company-search-audit.json
+            reports/operating-revenue-profile-check.json
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Fail when any company repair failed
-        if: steps.repair.outcome == 'failure'
+      - name: Fail when validation or repair failed
+        if: steps.holding-profile.outcome == 'failure' || steps.repair.outcome == 'failure'
         run: exit 1
