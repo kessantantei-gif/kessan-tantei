@@ -31,7 +31,6 @@ type Period = {
   document_id: string;
   financials: Json | null;
 };
-
 type Result = {
   ticker: string;
   companyName: string;
@@ -40,6 +39,9 @@ type Result = {
   sourcePeriods: number;
   latestCorrected: boolean;
   status: "repaired" | "unchanged" | "insufficient-source" | "failed";
+  zeroFieldsBefore?: string[];
+  zeroFieldsAfter?: string[];
+  invalidHistoryPeriods?: Array<{ period: string; fields: string[] }>;
   error?: string;
 };
 
@@ -64,34 +66,63 @@ function periodKey(row: Json) {
   return String(row.periodEnd ?? row.period_end ?? row.fiscalYear ?? row.fiscal_year ?? row.year ?? "");
 }
 
-function coreValues(row: Json | null | undefined) {
+function profile(company: Company): "bank" | "insurance" | "general" {
+  const source = `${company.company_name} ${company.industry_name ?? ""}`;
+  if (/銀行|信用金庫|bank/i.test(source)) return "bank";
+  if (/保険|生命|損害|insurance/i.test(source)) return "insurance";
+  return "general";
+}
+
+function requiredFields(company: Company) {
+  const kind = profile(company);
+  if (kind === "bank") {
+    return ["revenue", "operatingIncome", "cash", "assets", "liabilities", "netAssets", "loans", "deposits"];
+  }
+  if (kind === "insurance") {
+    return ["revenue", "operatingIncome", "cash", "assets", "liabilities", "netAssets", "policyReserves"];
+  }
+  return [
+    "revenue",
+    "operatingIncome",
+    "operatingCF",
+    "cash",
+    "currentAssets",
+    "currentLiabilities",
+    "assets",
+    "netAssets",
+  ];
+}
+
+function invalidFields(company: Company, row: Json | null | undefined) {
   const source = row ?? {};
-  return {
-    revenue: finite(source.revenue) ? source.revenue : null,
-    operatingIncome: finite(source.operatingIncome) ? source.operatingIncome : null,
-    operatingCF: finite(source.operatingCF) ? source.operatingCF : null,
-    cash: finite(source.cash) ? source.cash : null,
-    assets: finite(source.assets) ? source.assets : null,
-    netAssets: finite(source.netAssets) ? source.netAssets : null,
-  };
+  return requiredFields(company).filter((key) => {
+    const value = source[key];
+    return !finite(value) || value === 0;
+  });
 }
 
-function invalidLatest(financials: Json | null) {
-  const values = coreValues(financials);
-  const balanceMissing = values.assets === null || values.netAssets === null || values.cash === null;
-  const performance = [values.revenue, values.operatingIncome, values.operatingCF];
-  const performanceMissing = performance.every((value) => value === null);
-  const suspiciousAllZero = Object.values(values).every((value) => value === null || value === 0);
-  return balanceMissing || performanceMissing || suspiciousAllZero;
+function invalidHistory(company: Company, history: Json[] | null | undefined) {
+  if (!Array.isArray(history)) return [];
+  return history
+    .filter(Boolean)
+    .map((row) => ({ period: periodKey(row), fields: invalidFields(company, row) }))
+    .filter((row) => row.fields.length > 0);
 }
 
-function materiallyDifferent(a: Json | null, b: Json | null) {
+function comparableValues(company: Company, row: Json | null | undefined) {
+  const source = row ?? {};
+  return Object.fromEntries(
+    requiredFields(company).map((key) => [key, finite(source[key]) ? source[key] : null])
+  ) as Record<string, number | null>;
+}
+
+function materiallyDifferent(company: Company, a: Json | null, b: Json | null) {
   if (!a || !b) return false;
-  const left = coreValues(a);
-  const right = coreValues(b);
+  const left = comparableValues(company, a);
+  const right = comparableValues(company, b);
   return Object.keys(left).some((key) => {
-    const l = left[key as keyof typeof left];
-    const r = right[key as keyof typeof right];
+    const l = left[key];
+    const r = right[key];
     if (l === null || r === null) return l !== r;
     const scale = Math.max(Math.abs(l), Math.abs(r), 1);
     return Math.abs(l - r) / scale > 0.000001;
@@ -100,7 +131,7 @@ function materiallyDifferent(a: Json | null, b: Json | null) {
 
 function uniquePeriods(rows: Period[]) {
   const byPeriod = new Map<string, Period>();
-  for (const row of rows.sort((a, b) => b.period_end.localeCompare(a.period_end))) {
+  for (const row of [...rows].sort((a, b) => b.period_end.localeCompare(a.period_end))) {
     const key = row.period_end || String(row.fiscal_year);
     if (!byPeriod.has(key)) byPeriod.set(key, row);
   }
@@ -180,14 +211,15 @@ async function main() {
     const periods = uniquePeriods(periodsByCompany.get(company.id) ?? []);
     const latestPeriod = periods.at(-1)?.financials ?? null;
     return (
-      invalidLatest(analysis.financials) ||
-      materiallyDifferent(analysis.financials, latestPeriod) ||
+      invalidFields(company, analysis.financials).length > 0 ||
+      invalidHistory(company, analysis.history).length > 0 ||
+      materiallyDifferent(company, analysis.financials, latestPeriod) ||
       historyCount(analysis.history) < 3
     );
   });
 
   console.log("===== 財務数値・3期履歴 統合修復 =====");
-  console.log({ targets: targets.length, dryRun, concurrency });
+  console.log({ targets: targets.length, dryRun, concurrency, zeroRule: "必須項目が1つでも0なら異常" });
 
   const initial = new Map(
     targets.map((company) => {
@@ -195,6 +227,7 @@ async function main() {
       return [company.ticker, {
         beforeHistory: historyCount(analysis.history),
         beforeFinancials: analysis.financials,
+        zeroFieldsBefore: invalidFields(company, analysis.financials),
       }];
     })
   );
@@ -225,7 +258,9 @@ async function main() {
     const analysis = afterAnalysisMap.get(company.ticker);
     const sourcePeriods = uniquePeriods(afterPeriodsByCompany.get(company.id) ?? []).length;
     const afterHistory = historyCount(analysis?.history);
-    const latestCorrected = materiallyDifferent(beforeRow.beforeFinancials, analysis?.financials ?? null);
+    const latestCorrected = materiallyDifferent(company, beforeRow.beforeFinancials, analysis?.financials ?? null);
+    const zeroFieldsAfter = invalidFields(company, analysis?.financials);
+    const invalidHistoryPeriods = invalidHistory(company, analysis?.history);
 
     if (!analysis) {
       return {
@@ -235,12 +270,15 @@ async function main() {
         afterHistory: 0,
         sourcePeriods,
         latestCorrected,
+        zeroFieldsBefore: beforeRow.zeroFieldsBefore,
+        zeroFieldsAfter,
+        invalidHistoryPeriods,
         status: "failed",
         error: "更新後の分析データがありません",
       };
     }
 
-    if (invalidLatest(analysis.financials)) {
+    if (zeroFieldsAfter.length > 0) {
       return {
         ticker: company.ticker,
         companyName: company.company_name,
@@ -248,8 +286,27 @@ async function main() {
         afterHistory,
         sourcePeriods,
         latestCorrected,
+        zeroFieldsBefore: beforeRow.zeroFieldsBefore,
+        zeroFieldsAfter,
+        invalidHistoryPeriods,
         status: "failed",
-        error: "最新期の必須数値が原本再取得後も不足",
+        error: `最新期に0または未取得の必須項目があります: ${zeroFieldsAfter.join(", ")}`,
+      };
+    }
+
+    if (invalidHistoryPeriods.length > 0) {
+      return {
+        ticker: company.ticker,
+        companyName: company.company_name,
+        beforeHistory: beforeRow.beforeHistory,
+        afterHistory,
+        sourcePeriods,
+        latestCorrected,
+        zeroFieldsBefore: beforeRow.zeroFieldsBefore,
+        zeroFieldsAfter,
+        invalidHistoryPeriods,
+        status: "failed",
+        error: "履歴内に0または未取得の必須項目が残っています",
       };
     }
 
@@ -261,6 +318,9 @@ async function main() {
         afterHistory,
         sourcePeriods,
         latestCorrected,
+        zeroFieldsBefore: beforeRow.zeroFieldsBefore,
+        zeroFieldsAfter,
+        invalidHistoryPeriods,
         status: "failed",
         error: "3期以上の原本があるのに3期反映されていません",
       };
@@ -274,11 +334,14 @@ async function main() {
         afterHistory,
         sourcePeriods,
         latestCorrected,
+        zeroFieldsBefore: beforeRow.zeroFieldsBefore,
+        zeroFieldsAfter,
+        invalidHistoryPeriods,
         status: "insufficient-source",
       };
     }
 
-    const repaired = latestCorrected || afterHistory > beforeRow.beforeHistory;
+    const repaired = latestCorrected || afterHistory > beforeRow.beforeHistory || beforeRow.zeroFieldsBefore.length > 0;
     return {
       ticker: company.ticker,
       companyName: company.company_name,
@@ -286,6 +349,9 @@ async function main() {
       afterHistory,
       sourcePeriods,
       latestCorrected,
+      zeroFieldsBefore: beforeRow.zeroFieldsBefore,
+      zeroFieldsAfter,
+      invalidHistoryPeriods,
       status: repaired ? "repaired" : "unchanged",
     };
   });
