@@ -44,7 +44,7 @@ check(
 );
 check(
   csv.current.revenue === 339487000000,
-  "CSVで連結売上高より単体営業収益を優先しています"
+  "CSVで連結売上高を取得できません"
 );
 
 const xbrl = parseEdinetFinancialsFromXbrl(`
@@ -66,7 +66,7 @@ check(
 );
 check(
   xbrl.revenue === 339487000000,
-  "XBRLで連結売上高より単体営業収益を優先しています"
+  "XBRLで連結売上高を取得できません"
 );
 
 const report = {
