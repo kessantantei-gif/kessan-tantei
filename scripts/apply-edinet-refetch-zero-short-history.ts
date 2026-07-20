@@ -6,17 +6,33 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import { parseEdinetFinancials } from "../lib/edinet-parser";
 import { supabaseAdmin } from "../lib/supabase";
+import { loadAllSupabaseRows } from "../lib/load-all-supabase-rows";
 
 type Json = Record<string, unknown>;
-type TargetRow = {
+
+type AuditRow = {
   ticker: string;
   companyName: string;
   reasons: string[];
   zeroFields: string[];
   historyCount: number;
+};
+
+type AuditReport = { rows?: AuditRow[] };
+
+type SourceRow = {
+  ticker: string;
+  companyName: string;
   documentIds: string[];
 };
-type Report = { targetRows?: TargetRow[] };
+
+type SourceReport = { targetRows?: SourceRow[] };
+
+type Analysis = {
+  ticker: string;
+  financials: Json | null;
+  history: Json[] | null;
+};
 
 const FIELDS = [
   "revenue",
@@ -50,7 +66,7 @@ function finite(value: unknown): value is number {
 }
 
 function explicitZeroFields(row: Json | null | undefined) {
-  if (!row) return [];
+  if (!row) return [] as string[];
   return FIELDS.filter((field) => field in row && finite(row[field]) && row[field] === 0);
 }
 
@@ -59,14 +75,13 @@ function periodKey(row: Json | null | undefined) {
   return String(row.periodEnd ?? row.fiscalYear ?? row.year ?? "");
 }
 
-function latestReportPath() {
+function latestLog(prefix: string) {
   const logsDir = path.join(process.cwd(), "logs");
-  const files = fs
-    .readdirSync(logsDir)
-    .filter((name) => /^refetch-zero-short-history-.*\.json$/.test(name))
-    .sort();
-  const name = files.at(-1);
-  if (!name) throw new Error("refetch-zero-short-history の監査レポートがありません");
+  const name = fs.readdirSync(logsDir)
+    .filter((file) => file.startsWith(prefix) && file.endsWith(".json"))
+    .sort()
+    .at(-1);
+  if (!name) throw new Error(`${prefix} のレポートがありません`);
   return path.join(logsDir, name);
 }
 
@@ -78,12 +93,12 @@ function validZip(docId: string) {
 }
 
 function download(docId: string) {
-  if (validZip(docId)) return;
+  if (validZip(docId)) return false;
   execSync(`DOC_ID=${docId} npx tsx scripts/download-edinet.ts`, { stdio: "inherit" });
+  return true;
 }
 
 function parseDocument(docId: string): Json {
-  download(docId);
   const parsed = parseEdinetFinancials(docId) as unknown as Json;
   const key = periodKey(parsed);
   if (!key) throw new Error(`決算期を取得できません: ${docId}`);
@@ -101,104 +116,144 @@ function uniqueLatestThree(rows: Json[]) {
     .slice(-3);
 }
 
+function currentState(analysis: Analysis) {
+  const financials = analysis.financials ?? null;
+  const history = Array.isArray(analysis.history) ? analysis.history : [];
+  const zeroFields = [...new Set([
+    ...explicitZeroFields(financials),
+    ...history.flatMap((row) => explicitZeroFields(row)),
+  ])];
+  const historyCount = new Set(history.map(periodKey).filter(Boolean)).size;
+  return { financials, history, zeroFields, historyCount };
+}
+
 async function main() {
   const apply = process.argv.includes("--apply");
-  const maxTargetsArg = arg("max-targets");
-  const parsedMaxTargets = maxTargetsArg === undefined ? null : Number(maxTargetsArg);
-  const maxTargets =
-    parsedMaxTargets !== null && Number.isFinite(parsedMaxTargets) && parsedMaxTargets > 0
-      ? Math.floor(parsedMaxTargets)
-      : null;
+  const batchSizeArg = Number(arg("batch-size") ?? "20");
+  const batchSize = Number.isFinite(batchSizeArg) && batchSizeArg > 0 ? Math.floor(batchSizeArg) : 20;
   const tickerFilter = arg("ticker");
-  const reportPath = latestReportPath();
-  const report = JSON.parse(fs.readFileSync(reportPath, "utf8")) as Report;
-  let targets = Array.isArray(report.targetRows) ? report.targetRows : [];
-  if (tickerFilter) targets = targets.filter((row) => row.ticker === tickerFilter);
-  if (maxTargets !== null) targets = targets.slice(0, maxTargets);
 
-  console.log("===== EDINET原本 0・3期未満 直接再取得 =====");
+  const auditPath = latestLog("audit-current-zero-short-history-");
+  const sourcePath = latestLog("refetch-zero-short-history-");
+  const audit = JSON.parse(fs.readFileSync(auditPath, "utf8")) as AuditReport;
+  const source = JSON.parse(fs.readFileSync(sourcePath, "utf8")) as SourceReport;
+  const sourceByTicker = new Map((source.targetRows ?? []).map((row) => [row.ticker, row]));
+
+  const analyses = await loadAllSupabaseRows<Analysis>("分析取得失敗", (from, to) =>
+    supabaseAdmin
+      .from("company_analyses")
+      .select("ticker, financials, history")
+      .order("ticker", { ascending: true })
+      .range(from, to)
+  );
+  const analysisByTicker = new Map(analyses.map((row) => [row.ticker, row]));
+
+  let pending = (audit.rows ?? []).filter((target) => {
+    if (tickerFilter && target.ticker !== tickerFilter) return false;
+    const analysis = analysisByTicker.get(target.ticker);
+    if (!analysis) return true;
+    const state = currentState(analysis);
+    const needsHistory = target.reasons.includes("history_under_3") && state.historyCount < 3;
+    return state.zeroFields.length > 0 || needsHistory;
+  });
+
+  const remainingBeforeBatch = pending.length;
+  pending = pending.slice(0, batchSize);
+
+  console.log("===== EDINET原本 修復バッチ =====");
   console.log({
     apply,
-    reportPath,
-    targets: targets.length,
-    maxTargets: maxTargets ?? "unlimited",
+    auditPath,
+    sourcePath,
+    remainingBeforeBatch,
+    batchTargets: pending.length,
+    batchSize,
     tickerFilter: tickerFilter ?? null,
   });
 
   const results: Json[] = [];
+  let updated = 0;
+  let downloaded = 0;
+  let failed = 0;
 
-  for (const target of targets) {
-    const { data: current, error: loadError } = await supabaseAdmin
-      .from("company_analyses")
-      .select("ticker, financials, history")
-      .eq("ticker", target.ticker)
-      .maybeSingle();
-    if (loadError) throw new Error(`${target.ticker}: 現在値取得失敗 ${loadError.message}`);
-    if (!current) {
+  for (let index = 0; index < pending.length; index += 1) {
+    const target = pending[index];
+    const analysis = analysisByTicker.get(target.ticker);
+    const sourceRow = sourceByTicker.get(target.ticker);
+
+    console.log(`[${index + 1}/${pending.length}] ${target.ticker} ${target.companyName}`);
+
+    if (!analysis) {
+      failed += 1;
       results.push({ ticker: target.ticker, status: "missing_analysis" });
       continue;
     }
-
-    const currentFinancials = (current.financials ?? null) as Json | null;
-    const currentHistory = Array.isArray(current.history) ? (current.history as Json[]) : [];
-    const currentZeroFields = [
-      ...new Set([
-        ...explicitZeroFields(currentFinancials),
-        ...currentHistory.flatMap((row) => explicitZeroFields(row)),
-      ]),
-    ];
-    const currentHistoryCount = new Set(currentHistory.map(periodKey).filter(Boolean)).size;
-
-    if (currentZeroFields.length === 0 && currentHistoryCount >= 3) {
-      results.push({ ticker: target.ticker, status: "already_resolved" });
+    if (!sourceRow || sourceRow.documentIds.length === 0) {
+      failed += 1;
+      results.push({ ticker: target.ticker, status: "missing_source_documents" });
       continue;
     }
 
+    const before = currentState(analysis);
+    const needsThree = target.reasons.includes("history_under_3");
+    const requiredHistoryCount = needsThree ? 3 : Math.max(1, Math.min(3, before.historyCount));
     const parsedRows: Json[] = [];
     const parseFailures: Json[] = [];
-    for (const docId of target.documentIds) {
+    const usedDocumentIds: string[] = [];
+
+    for (const docId of sourceRow.documentIds) {
       try {
-        parsedRows.push(parseDocument(docId));
+        if (download(docId)) downloaded += 1;
+        const parsed = parseDocument(docId);
+        parsedRows.push(parsed);
+        usedDocumentIds.push(docId);
+
+        const interimHistory = uniqueLatestThree(parsedRows);
+        const interimLatest = parsedRows[0] ?? null;
+        const interimZeros = [...new Set([
+          ...explicitZeroFields(interimLatest),
+          ...interimHistory.flatMap((row) => explicitZeroFields(row)),
+        ])];
+
+        if (interimHistory.length >= requiredHistoryCount && interimZeros.length === 0) break;
       } catch (error) {
-        parseFailures.push({ docId, error: error instanceof Error ? error.message : String(error) });
+        parseFailures.push({
+          docId,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
 
     const history = uniqueLatestThree(parsedRows);
     const latest = parsedRows[0] ?? null;
-    const remainingZeroFields = [
-      ...new Set([
-        ...explicitZeroFields(latest),
-        ...history.flatMap((row) => explicitZeroFields(row)),
-      ]),
-    ];
+    const remainingZeroFields = [...new Set([
+      ...explicitZeroFields(latest),
+      ...history.flatMap((row) => explicitZeroFields(row)),
+    ])];
+    const canApply = Boolean(latest)
+      && remainingZeroFields.length === 0
+      && history.length >= requiredHistoryCount;
 
-    const canFixHistory = !target.reasons.includes("history_under_3") || history.length >= 3;
-    const preview = {
+    const resultBase = {
       ticker: target.ticker,
       companyName: target.companyName,
-      status: apply ? "pending_apply" : "preview",
-      reasons: target.reasons,
-      before: { zeroFields: currentZeroFields, historyCount: currentHistoryCount },
+      before: { zeroFields: before.zeroFields, historyCount: before.historyCount },
       after: { zeroFields: remainingZeroFields, historyCount: history.length },
-      documentIds: target.documentIds,
-      parsedDocumentIds: parsedRows.map((row) => row.docID),
+      requiredHistoryCount,
+      usedDocumentIds,
       parseFailures,
-      canFixHistory,
     };
 
-    if (!apply) {
-      results.push(preview);
-      console.log("[PREVIEW]", preview);
+    if (!canApply) {
+      failed += 1;
+      results.push({ ...resultBase, status: "still_invalid" });
+      console.log(`[SKIP] ${target.ticker} history=${history.length} remainingZero=${remainingZeroFields.length}`);
       continue;
     }
 
-    if (!latest) {
-      results.push({ ...preview, status: "failed_no_latest" });
-      continue;
-    }
-    if (!canFixHistory) {
-      results.push({ ...preview, status: "failed_history_under_3" });
+    if (!apply) {
+      results.push({ ...resultBase, status: "preview_ready" });
+      console.log(`[READY] ${target.ticker} history=${history.length}`);
       continue;
     }
 
@@ -208,12 +263,14 @@ async function main() {
       .eq("ticker", target.ticker);
 
     if (updateError) {
-      results.push({ ...preview, status: "failed_update", error: updateError.message });
+      failed += 1;
+      results.push({ ...resultBase, status: "failed_update", error: updateError.message });
       continue;
     }
 
-    results.push({ ...preview, status: "updated" });
-    console.log(`[UPDATED] ${target.ticker} history=${history.length} remainingZero=${remainingZeroFields.length}`);
+    updated += 1;
+    results.push({ ...resultBase, status: "updated" });
+    console.log(`[UPDATED] ${target.ticker} history=${history.length}`);
   }
 
   const outputPath = path.join(
@@ -221,11 +278,28 @@ async function main() {
     "logs",
     `apply-edinet-refetch-zero-short-history-${new Date().toISOString().replace(/[:.]/g, "-")}.json`
   );
-  fs.writeFileSync(
+  fs.writeFileSync(outputPath, JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    apply,
+    auditPath,
+    sourcePath,
+    remainingBeforeBatch,
+    batchTargets: pending.length,
+    updated,
+    downloaded,
+    failed,
+    results,
+  }, null, 2));
+
+  console.log({
+    apply,
+    remainingBeforeBatch,
+    processed: pending.length,
+    updated,
+    downloaded,
+    failed,
     outputPath,
-    JSON.stringify({ generatedAt: new Date().toISOString(), apply, reportPath, results }, null, 2)
-  );
-  console.log({ apply, processed: results.length, outputPath });
+  });
 }
 
 main().catch((error) => {
