@@ -34,6 +34,22 @@ type Analysis = {
   history: Json[] | null;
 };
 
+type SourcePeriodStatus = "eligible" | "not_eligible" | "parse_failed";
+
+type SourcePeriodEntry = {
+  status: SourcePeriodStatus;
+  sourcePeriodCount: number;
+  periodKeys: string[];
+  checkedDocumentIds: string[];
+  parseFailures: Json[];
+  checkedAt: string;
+};
+
+type SourcePeriodState = {
+  updatedAt: string;
+  tickers: Record<string, SourcePeriodEntry>;
+};
+
 const FIELDS = [
   "revenue",
   "operatingIncome",
@@ -109,7 +125,22 @@ function uniqueLatestThree(rows: Json[]) {
   const byPeriod = new Map<string, Json>();
   for (const row of rows) {
     const key = periodKey(row);
-    if (key && !byPeriod.has(key)) byPeriod.set(key, row);
+    if (key) byPeriod.set(key, row);
+  }
+  return [...byPeriod.values()]
+    .sort((a, b) => periodKey(a).localeCompare(periodKey(b)))
+    .slice(-3);
+}
+
+function mergeHistory(current: Json[], parsed: Json[]) {
+  const byPeriod = new Map<string, Json>();
+  for (const row of current) {
+    const key = periodKey(row);
+    if (key) byPeriod.set(key, row);
+  }
+  for (const row of parsed) {
+    const key = periodKey(row);
+    if (key) byPeriod.set(key, row);
   }
   return [...byPeriod.values()]
     .sort((a, b) => periodKey(a).localeCompare(periodKey(b)))
@@ -127,6 +158,65 @@ function currentState(analysis: Analysis) {
   return { financials, history, zeroFields, historyCount };
 }
 
+function sourceStatePath() {
+  return path.join(process.cwd(), "logs", "edinet-source-period-state.json");
+}
+
+function loadSourceState(): SourcePeriodState {
+  const file = sourceStatePath();
+  if (!fs.existsSync(file)) {
+    return { updatedAt: new Date().toISOString(), tickers: {} };
+  }
+  const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as Partial<SourcePeriodState>;
+  return {
+    updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : new Date().toISOString(),
+    tickers: parsed.tickers && typeof parsed.tickers === "object" ? parsed.tickers : {},
+  };
+}
+
+function saveSourceState(state: SourcePeriodState) {
+  state.updatedAt = new Date().toISOString();
+  fs.writeFileSync(sourceStatePath(), JSON.stringify(state, null, 2));
+}
+
+function importPreviousBatchResults(state: SourcePeriodState) {
+  const logsDir = path.join(process.cwd(), "logs");
+  const files = fs.readdirSync(logsDir)
+    .filter((name) => /^apply-edinet-refetch-zero-short-history-.*\.json$/.test(name))
+    .sort();
+
+  for (const file of files) {
+    const report = JSON.parse(fs.readFileSync(path.join(logsDir, file), "utf8")) as { results?: Json[] };
+    for (const result of report.results ?? []) {
+      const ticker = typeof result.ticker === "string" ? result.ticker : "";
+      const requiredHistoryCount = Number(result.requiredHistoryCount ?? 0);
+      const after = result.after as Json | undefined;
+      const historyCount = Number(after?.historyCount ?? NaN);
+      if (!ticker || requiredHistoryCount !== 3 || !Number.isFinite(historyCount)) continue;
+      if (state.tickers[ticker]) continue;
+
+      const parseFailures = Array.isArray(result.parseFailures) ? result.parseFailures as Json[] : [];
+      const checkedDocumentIds = Array.isArray(result.usedDocumentIds)
+        ? result.usedDocumentIds.filter((value): value is string => typeof value === "string")
+        : [];
+      const status: SourcePeriodStatus = historyCount >= 3
+        ? "eligible"
+        : parseFailures.length > 0
+          ? "parse_failed"
+          : "not_eligible";
+
+      state.tickers[ticker] = {
+        status,
+        sourcePeriodCount: Math.max(0, Math.min(3, historyCount)),
+        periodKeys: [],
+        checkedDocumentIds,
+        parseFailures,
+        checkedAt: new Date().toISOString(),
+      };
+    }
+  }
+}
+
 async function main() {
   const apply = process.argv.includes("--apply");
   const batchSizeArg = Number(arg("batch-size") ?? "20");
@@ -138,6 +228,10 @@ async function main() {
   const audit = JSON.parse(fs.readFileSync(auditPath, "utf8")) as AuditReport;
   const source = JSON.parse(fs.readFileSync(sourcePath, "utf8")) as SourceReport;
   const sourceByTicker = new Map((source.targetRows ?? []).map((row) => [row.ticker, row]));
+
+  const sourceState = loadSourceState();
+  importPreviousBatchResults(sourceState);
+  saveSourceState(sourceState);
 
   const analyses = await loadAllSupabaseRows<Analysis>("分析取得失敗", (from, to) =>
     supabaseAdmin
@@ -152,9 +246,14 @@ async function main() {
     if (tickerFilter && target.ticker !== tickerFilter) return false;
     const analysis = analysisByTicker.get(target.ticker);
     if (!analysis) return true;
-    const state = currentState(analysis);
-    const needsHistory = target.reasons.includes("history_under_3") && state.historyCount < 3;
-    return state.zeroFields.length > 0 || needsHistory;
+
+    const current = currentState(analysis);
+    const sourcePeriod = sourceState.tickers[target.ticker];
+    const blockedByParseFailure = sourcePeriod?.status === "parse_failed";
+    const needsZero = current.zeroFields.length > 0 && !blockedByParseFailure;
+    const needsHistoryDiscovery = current.historyCount < 3 && !sourcePeriod;
+    const needsHistoryRepair = current.historyCount < 3 && sourcePeriod?.status === "eligible";
+    return needsZero || needsHistoryDiscovery || needsHistoryRepair;
   });
 
   const remainingBeforeBatch = pending.length;
@@ -165,6 +264,7 @@ async function main() {
     apply,
     auditPath,
     sourcePath,
+    sourceStatePath: sourceStatePath(),
     remainingBeforeBatch,
     batchTargets: pending.length,
     batchSize,
@@ -175,6 +275,7 @@ async function main() {
   let updated = 0;
   let downloaded = 0;
   let failed = 0;
+  let notEligible = 0;
 
   for (let index = 0; index < pending.length; index += 1) {
     const target = pending[index];
@@ -190,13 +291,20 @@ async function main() {
     }
     if (!sourceRow || sourceRow.documentIds.length === 0) {
       failed += 1;
+      sourceState.tickers[target.ticker] = {
+        status: "parse_failed",
+        sourcePeriodCount: 0,
+        periodKeys: [],
+        checkedDocumentIds: [],
+        parseFailures: [{ error: "missing_source_documents" }],
+        checkedAt: new Date().toISOString(),
+      };
+      saveSourceState(sourceState);
       results.push({ ticker: target.ticker, status: "missing_source_documents" });
       continue;
     }
 
     const before = currentState(analysis);
-    const needsThree = target.reasons.includes("history_under_3");
-    const requiredHistoryCount = needsThree ? 3 : Math.max(1, Math.min(3, before.historyCount));
     const parsedRows: Json[] = [];
     const parseFailures: Json[] = [];
     const usedDocumentIds: string[] = [];
@@ -207,15 +315,7 @@ async function main() {
         const parsed = parseDocument(docId);
         parsedRows.push(parsed);
         usedDocumentIds.push(docId);
-
-        const interimHistory = uniqueLatestThree(parsedRows);
-        const interimLatest = parsedRows[0] ?? null;
-        const interimZeros = [...new Set([
-          ...explicitZeroFields(interimLatest),
-          ...interimHistory.flatMap((row) => explicitZeroFields(row)),
-        ])];
-
-        if (interimHistory.length >= requiredHistoryCount && interimZeros.length === 0) break;
+        if (uniqueLatestThree(parsedRows).length >= 3) break;
       } catch (error) {
         parseFailures.push({
           docId,
@@ -224,42 +324,70 @@ async function main() {
       }
     }
 
-    const history = uniqueLatestThree(parsedRows);
+    const sourceHistory = uniqueLatestThree(parsedRows);
+    const sourcePeriodCount = sourceHistory.length;
+    const sourceStatus: SourcePeriodStatus = sourcePeriodCount >= 3
+      ? "eligible"
+      : parseFailures.length > 0
+        ? "parse_failed"
+        : "not_eligible";
+
+    sourceState.tickers[target.ticker] = {
+      status: sourceStatus,
+      sourcePeriodCount,
+      periodKeys: sourceHistory.map(periodKey),
+      checkedDocumentIds: usedDocumentIds,
+      parseFailures,
+      checkedAt: new Date().toISOString(),
+    };
+    saveSourceState(sourceState);
+
     const latest = parsedRows[0] ?? null;
+    const mergedHistory = mergeHistory(before.history, parsedRows);
     const remainingZeroFields = [...new Set([
       ...explicitZeroFields(latest),
-      ...history.flatMap((row) => explicitZeroFields(row)),
+      ...mergedHistory.flatMap((row) => explicitZeroFields(row)),
     ])];
+    const hasZeroProblem = before.zeroFields.length > 0;
+    const historyRepairAllowed = sourceStatus === "eligible";
     const canApply = Boolean(latest)
       && remainingZeroFields.length === 0
-      && history.length >= requiredHistoryCount;
+      && (hasZeroProblem || historyRepairAllowed);
 
     const resultBase = {
       ticker: target.ticker,
       companyName: target.companyName,
       before: { zeroFields: before.zeroFields, historyCount: before.historyCount },
-      after: { zeroFields: remainingZeroFields, historyCount: history.length },
-      requiredHistoryCount,
+      after: { zeroFields: remainingZeroFields, historyCount: mergedHistory.length },
+      sourcePeriodStatus: sourceStatus,
+      sourcePeriodCount,
+      sourcePeriodKeys: sourceHistory.map(periodKey),
       usedDocumentIds,
       parseFailures,
     };
 
     if (!canApply) {
-      failed += 1;
-      results.push({ ...resultBase, status: "still_invalid" });
-      console.log(`[SKIP] ${target.ticker} history=${history.length} remainingZero=${remainingZeroFields.length}`);
+      if (sourceStatus === "not_eligible" && !hasZeroProblem) {
+        notEligible += 1;
+        results.push({ ...resultBase, status: "not_eligible_for_three_periods" });
+        console.log(`[NOT_ELIGIBLE] ${target.ticker} sourcePeriods=${sourcePeriodCount}`);
+      } else {
+        failed += 1;
+        results.push({ ...resultBase, status: "still_invalid" });
+        console.log(`[SKIP] ${target.ticker} sourcePeriods=${sourcePeriodCount} remainingZero=${remainingZeroFields.length}`);
+      }
       continue;
     }
 
     if (!apply) {
       results.push({ ...resultBase, status: "preview_ready" });
-      console.log(`[READY] ${target.ticker} history=${history.length}`);
+      console.log(`[READY] ${target.ticker} history=${mergedHistory.length}`);
       continue;
     }
 
     const { error: updateError } = await supabaseAdmin
       .from("company_analyses")
-      .update({ financials: latest, history })
+      .update({ financials: latest, history: mergedHistory })
       .eq("ticker", target.ticker);
 
     if (updateError) {
@@ -270,7 +398,7 @@ async function main() {
 
     updated += 1;
     results.push({ ...resultBase, status: "updated" });
-    console.log(`[UPDATED] ${target.ticker} history=${history.length}`);
+    console.log(`[UPDATED] ${target.ticker} history=${mergedHistory.length}`);
   }
 
   const outputPath = path.join(
@@ -283,11 +411,13 @@ async function main() {
     apply,
     auditPath,
     sourcePath,
+    sourceStatePath: sourceStatePath(),
     remainingBeforeBatch,
     batchTargets: pending.length,
     updated,
     downloaded,
     failed,
+    notEligible,
     results,
   }, null, 2));
 
@@ -298,6 +428,7 @@ async function main() {
     updated,
     downloaded,
     failed,
+    notEligible,
     outputPath,
   });
 }
