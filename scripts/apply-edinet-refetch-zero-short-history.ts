@@ -103,16 +103,27 @@ function uniqueLatestThree(rows: Json[]) {
 
 async function main() {
   const apply = process.argv.includes("--apply");
-  const maxTargets = Math.max(1, Number(arg("max-targets") ?? "1"));
+  const maxTargetsArg = arg("max-targets");
+  const parsedMaxTargets = maxTargetsArg === undefined ? null : Number(maxTargetsArg);
+  const maxTargets =
+    parsedMaxTargets !== null && Number.isFinite(parsedMaxTargets) && parsedMaxTargets > 0
+      ? Math.floor(parsedMaxTargets)
+      : null;
   const tickerFilter = arg("ticker");
   const reportPath = latestReportPath();
   const report = JSON.parse(fs.readFileSync(reportPath, "utf8")) as Report;
   let targets = Array.isArray(report.targetRows) ? report.targetRows : [];
   if (tickerFilter) targets = targets.filter((row) => row.ticker === tickerFilter);
-  targets = targets.slice(0, maxTargets);
+  if (maxTargets !== null) targets = targets.slice(0, maxTargets);
 
   console.log("===== EDINET原本 0・3期未満 直接再取得 =====");
-  console.log({ apply, reportPath, targets: targets.length, maxTargets, tickerFilter: tickerFilter ?? null });
+  console.log({
+    apply,
+    reportPath,
+    targets: targets.length,
+    maxTargets: maxTargets ?? "unlimited",
+    tickerFilter: tickerFilter ?? null,
+  });
 
   const results: Json[] = [];
 
@@ -210,7 +221,10 @@ async function main() {
     "logs",
     `apply-edinet-refetch-zero-short-history-${new Date().toISOString().replace(/[:.]/g, "-")}.json`
   );
-  fs.writeFileSync(outputPath, JSON.stringify({ generatedAt: new Date().toISOString(), apply, reportPath, results }, null, 2));
+  fs.writeFileSync(
+    outputPath,
+    JSON.stringify({ generatedAt: new Date().toISOString(), apply, reportPath, results }, null, 2)
+  );
   console.log({ apply, processed: results.length, outputPath });
 }
 
