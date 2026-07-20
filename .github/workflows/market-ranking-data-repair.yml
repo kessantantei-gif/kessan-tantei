@@ -3,6 +3,7 @@ name: Market Ranking Data Repair
 on:
   push:
     branches:
+      - main
       - agent/fix-market-rankings-global-search
     paths:
       - "lib/edinet-parser.ts"
@@ -10,7 +11,9 @@ on:
       - "scripts/analyze-company.ts"
       - "scripts/repair-market-ranking-data.ts"
       - "scripts/audit-market-ranking-data.ts"
+      - "scripts/audit-global-company-search.ts"
       - "scripts/check-market-ranking-parser.ts"
+      - "scripts/check-operating-revenue-profile.ts"
       - ".github/workflows/market-ranking-data-repair.yml"
   pull_request:
     paths:
@@ -19,7 +22,9 @@ on:
       - "scripts/analyze-company.ts"
       - "scripts/repair-market-ranking-data.ts"
       - "scripts/audit-market-ranking-data.ts"
+      - "scripts/audit-global-company-search.ts"
       - "scripts/check-market-ranking-parser.ts"
+      - "scripts/check-operating-revenue-profile.ts"
       - ".github/workflows/market-ranking-data-repair.yml"
   workflow_dispatch:
 
@@ -52,6 +57,9 @@ jobs:
       - name: Validate ranking parser
         run: npm run check:market-ranking-parser
 
+      - name: Validate holding-company revenue profile
+        run: npx tsx scripts/check-operating-revenue-profile.ts
+
       - name: Repair Prime and Standard ranking data
         id: repair
         continue-on-error: true
@@ -60,7 +68,10 @@ jobs:
       - name: Audit ranking availability and value quality
         run: npm run audit:market-ranking-data
 
-      - name: Upload ranking repair reports
+      - name: Audit all-market search coverage
+        run: npx tsx scripts/audit-global-company-search.ts
+
+      - name: Upload ranking and search reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -68,6 +79,7 @@ jobs:
           path: |
             reports/market-ranking-data-repair.json
             reports/market-ranking-data-audit.json
+            reports/global-company-search-audit.json
           if-no-files-found: warn
           retention-days: 7
 
