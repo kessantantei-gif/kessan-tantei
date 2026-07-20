@@ -7,6 +7,10 @@ on:
     paths:
       - "scripts/diagnose-market-ranking-values.ts"
       - ".github/workflows/market-ranking-value-diagnostics.yml"
+  pull_request:
+    paths:
+      - "scripts/diagnose-market-ranking-values.ts"
+      - ".github/workflows/market-ranking-value-diagnostics.yml"
   workflow_dispatch:
 
 jobs:
