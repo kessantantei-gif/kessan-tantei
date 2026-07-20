@@ -7,6 +7,10 @@ on:
     paths:
       - "scripts/apply-xbrl-summary-revenue-fix.mjs"
       - ".github/workflows/apply-xbrl-summary-revenue-fix.yml"
+  pull_request:
+    paths:
+      - "scripts/apply-xbrl-summary-revenue-fix.mjs"
+      - ".github/workflows/apply-xbrl-summary-revenue-fix.yml"
 
 permissions:
   contents: write
