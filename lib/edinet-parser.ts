@@ -8,7 +8,10 @@ export type FinancialMetricProfile =
   | "securities"
   | "insurance"
   | "special-finance"
-  | "commodity";
+  | "commodity"
+  | "ifrs"
+  | "insurance-ifrs"
+  | "operating-revenue";
 
 export type EdinetFinancials = {
   revenue: number;
@@ -76,6 +79,70 @@ const PROFILE_DEFINITIONS: Record<FinancialMetricProfile, ProfileDefinition> = {
     operatingIncomeLabel: "営業利益",
     currentRatioApplicable: true,
   },
+  ifrs: {
+    revenueElements: [
+      "RevenueIFRSSummaryOfBusinessResults",
+      "Revenue2IFRS",
+      "RevenueIFRS",
+      "RevenueFromExternalCustomers2IFRS",
+      "OperatingRevenueIFRS",
+    ],
+    operatingIncomeElements: [
+      "OperatingProfitLossIFRSKeyFinancialData",
+      "OperatingProfitLossIFRS",
+      "OperatingProfitIFRS",
+      "OperatingIncomeLossUSGAAPSummaryOfBusinessResults",
+    ],
+    cashElements: [
+      "CashAndCashEquivalentsIFRS",
+      "CashAndCashEquivalents",
+      "CashAndDeposits",
+    ],
+    revenueLabel: "売上収益",
+    operatingIncomeLabel: "営業利益",
+    currentRatioApplicable: true,
+  },
+  "insurance-ifrs": {
+    revenueElements: [
+      "Revenue2IFRS",
+      "InsuranceRevenueIFRSKeyFinancialData",
+      "InsuranceRevenueIFRS",
+      "RevenueIFRSSummaryOfBusinessResults",
+    ],
+    operatingIncomeElements: [
+      "ProfitLossBeforeTaxIFRSSummaryOfBusinessResults",
+      "ProfitLossBeforeTaxIFRS",
+    ],
+    cashElements: [
+      "CashAndCashEquivalentsIFRS",
+      "CashAndCashEquivalents",
+      "CashAndDepositsAssetsINS",
+      "CashAndDeposits",
+    ],
+    revenueLabel: "収益",
+    operatingIncomeLabel: "税引前利益",
+    currentRatioApplicable: false,
+  },
+  "operating-revenue": {
+    revenueElements: [
+      "OperatingRevenue1SummaryOfBusinessResults",
+      "OperatingRevenue1",
+      "OperatingRevenueIVT",
+      "OperatingRevenues",
+      "OperatingRevenue",
+    ],
+    operatingIncomeElements: [
+      "OperatingIncome",
+      "OperatingProfit",
+      "OperatingIncomeLoss",
+      "OrdinaryIncomeLossSummaryOfBusinessResults",
+      "OrdinaryIncome",
+    ],
+    cashElements: ["CashAndCashEquivalents", "CashAndDeposits"],
+    revenueLabel: "営業収益",
+    operatingIncomeLabel: "営業利益",
+    currentRatioApplicable: true,
+  },
   bank: {
     revenueElements: [
       "OrdinaryIncomeBNK",
@@ -84,7 +151,11 @@ const PROFILE_DEFINITIONS: Record<FinancialMetricProfile, ProfileDefinition> = {
       "Revenue",
     ],
     // 銀行業には営業利益の概念がないため、経常利益を比較利益として使用する。
-    operatingIncomeElements: ["OrdinaryIncome", "ProfitLoss"],
+    operatingIncomeElements: [
+      "OrdinaryIncomeLossSummaryOfBusinessResults",
+      "OrdinaryIncome",
+      "ProfitLoss",
+    ],
     cashElements: [
       "CashAndCashEquivalents",
       "CashAndDueFromBanksAssetsBNK",
@@ -113,9 +184,18 @@ const PROFILE_DEFINITIONS: Record<FinancialMetricProfile, ProfileDefinition> = {
   },
   insurance: {
     // 保険業タクソノミでは OperatingIncomeINS が「経常収益」を表す。
-    revenueElements: ["OperatingIncomeINS", "OperatingRevenueINS", "Revenue"],
+    revenueElements: [
+      "OrdinaryIncomeSummaryOfBusinessResults",
+      "OperatingIncomeINS",
+      "OperatingRevenueINS",
+      "Revenue",
+    ],
     // 保険業には営業利益の概念がないため、経常利益を比較利益として使用する。
-    operatingIncomeElements: ["OrdinaryIncome", "ProfitLoss"],
+    operatingIncomeElements: [
+      "OrdinaryIncomeLossSummaryOfBusinessResults",
+      "OrdinaryIncome",
+      "ProfitLoss",
+    ],
     cashElements: [
       "CashAndCashEquivalents",
       "CashAndDepositsAssetsINS",
@@ -356,6 +436,8 @@ function buildFinancials(
       definition.operatingIncomeElements
     ),
     operatingCF: extractFact(facts, contexts, durationContext, [
+      "CashFlowsFromUsedInOperatingActivitiesIFRSSummaryOfBusinessResults",
+      "NetCashProvidedByUsedInOperatingActivitiesIFRS",
       "NetCashProvidedByUsedInOperatingActivities",
       "CashFlowsFromUsedInOperatingActivities",
       "NetCashProvidedByOperatingActivities",
@@ -367,12 +449,21 @@ function buildFinancials(
     currentLiabilities: definition.currentRatioApplicable
       ? extractFact(facts, contexts, instantContext, ["CurrentLiabilities"])
       : 0,
-    assets: extractFact(facts, contexts, instantContext, ["Assets", "TotalAssets"]),
+    assets: extractFact(facts, contexts, instantContext, [
+      "TotalAssetsSummaryOfBusinessResults",
+      "AssetsIFRS",
+      "TotalAssetsIFRS",
+      "Assets",
+      "TotalAssets",
+    ]),
     netAssets: extractFact(facts, contexts, instantContext, [
       "NetAssets",
       "Equity",
       "TotalEquity",
       "EquityAttributableToOwnersOfParent",
+      "EquityAttributableToOwnersOfParentIFRS",
+      "EquityIFRS",
+      "TotalEquityIFRS",
     ]),
     financialProfile,
     revenueLabel: definition.revenueLabel,
@@ -403,12 +494,20 @@ function detectFinancialProfile(facts: NumericFact[]): FinancialMetricProfile {
   ) {
     return "bank";
   }
-  if (
-    elements.has("OperatingIncomeINS") ||
-    elements.has("CashAndDepositsAssetsINS")
-  ) {
-    return "insurance";
+
+  const insuranceMarkers = [
+    "OperatingIncomeINS",
+    "CashAndDepositsAssetsINS",
+    "InsuranceRevenueIFRSKeyFinancialData",
+    "InsuranceRevenueIFRS",
+    "NetPremiumsWrittenSummaryOfBusinessResultsINS",
+  ];
+  if (insuranceMarkers.some((element) => elements.has(element))) {
+    return elements.has("OrdinaryIncomeSummaryOfBusinessResults")
+      ? "insurance"
+      : "insurance-ifrs";
   }
+
   if (
     elements.has("OperatingRevenueSEC") ||
     elements.has("NetOperatingRevenueSEC")
@@ -417,6 +516,25 @@ function detectFinancialProfile(facts: NumericFact[]): FinancialMetricProfile {
   }
   if (elements.has("OperatingRevenueSPF")) return "special-finance";
   if (elements.has("OperatingRevenueCMD")) return "commodity";
+
+  if (
+    elements.has("RevenueIFRSSummaryOfBusinessResults") ||
+    elements.has("Revenue2IFRS") ||
+    elements.has("RevenueIFRS") ||
+    elements.has("OperatingProfitLossIFRS")
+  ) {
+    return "ifrs";
+  }
+
+  if (
+    elements.has("OperatingRevenue1SummaryOfBusinessResults") ||
+    elements.has("OperatingRevenue1") ||
+    elements.has("OperatingRevenueIVT") ||
+    elements.has("OperatingRevenues")
+  ) {
+    return "operating-revenue";
+  }
+
   return "general";
 }
 

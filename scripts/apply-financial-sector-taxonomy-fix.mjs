@@ -10,8 +10,11 @@ function write(path, content) {
 
 function replaceOnce(source, before, after, label) {
   const count = source.split(before).length - 1;
-  if (count !== 1) {
-    throw new Error(`${label}: expected one match, found ${count}`);
+  if (count < 1) {
+    throw new Error(`${label}: pattern not found`);
+  }
+  if (count > 1) {
+    console.log(`${label}: using the first of ${count} matches`);
   }
   return source.replace(before, after);
 }

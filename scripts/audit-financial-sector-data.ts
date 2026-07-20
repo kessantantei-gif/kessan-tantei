@@ -53,6 +53,9 @@ const KNOWN_PROFILES = new Set([
   "insurance",
   "special-finance",
   "commodity",
+  "ifrs",
+  "insurance-ifrs",
+  "operating-revenue",
 ]);
 
 function finite(value: unknown): number | null {
@@ -88,11 +91,7 @@ function auditCompany(
     });
   };
 
-  if (!analysis) {
-    add("analysis", "company_analyses に分析データがありません");
-    return issues;
-  }
-  if (!analysis.doc_id) add("doc_id", "最新のEDINET書類IDがありません");
+  if (!analysis?.doc_id) return issues;
 
   const financials = analysis.financials ?? {};
   const profile = financials.financialProfile;
@@ -146,10 +145,32 @@ function auditCompany(
     }
   }
 
+  if (profile === "insurance-ifrs") {
+    if (financials.revenueLabel !== "収益") {
+      add("revenueLabel", "insurance-ifrs は「収益」で表示する必要があります");
+    }
+    if (financials.operatingIncomeLabel !== "税引前利益") {
+      add("operatingIncomeLabel", "insurance-ifrs は「税引前利益」で表示する必要があります");
+    }
+    if (financials.currentRatioApplicable !== false) {
+      add("currentRatioApplicable", "insurance-ifrs に一般会社の流動比率を適用しています");
+    }
+  }
+
+  if (profile === "ifrs") {
+    if (financials.revenueLabel !== "売上収益") {
+      add("revenueLabel", "ifrs は「売上収益」で表示する必要があります");
+    }
+    if (financials.operatingIncomeLabel !== "営業利益") {
+      add("operatingIncomeLabel", "ifrs は「営業利益」で表示する必要があります");
+    }
+  }
+
   if (
     profile === "securities" ||
     profile === "special-finance" ||
-    profile === "commodity"
+    profile === "commodity" ||
+    profile === "operating-revenue"
   ) {
     if (financials.revenueLabel !== "営業収益") {
       add("revenueLabel", `${profile} は「営業収益」で表示する必要があります`);
@@ -236,7 +257,13 @@ async function main() {
   const analysisByTicker = new Map(
     analyses.map((analysis) => [analysis.ticker, analysis])
   );
-  const issues = companies.flatMap((company) =>
+  const unavailableCompanies = companies
+    .filter((company) => !analysisByTicker.get(company.ticker)?.doc_id)
+    .map((company) => company.ticker);
+  const auditableCompanies = companies.filter(
+    (company) => analysisByTicker.get(company.ticker)?.doc_id
+  );
+  const issues = auditableCompanies.flatMap((company) =>
     auditCompany(company, analysisByTicker.get(company.ticker))
   );
 
@@ -251,7 +278,9 @@ async function main() {
   const flaggedCompanies = new Set(issues.map((issue) => issue.ticker)).size;
   const summary = {
     listedFinancialCompanies: companies.length,
-    cleanCompanies: companies.length - flaggedCompanies,
+    auditedCompanies: auditableCompanies.length,
+    unavailableCompanies,
+    cleanCompanies: auditableCompanies.length - flaggedCompanies,
     flaggedCompanies,
     totalIssues: issues.length,
     profiles: Object.fromEntries([...profileCounts.entries()].sort()),

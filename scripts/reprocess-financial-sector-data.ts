@@ -9,6 +9,7 @@ type FinancialCompany = {
 };
 
 type StoredFinancials = {
+  revenue?: number | null;
   financialProfile?: string;
   revenueLabel?: string;
   operatingIncomeLabel?: string;
@@ -18,7 +19,12 @@ type StoredFinancials = {
 type AnalysisRow = {
   ticker: string;
   doc_id: string | null;
-  history: Array<{ docID?: string }> | null;
+  history: Array<{
+    docID?: string;
+    periodEnd?: string;
+    fiscalYear?: number | string;
+    year?: number | string;
+  }> | null;
   financials: StoredFinancials | null;
 };
 
@@ -34,6 +40,18 @@ function parsePositiveInteger(name: string, fallback: number) {
   const raw = process.argv.find((value) => value.startsWith(prefix))?.slice(prefix.length);
   const parsed = Number(raw ?? fallback);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function latestHistoryDocument(history: AnalysisRow["history"]) {
+  if (!Array.isArray(history)) return null;
+  return [...history]
+    .filter((row) => typeof row.docID === "string" && /^S100[A-Z0-9]+$/.test(row.docID))
+    .sort((left, right) => {
+      const leftKey = left.periodEnd ?? String(left.fiscalYear ?? left.year ?? "");
+      const rightKey = right.periodEnd ?? String(right.fiscalYear ?? right.year ?? "");
+      return leftKey.localeCompare(rightKey);
+    })
+    .at(-1)?.docID ?? null;
 }
 
 function alreadyUsesFinancialMetadata(financials: StoredFinancials | null) {
@@ -105,13 +123,25 @@ async function main() {
         return null;
       }
 
-      if (!force && alreadyUsesFinancialMetadata(analysis.financials)) {
+      const latestDocID = latestHistoryDocument(analysis.history) ?? analysis.doc_id;
+      const revenue = analysis.financials?.revenue;
+      const revenueIsValid =
+        typeof revenue === "number" && Number.isFinite(revenue) && revenue > 0;
+      const isCurrentDocument = latestDocID === analysis.doc_id;
+
+      if (
+        !force &&
+        alreadyUsesFinancialMetadata(analysis.financials) &&
+        revenueIsValid &&
+        isCurrentDocument
+      ) {
         alreadyUpdated += 1;
         return null;
       }
 
       const historyDocIDs = Array.from(
         new Set([
+          latestDocID,
           analysis.doc_id,
           ...(Array.isArray(analysis.history)
             ? analysis.history
@@ -127,7 +157,7 @@ async function main() {
       return {
         ticker: company.ticker,
         companyName: company.company_name,
-        docID: analysis.doc_id,
+        docID: latestDocID,
         historyDocIDs,
       };
     })
