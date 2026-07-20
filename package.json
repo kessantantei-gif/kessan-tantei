@@ -17,6 +17,7 @@
     "repair:market-memberships": "DOTENV_CONFIG_PATH=.env.local tsx scripts/repair-market-memberships.ts",
     "repair:financial-data": "tsx scripts/repair-financial-anomalies.ts",
     "repair:core-financial-data": "tsx scripts/repair-core-financial-data.ts",
+    "repair:financial-sector-data": "DOTENV_CONFIG_PATH=.env.local tsx scripts/reprocess-financial-sector-data.ts",
     "sync:jpx-markets": "DOTENV_CONFIG_PATH=.env.local tsx scripts/sync-jpx-all-markets.ts && DOTENV_CONFIG_PATH=.env.local tsx scripts/repair-market-memberships.ts",
     "sync:edinet-daily": "DOTENV_CONFIG_PATH=.env.local tsx scripts/sync-daily-edinet.ts",
     "complete:all-markets": "DOTENV_CONFIG_PATH=.env.local tsx scripts/run-all-markets-completion.ts",
@@ -42,6 +43,7 @@
     "cleanup:duplicate-tickers": "tsx scripts/cleanup-duplicate-tickers.ts",
     "normalize:history-periods": "tsx scripts/normalize-history-periods.ts",
     "check:fiscal-periods": "tsx scripts/check-fiscal-period-extraction.ts",
+    "check:financial-sector-parser": "tsx scripts/check-financial-sector-parser.ts",
     "audit:market-order": "tsx scripts/audit-market-display-order.ts",
     "audit:pro-boundaries": "tsx scripts/audit-pro-boundaries.ts"
   },
