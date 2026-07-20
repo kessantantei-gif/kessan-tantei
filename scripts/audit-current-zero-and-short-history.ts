@@ -20,14 +20,14 @@ type Analysis = {
   history: Json[] | null;
 };
 
-type EdinetTargetRow = {
-  ticker: string;
-  documentIds?: string[];
+type SourcePeriodEntry = {
+  status: "eligible" | "not_eligible" | "parse_failed";
+  sourcePeriodCount: number;
+  periodKeys?: string[];
 };
 
-type EdinetReport = {
-  targetRows?: EdinetTargetRow[];
-  unresolvedRows?: EdinetTargetRow[];
+type SourcePeriodState = {
+  tickers?: Record<string, SourcePeriodEntry>;
 };
 
 const FIELDS = [
@@ -66,30 +66,19 @@ function periodKey(row: Json | null | undefined) {
   return String(row.periodEnd ?? row.fiscalYear ?? row.year ?? "");
 }
 
-function latestEdinetReportPath() {
-  const logsDir = path.join(process.cwd(), "logs");
-  const files = fs
-    .readdirSync(logsDir)
-    .filter((name) => /^refetch-zero-short-history-.*\.json$/.test(name))
-    .sort();
-  const name = files.at(-1);
-  if (!name) throw new Error("EDINET監査レポートがありません");
-  return path.join(logsDir, name);
+function sourceStatePath() {
+  return path.join(process.cwd(), "logs", "edinet-source-period-state.json");
+}
+
+function loadSourceState() {
+  const file = sourceStatePath();
+  if (!fs.existsSync(file)) return new Map<string, SourcePeriodEntry>();
+  const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as SourcePeriodState;
+  return new Map(Object.entries(parsed.tickers ?? {}));
 }
 
 async function main() {
-  const edinetReportPath = latestEdinetReportPath();
-  const edinetReport = JSON.parse(fs.readFileSync(edinetReportPath, "utf8")) as EdinetReport;
-  const edinetRows = [
-    ...(Array.isArray(edinetReport.targetRows) ? edinetReport.targetRows : []),
-    ...(Array.isArray(edinetReport.unresolvedRows) ? edinetReport.unresolvedRows : []),
-  ];
-  const edinetDocCountByTicker = new Map(
-    edinetRows.map((row) => [
-      row.ticker,
-      Array.isArray(row.documentIds) ? new Set(row.documentIds).size : 0,
-    ])
-  );
+  const sourceStateByTicker = loadSourceState();
 
   const [companies, analyses] = await Promise.all([
     loadAllSupabaseRows<Company>("会社取得失敗", (from, to) =>
@@ -110,7 +99,7 @@ async function main() {
   ]);
 
   const companyByTicker = new Map(companies.map((row) => [row.ticker, row]));
-  const rows = analyses.flatMap((analysis) => {
+  const allRows = analyses.flatMap((analysis) => {
     const company = companyByTicker.get(analysis.ticker);
     if (!company) return [];
 
@@ -122,39 +111,53 @@ async function main() {
       ]),
     ].sort();
     const historyCount = new Set(history.map(periodKey).filter(Boolean)).size;
-    const edinetAnnualDocumentCount = edinetDocCountByTicker.get(analysis.ticker) ?? 0;
-    const historyUnder3 = historyCount < 3 && edinetAnnualDocumentCount >= 3;
-
-    if (zeros.length === 0 && !historyUnder3) return [];
+    const sourceState = sourceStateByTicker.get(analysis.ticker);
+    const historyUnder3 = historyCount < 3 && sourceState?.status === "eligible";
+    const historyEligibilityUnknown = historyCount < 3 && !sourceState;
+    const historySourceParseFailed = historyCount < 3 && sourceState?.status === "parse_failed";
+    const historyNotEligible = historyCount < 3 && sourceState?.status === "not_eligible";
 
     return [{
       ticker: analysis.ticker,
       companyName: company.company_name,
       zeroFields: zeros,
       historyCount,
-      edinetAnnualDocumentCount,
+      sourcePeriodStatus: sourceState?.status ?? "unknown",
+      sourcePeriodCount: sourceState?.sourcePeriodCount ?? null,
+      historyUnder3,
+      historyEligibilityUnknown,
+      historySourceParseFailed,
+      historyNotEligible,
       reasons: [
         ...(zeros.length > 0 ? ["zero"] : []),
         ...(historyUnder3 ? ["history_under_3"] : []),
+        ...(historyEligibilityUnknown ? ["history_eligibility_unknown"] : []),
+        ...(historySourceParseFailed ? ["history_source_parse_failed"] : []),
       ],
     }];
   });
 
-  const zeroRows = rows.filter((row) => row.zeroFields.length > 0);
-  const shortRows = rows.filter((row) => row.reasons.includes("history_under_3"));
-  const bothRows = rows.filter(
-    (row) => row.zeroFields.length > 0 && row.reasons.includes("history_under_3")
-  );
+  const rows = allRows.filter((row) => row.zeroFields.length > 0 || row.reasons.length > 0);
+  const zeroRows = allRows.filter((row) => row.zeroFields.length > 0);
+  const shortRows = allRows.filter((row) => row.historyUnder3);
+  const unknownRows = allRows.filter((row) => row.historyEligibilityUnknown);
+  const parseFailedRows = allRows.filter((row) => row.historySourceParseFailed);
+  const notEligibleRows = allRows.filter((row) => row.historyNotEligible);
+  const bothRows = allRows.filter((row) => row.zeroFields.length > 0 && row.historyUnder3);
 
   const report = {
     generatedAt: new Date().toISOString(),
-    edinetReportPath,
+    sourceStatePath: sourceStatePath(),
+    sourceStateCompanies: sourceStateByTicker.size,
     listedCompanies: companies.length,
     analyses: analyses.length,
     remainingTargets: rows.length,
     zeroCompanies: zeroRows.length,
     historyUnder3Companies: shortRows.length,
-    both: bothRows.length,
+    historyEligibilityUnknownCompanies: unknownRows.length,
+    historySourceParseFailedCompanies: parseFailedRows.length,
+    historyNotEligibleCompanies: notEligibleRows.length,
+    both,
     zeroFieldBreakdown: Object.fromEntries(
       FIELDS.map((field) => [field, zeroRows.filter((row) => row.zeroFields.includes(field)).length])
         .filter(([, count]) => count > 0)
@@ -172,13 +175,17 @@ async function main() {
 
   console.log("===== 現在DB 0・3期未満監査（読取専用） =====");
   console.log({
-    edinetReportPath,
+    sourceStatePath: report.sourceStatePath,
+    sourceStateCompanies: report.sourceStateCompanies,
     listedCompanies: report.listedCompanies,
     analyses: report.analyses,
     remainingTargets: report.remainingTargets,
     zeroCompanies: report.zeroCompanies,
     historyUnder3Companies: report.historyUnder3Companies,
-    both: report.both,
+    historyEligibilityUnknownCompanies: report.historyEligibilityUnknownCompanies,
+    historySourceParseFailedCompanies: report.historySourceParseFailedCompanies,
+    historyNotEligibleCompanies: report.historyNotEligibleCompanies,
+    both: bothRows.length,
     zeroFieldBreakdown: report.zeroFieldBreakdown,
     outputPath,
   });
