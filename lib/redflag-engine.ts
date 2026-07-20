@@ -42,6 +42,7 @@ export function analyzeRedFlags(input: RedFlagInput) {
       flags.push({ title: "営業CF 単期マイナス", scoreImpact: 10 });
     }
   } else if (input.ocfNegativeStreak >= 3) {
+    // 金融業の営業CFは預金・運用資産等の増減で大きく振れるため参考扱い。
     dangerScore += 10;
     flags.push({
       title: "金融業: 営業CF 3期マイナス（参考）",
@@ -49,7 +50,9 @@ export function analyzeRedFlags(input: RedFlagInput) {
     });
   }
 
+  // 銀行・保険は流動区分を採用しないため、一般会社向け流動比率判定を適用しない。
   if (
+    !financeLike &&
     input.currentAssets > 0 &&
     input.currentLiabilities > 0 &&
     input.currentAssets < input.currentLiabilities
@@ -58,7 +61,10 @@ export function analyzeRedFlags(input: RedFlagInput) {
     flags.push({ title: "流動資産 < 流動負債", scoreImpact: 20 });
   }
 
+  // 金融業の自己資本比率は規制資本・ソルベンシー等で見るべきため、
+  // 一般会社向け30%基準をそのまま適用しない。
   if (
+    !financeLike &&
     input.equityRatio !== undefined &&
     Number.isFinite(input.equityRatio) &&
     input.equityRatio < 30

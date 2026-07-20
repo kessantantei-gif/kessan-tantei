@@ -2,7 +2,15 @@ import fs from "fs";
 import path from "path";
 import AdmZip from "adm-zip";
 
-type Financials = {
+export type FinancialMetricProfile =
+  | "general"
+  | "bank"
+  | "securities"
+  | "insurance"
+  | "special-finance"
+  | "commodity";
+
+export type EdinetFinancials = {
   revenue: number;
   operatingIncome: number;
   operatingCF: number;
@@ -11,6 +19,10 @@ type Financials = {
   currentLiabilities: number;
   assets: number;
   netAssets: number;
+  financialProfile: FinancialMetricProfile;
+  revenueLabel: string;
+  operatingIncomeLabel: string;
+  currentRatioApplicable: boolean;
   periodEnd?: string;
   fiscalYear?: number;
   fiscalMonth?: number;
@@ -33,7 +45,113 @@ type NumericFact = {
   value: number;
 };
 
-export function parseEdinetFinancials(docID: string): Financials {
+type ProfileDefinition = {
+  revenueElements: string[];
+  operatingIncomeElements: string[];
+  cashElements: string[];
+  revenueLabel: string;
+  operatingIncomeLabel: string;
+  currentRatioApplicable: boolean;
+};
+
+const PROFILE_DEFINITIONS: Record<FinancialMetricProfile, ProfileDefinition> = {
+  general: {
+    revenueElements: [
+      "NetSales",
+      "Sales",
+      "Revenue",
+      "Revenues",
+      "OperatingRevenue",
+      "BusinessRevenue",
+      "SalesRevenue",
+    ],
+    operatingIncomeElements: [
+      "OperatingIncome",
+      "OperatingProfit",
+      "OperatingIncomeLoss",
+      "ProfitLossFromOperatingActivities",
+    ],
+    cashElements: ["CashAndCashEquivalents", "CashAndDeposits"],
+    revenueLabel: "売上高",
+    operatingIncomeLabel: "営業利益",
+    currentRatioApplicable: true,
+  },
+  bank: {
+    revenueElements: [
+      "OrdinaryIncomeBNK",
+      "OperatingRevenueBNK",
+      "NetSales",
+      "Revenue",
+    ],
+    // 銀行業には営業利益の概念がないため、経常利益を比較利益として使用する。
+    operatingIncomeElements: ["OrdinaryIncome", "ProfitLoss"],
+    cashElements: [
+      "CashAndCashEquivalents",
+      "CashAndDueFromBanksAssetsBNK",
+      "CashAndDeposits",
+    ],
+    revenueLabel: "経常収益",
+    operatingIncomeLabel: "経常利益",
+    currentRatioApplicable: false,
+  },
+  securities: {
+    revenueElements: [
+      "OperatingRevenueSEC",
+      "NetOperatingRevenueSEC",
+      "OperatingRevenue",
+      "Revenue",
+    ],
+    operatingIncomeElements: [
+      "OperatingIncome",
+      "OperatingProfit",
+      "OrdinaryIncome",
+    ],
+    cashElements: ["CashAndCashEquivalents", "CashAndDeposits"],
+    revenueLabel: "営業収益",
+    operatingIncomeLabel: "営業利益",
+    currentRatioApplicable: true,
+  },
+  insurance: {
+    // 保険業タクソノミでは OperatingIncomeINS が「経常収益」を表す。
+    revenueElements: ["OperatingIncomeINS", "OperatingRevenueINS", "Revenue"],
+    // 保険業には営業利益の概念がないため、経常利益を比較利益として使用する。
+    operatingIncomeElements: ["OrdinaryIncome", "ProfitLoss"],
+    cashElements: [
+      "CashAndCashEquivalents",
+      "CashAndDepositsAssetsINS",
+      "CashAndDeposits",
+    ],
+    revenueLabel: "経常収益",
+    operatingIncomeLabel: "経常利益",
+    currentRatioApplicable: false,
+  },
+  "special-finance": {
+    revenueElements: ["OperatingRevenueSPF", "OperatingRevenue", "Revenue"],
+    operatingIncomeElements: [
+      "OperatingIncome",
+      "OperatingProfit",
+      "OrdinaryIncome",
+    ],
+    cashElements: ["CashAndCashEquivalents", "CashAndDeposits"],
+    revenueLabel: "営業収益",
+    operatingIncomeLabel: "営業利益",
+    currentRatioApplicable: true,
+  },
+  commodity: {
+    revenueElements: ["OperatingRevenueCMD", "OperatingRevenue", "Revenue"],
+    operatingIncomeElements: [
+      "OperatingIncome",
+      "OperatingProfit",
+      "OrdinaryIncome",
+    ],
+    cashElements: ["CashAndCashEquivalents", "CashAndDeposits"],
+    revenueLabel: "営業収益",
+    operatingIncomeLabel: "営業利益",
+    currentRatioApplicable: true,
+  },
+};
+
+export function parseEdinetFinancials(docID: string): EdinetFinancials {
   const zipPath = path.join(process.cwd(), "downloads", `${docID}.zip`);
 
   if (!fs.existsSync(zipPath)) {
@@ -56,10 +174,10 @@ export function parseEdinetFinancials(docID: string): Financials {
   );
 
   const fromXbrl = xbrlEntry
-    ? parseStandardXbrl(xbrlEntry.getData().toString("utf8"))
+    ? parseEdinetFinancialsFromXbrl(xbrlEntry.getData().toString("utf8"))
     : emptyFinancials();
 
-  const fromInline = htmEntries.reduce<Financials>((merged, entry) => {
+  const fromInline = htmEntries.reduce<EdinetFinancials>((merged, entry) => {
     const parsed = parseInlineXbrl(entry.getData().toString("utf8"));
     return mergeFinancials(merged, parsed);
   }, emptyFinancials());
@@ -67,7 +185,13 @@ export function parseEdinetFinancials(docID: string): Financials {
   return mergeFinancials(fromXbrl, fromInline);
 }
 
-function emptyFinancials(): Financials {
+export function parseEdinetFinancialsFromXbrl(text: string): EdinetFinancials {
+  const contexts = parseContexts(text);
+  const facts = parseStandardFacts(text);
+  return buildFinancials(facts, contexts);
+}
+
+function emptyFinancials(): EdinetFinancials {
   return {
     revenue: 0,
     operatingIncome: 0,
@@ -77,10 +201,23 @@ function emptyFinancials(): Financials {
     currentLiabilities: 0,
     assets: 0,
     netAssets: 0,
+    financialProfile: "general",
+    revenueLabel: PROFILE_DEFINITIONS.general.revenueLabel,
+    operatingIncomeLabel: PROFILE_DEFINITIONS.general.operatingIncomeLabel,
+    currentRatioApplicable: PROFILE_DEFINITIONS.general.currentRatioApplicable,
   };
 }
 
-function mergeFinancials(primary: Financials, fallback: Financials): Financials {
+function mergeFinancials(
+  primary: EdinetFinancials,
+  fallback: EdinetFinancials
+): EdinetFinancials {
+  const financialProfile =
+    primary.financialProfile !== "general"
+      ? primary.financialProfile
+      : fallback.financialProfile;
+  const definition = PROFILE_DEFINITIONS[financialProfile];
+
   return {
     revenue: chooseNumber(primary.revenue, fallback.revenue),
     operatingIncome: chooseNumber(primary.operatingIncome, fallback.operatingIncome),
@@ -90,6 +227,10 @@ function mergeFinancials(primary: Financials, fallback: Financials): Financials 
     currentLiabilities: chooseNumber(primary.currentLiabilities, fallback.currentLiabilities),
     assets: chooseNumber(primary.assets, fallback.assets),
     netAssets: chooseNumber(primary.netAssets, fallback.netAssets),
+    financialProfile,
+    revenueLabel: definition.revenueLabel,
+    operatingIncomeLabel: definition.operatingIncomeLabel,
+    currentRatioApplicable: definition.currentRatioApplicable,
     periodEnd: primary.periodEnd ?? fallback.periodEnd,
     fiscalYear: primary.fiscalYear ?? fallback.fiscalYear,
     fiscalMonth: primary.fiscalMonth ?? fallback.fiscalMonth,
@@ -101,13 +242,7 @@ function chooseNumber(primary: number, fallback: number) {
   return primary !== 0 ? primary : fallback;
 }
 
-function parseStandardXbrl(text: string): Financials {
-  const contexts = parseContexts(text);
-  const facts = parseStandardFacts(text);
-  return buildFinancials(facts, contexts);
-}
-
-function parseInlineXbrl(text: string): Financials {
+function parseInlineXbrl(text: string): EdinetFinancials {
   const contexts = parseContexts(text);
   const facts: NumericFact[] = [];
   const regex = /<ix:nonFraction\b([^>]*)>([\s\S]*?)<\/ix:nonFraction>/gi;
@@ -118,7 +253,9 @@ function parseInlineXbrl(text: string): Financials {
     const contextRef = attrs.contextref;
     if (!name || !contextRef) continue;
 
-    const rawText = decodeXml(match[2].replace(/<[^>]+>/g, "")).replace(/,/g, "").trim();
+    const rawText = decodeXml(match[2].replace(/<[^>]+>/g, ""))
+      .replace(/,/g, "")
+      .trim();
     if (!rawText || attrs.nil === "true") continue;
 
     let value = Number(rawText);
@@ -196,33 +333,51 @@ function parseContexts(text: string): Map<string, ContextInfo> {
   return contexts;
 }
 
-function buildFinancials(facts: NumericFact[], contexts: Map<string, ContextInfo>): Financials {
+function buildFinancials(
+  facts: NumericFact[],
+  contexts: Map<string, ContextInfo>
+): EdinetFinancials {
   const durationContext = bestContext(contexts, "duration");
   const instantContext = bestContext(contexts, "instant");
+  const financialProfile = detectFinancialProfile(facts);
+  const definition = PROFILE_DEFINITIONS[financialProfile];
 
-  const result: Financials = {
-    revenue: extractFact(facts, contexts, durationContext, [
-      "NetSales",
-      "Sales",
-      "Revenue",
-      "OperatingRevenue",
-      "BusinessRevenue",
-    ]),
-    operatingIncome: extractFact(facts, contexts, durationContext, [
-      "OperatingIncome",
-      "OperatingProfit",
-    ]),
+  const result: EdinetFinancials = {
+    revenue: extractFact(
+      facts,
+      contexts,
+      durationContext,
+      definition.revenueElements
+    ),
+    operatingIncome: extractFact(
+      facts,
+      contexts,
+      durationContext,
+      definition.operatingIncomeElements
+    ),
     operatingCF: extractFact(facts, contexts, durationContext, [
       "NetCashProvidedByUsedInOperatingActivities",
+      "CashFlowsFromUsedInOperatingActivities",
+      "NetCashProvidedByOperatingActivities",
     ]),
-    cash: extractFact(facts, contexts, instantContext, [
-      "CashAndCashEquivalents",
-      "CashAndDeposits",
-    ]),
-    currentAssets: extractFact(facts, contexts, instantContext, ["CurrentAssets"]),
-    currentLiabilities: extractFact(facts, contexts, instantContext, ["CurrentLiabilities"]),
+    cash: extractFact(facts, contexts, instantContext, definition.cashElements),
+    currentAssets: definition.currentRatioApplicable
+      ? extractFact(facts, contexts, instantContext, ["CurrentAssets"])
+      : 0,
+    currentLiabilities: definition.currentRatioApplicable
+      ? extractFact(facts, contexts, instantContext, ["CurrentLiabilities"])
+      : 0,
     assets: extractFact(facts, contexts, instantContext, ["Assets", "TotalAssets"]),
-    netAssets: extractFact(facts, contexts, instantContext, ["NetAssets", "Equity"]),
+    netAssets: extractFact(facts, contexts, instantContext, [
+      "NetAssets",
+      "Equity",
+      "TotalEquity",
+      "EquityAttributableToOwnersOfParent",
+    ]),
+    financialProfile,
+    revenueLabel: definition.revenueLabel,
+    operatingIncomeLabel: definition.operatingIncomeLabel,
+    currentRatioApplicable: definition.currentRatioApplicable,
   };
 
   const periodEnd = durationContext?.endDate ?? instantContext?.instant;
@@ -237,6 +392,32 @@ function buildFinancials(facts: NumericFact[], contexts: Map<string, ContextInfo
   }
 
   return result;
+}
+
+function detectFinancialProfile(facts: NumericFact[]): FinancialMetricProfile {
+  const elements = new Set(facts.map((fact) => localName(fact.name)));
+
+  if (
+    elements.has("OrdinaryIncomeBNK") ||
+    elements.has("CashAndDueFromBanksAssetsBNK")
+  ) {
+    return "bank";
+  }
+  if (
+    elements.has("OperatingIncomeINS") ||
+    elements.has("CashAndDepositsAssetsINS")
+  ) {
+    return "insurance";
+  }
+  if (
+    elements.has("OperatingRevenueSEC") ||
+    elements.has("NetOperatingRevenueSEC")
+  ) {
+    return "securities";
+  }
+  if (elements.has("OperatingRevenueSPF")) return "special-finance";
+  if (elements.has("OperatingRevenueCMD")) return "commodity";
+  return "general";
 }
 
 function bestContext(
@@ -257,7 +438,9 @@ function contextScore(context: ContextInfo) {
   if (context.currentYear) score += 100;
   if (context.consolidated) score += 30;
   if (context.priorYear) score -= 100;
-  if (/^CurrentYear(?:Consolidated)?(?:Duration|Instant)$/i.test(context.id)) score += 50;
+  if (/^CurrentYear(?:Consolidated)?(?:Duration|Instant)$/i.test(context.id)) {
+    score += 50;
+  }
   return score;
 }
 
@@ -267,13 +450,25 @@ function extractFact(
   preferredContext: ContextInfo | undefined,
   suffixes: string[]
 ): number {
+  const rank = new Map(suffixes.map((suffix, index) => [suffix, index]));
   const candidates = facts
-    .filter((fact) => suffixes.some((suffix) => localName(fact.name) === suffix))
+    .filter((fact) => rank.has(localName(fact.name)))
     .map((fact) => ({ fact, context: contexts.get(fact.contextRef) }))
     .sort((a, b) => {
-      const aPreferred = preferredContext && a.fact.contextRef === preferredContext.id ? 1000 : 0;
-      const bPreferred = preferredContext && b.fact.contextRef === preferredContext.id ? 1000 : 0;
-      return bPreferred + contextScoreSafe(b.context) - (aPreferred + contextScoreSafe(a.context));
+      const score = (candidate: {
+        fact: NumericFact;
+        context: ContextInfo | undefined;
+      }) => {
+        const preferred =
+          preferredContext && candidate.fact.contextRef === preferredContext.id
+            ? 10_000
+            : 0;
+        const elementRank = rank.get(localName(candidate.fact.name)) ?? suffixes.length;
+        const elementPriority = (suffixes.length - elementRank) * 10;
+        return preferred + contextScoreSafe(candidate.context) * 10 + elementPriority;
+      };
+
+      return score(b) - score(a);
     });
 
   return candidates[0]?.fact.value ?? 0;
@@ -288,7 +483,10 @@ function localName(name: string) {
 }
 
 function firstTagText(text: string, tagName: string) {
-  const regex = new RegExp(`<${escapeRegExp(tagName)}[^>]*>([^<]+)<\\/${escapeRegExp(tagName)}>`, "i");
+  const regex = new RegExp(
+    `<${escapeRegExp(tagName)}[^>]*>([^<]+)<\\/${escapeRegExp(tagName)}>` ,
+    "i"
+  );
   return text.match(regex)?.[1]?.trim();
 }
 
