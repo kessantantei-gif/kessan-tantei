@@ -12,13 +12,22 @@ type Company = {
   ticker: string;
   company_name: string;
   listing_status: string;
-  listing_date: string | null;
 };
 
 type Analysis = {
   ticker: string;
   financials: Json | null;
   history: Json[] | null;
+};
+
+type EdinetTargetRow = {
+  ticker: string;
+  documentIds?: string[];
+};
+
+type EdinetReport = {
+  targetRows?: EdinetTargetRow[];
+  unresolvedRows?: EdinetTargetRow[];
 };
 
 const FIELDS = [
@@ -57,27 +66,36 @@ function periodKey(row: Json | null | undefined) {
   return String(row.periodEnd ?? row.fiscalYear ?? row.year ?? "");
 }
 
-function subtractYears(date: Date, years: number) {
-  const result = new Date(date);
-  result.setUTCFullYear(result.getUTCFullYear() - years);
-  return result;
-}
-
-function isListedAtLeastThreeYears(listingDate: string | null, cutoff: Date) {
-  if (!listingDate) return false;
-  const parsed = new Date(`${listingDate}T00:00:00Z`);
-  return Number.isFinite(parsed.getTime()) && parsed <= cutoff;
+function latestEdinetReportPath() {
+  const logsDir = path.join(process.cwd(), "logs");
+  const files = fs
+    .readdirSync(logsDir)
+    .filter((name) => /^refetch-zero-short-history-.*\.json$/.test(name))
+    .sort();
+  const name = files.at(-1);
+  if (!name) throw new Error("EDINET監査レポートがありません");
+  return path.join(logsDir, name);
 }
 
 async function main() {
-  const today = new Date();
-  const threeYearCutoff = subtractYears(today, 3);
+  const edinetReportPath = latestEdinetReportPath();
+  const edinetReport = JSON.parse(fs.readFileSync(edinetReportPath, "utf8")) as EdinetReport;
+  const edinetRows = [
+    ...(Array.isArray(edinetReport.targetRows) ? edinetReport.targetRows : []),
+    ...(Array.isArray(edinetReport.unresolvedRows) ? edinetReport.unresolvedRows : []),
+  ];
+  const edinetDocCountByTicker = new Map(
+    edinetRows.map((row) => [
+      row.ticker,
+      Array.isArray(row.documentIds) ? new Set(row.documentIds).size : 0,
+    ])
+  );
 
   const [companies, analyses] = await Promise.all([
     loadAllSupabaseRows<Company>("会社取得失敗", (from, to) =>
       supabaseAdmin
         .from("all_market_companies")
-        .select("ticker, company_name, listing_status, listing_date")
+        .select("ticker, company_name, listing_status")
         .eq("listing_status", "listed")
         .order("ticker", { ascending: true })
         .range(from, to)
@@ -104,18 +122,17 @@ async function main() {
       ]),
     ].sort();
     const historyCount = new Set(history.map(periodKey).filter(Boolean)).size;
-    const eligibleForThreePeriods = isListedAtLeastThreeYears(company.listing_date, threeYearCutoff);
-    const historyUnder3 = eligibleForThreePeriods && historyCount < 3;
+    const edinetAnnualDocumentCount = edinetDocCountByTicker.get(analysis.ticker) ?? 0;
+    const historyUnder3 = historyCount < 3 && edinetAnnualDocumentCount >= 3;
 
     if (zeros.length === 0 && !historyUnder3) return [];
 
     return [{
       ticker: analysis.ticker,
       companyName: company.company_name,
-      listingDate: company.listing_date,
-      eligibleForThreePeriods,
       zeroFields: zeros,
       historyCount,
+      edinetAnnualDocumentCount,
       reasons: [
         ...(zeros.length > 0 ? ["zero"] : []),
         ...(historyUnder3 ? ["history_under_3"] : []),
@@ -128,14 +145,12 @@ async function main() {
   const bothRows = rows.filter(
     (row) => row.zeroFields.length > 0 && row.reasons.includes("history_under_3")
   );
-  const missingListingDateCompanies = companies.filter((row) => !row.listing_date).length;
 
   const report = {
     generatedAt: new Date().toISOString(),
-    threeYearCutoff: threeYearCutoff.toISOString().slice(0, 10),
+    edinetReportPath,
     listedCompanies: companies.length,
     analyses: analyses.length,
-    missingListingDateCompanies,
     remainingTargets: rows.length,
     zeroCompanies: zeroRows.length,
     historyUnder3Companies: shortRows.length,
@@ -157,10 +172,9 @@ async function main() {
 
   console.log("===== 現在DB 0・3期未満監査（読取専用） =====");
   console.log({
-    threeYearCutoff: report.threeYearCutoff,
+    edinetReportPath,
     listedCompanies: report.listedCompanies,
     analyses: report.analyses,
-    missingListingDateCompanies: report.missingListingDateCompanies,
     remainingTargets: report.remainingTargets,
     zeroCompanies: report.zeroCompanies,
     historyUnder3Companies: report.historyUnder3Companies,
