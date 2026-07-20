@@ -1,0 +1,37 @@
+name: Apply Financial Sector Taxonomy Fix
+
+on:
+  push:
+    branches:
+      - agent/run-financial-sector-repair
+    paths:
+      - "scripts/apply-financial-sector-taxonomy-fix.mjs"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/run-financial-sector-repair
+          fetch-depth: 0
+
+      - name: Apply deterministic patch
+        run: node scripts/apply-financial-sector-taxonomy-fix.mjs
+
+      - name: Commit patched files
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No patch changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/edinet-parser.ts lib/edinet-financial-parser.ts scripts/reprocess-financial-sector-data.ts scripts/audit-financial-sector-data.ts scripts/check-financial-sector-parser.ts
+          git commit -m "Complete financial sector taxonomy support"
+          git push origin HEAD:agent/run-financial-sector-repair
