@@ -24,6 +24,8 @@
     "complete:all-markets:repair": "DOTENV_CONFIG_PATH=.env.local tsx scripts/run-all-markets-completion.ts --with-repairs",
     "complete:all-markets:no-sync": "DOTENV_CONFIG_PATH=.env.local tsx scripts/run-all-markets-completion.ts --skip-sync",
     "audit:financial-data": "tsx scripts/audit-financial-data.ts",
+    "audit:financial-sector-data": "DOTENV_CONFIG_PATH=.env.local tsx scripts/audit-financial-sector-data.ts",
+    "diagnose:financial-sector-tags": "DOTENV_CONFIG_PATH=.env.local tsx scripts/diagnose-financial-sector-tags.ts",
     "audit:financial-integrity": "tsx scripts/audit-financial-integrity.ts",
     "audit:history-periods": "tsx scripts/audit-history-periods.ts",
     "audit:phase1-all-markets": "DOTENV_CONFIG_PATH=.env.local tsx scripts/audit-phase1-all-markets.ts",

@@ -8,10 +8,24 @@ type FinancialCompany = {
   company_name: string;
 };
 
+type StoredFinancials = {
+  revenue?: number | null;
+  financialProfile?: string;
+  revenueLabel?: string;
+  operatingIncomeLabel?: string;
+  currentRatioApplicable?: boolean;
+};
+
 type AnalysisRow = {
   ticker: string;
   doc_id: string | null;
-  history: Array<{ docID?: string }> | null;
+  history: Array<{
+    docID?: string;
+    periodEnd?: string;
+    fiscalYear?: number | string;
+    year?: number | string;
+  }> | null;
+  financials: StoredFinancials | null;
 };
 
 type Target = {
@@ -26,6 +40,28 @@ function parsePositiveInteger(name: string, fallback: number) {
   const raw = process.argv.find((value) => value.startsWith(prefix))?.slice(prefix.length);
   const parsed = Number(raw ?? fallback);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function latestHistoryDocument(history: AnalysisRow["history"]) {
+  if (!Array.isArray(history)) return null;
+  return [...history]
+    .filter((row) => typeof row.docID === "string" && /^S100[A-Z0-9]+$/.test(row.docID))
+    .sort((left, right) => {
+      const leftKey = left.periodEnd ?? String(left.fiscalYear ?? left.year ?? "");
+      const rightKey = right.periodEnd ?? String(right.fiscalYear ?? right.year ?? "");
+      return leftKey.localeCompare(rightKey);
+    })
+    .at(-1)?.docID ?? null;
+}
+
+function alreadyUsesFinancialMetadata(financials: StoredFinancials | null) {
+  return Boolean(
+    financials &&
+      typeof financials.financialProfile === "string" &&
+      typeof financials.revenueLabel === "string" &&
+      typeof financials.operatingIncomeLabel === "string" &&
+      typeof financials.currentRatioApplicable === "boolean"
+  );
 }
 
 function runAnalysis(target: Target): Promise<number | null> {
@@ -48,8 +84,9 @@ function runAnalysis(target: Target): Promise<number | null> {
 }
 
 async function main() {
-  const concurrency = Math.min(3, parsePositiveInteger("concurrency", 2));
+  const concurrency = Math.min(3, parsePositiveInteger("concurrency", 3));
   const maxCompanies = parsePositiveInteger("max-companies", Number.MAX_SAFE_INTEGER);
+  const force = process.argv.includes("--force");
 
   const [companies, analyses] = await Promise.all([
     loadAllSupabaseRows<FinancialCompany>(
@@ -68,26 +105,50 @@ async function main() {
       (from, to) =>
         supabaseAdmin
           .from("company_analyses")
-          .select("ticker, doc_id, history")
+          .select("ticker, doc_id, history, financials")
           .order("ticker", { ascending: true })
           .range(from, to)
     ),
   ]);
 
   const analysisByTicker = new Map(analyses.map((row) => [row.ticker, row]));
+  let alreadyUpdated = 0;
+  let missingDocument = 0;
+
   const targets = companies
     .map((company): Target | null => {
       const analysis = analysisByTicker.get(company.ticker);
-      if (!analysis?.doc_id) return null;
+      if (!analysis?.doc_id) {
+        missingDocument += 1;
+        return null;
+      }
+
+      const latestDocID = latestHistoryDocument(analysis.history) ?? analysis.doc_id;
+      const revenue = analysis.financials?.revenue;
+      const revenueIsValid =
+        typeof revenue === "number" && Number.isFinite(revenue) && revenue > 0;
+      const isCurrentDocument = latestDocID === analysis.doc_id;
+
+      if (
+        !force &&
+        alreadyUsesFinancialMetadata(analysis.financials) &&
+        revenueIsValid &&
+        isCurrentDocument
+      ) {
+        alreadyUpdated += 1;
+        return null;
+      }
 
       const historyDocIDs = Array.from(
         new Set([
+          latestDocID,
           analysis.doc_id,
           ...(Array.isArray(analysis.history)
             ? analysis.history
                 .map((row) => row?.docID)
-                .filter((docID): docID is string =>
-                  typeof docID === "string" && /^S100[A-Z0-9]+$/.test(docID)
+                .filter(
+                  (docID): docID is string =>
+                    typeof docID === "string" && /^S100[A-Z0-9]+$/.test(docID)
                 )
             : []),
         ])
@@ -96,7 +157,7 @@ async function main() {
       return {
         ticker: company.ticker,
         companyName: company.company_name,
-        docID: analysis.doc_id,
+        docID: latestDocID,
         historyDocIDs,
       };
     })
@@ -105,7 +166,10 @@ async function main() {
 
   console.log("===== 金融業財務データ再解析 =====");
   console.log("金融業上場会社:", companies.length);
+  console.log("更新済みスキップ:", alreadyUpdated);
+  console.log("書類なしスキップ:", missingDocument);
   console.log("再解析対象:", targets.length);
+  console.log("強制再解析:", force);
   console.log("同時実行数:", concurrency);
 
   let nextIndex = 0;
@@ -144,6 +208,7 @@ async function main() {
   );
 
   console.log("\n===== 金融業財務データ再解析結果 =====");
+  console.log("更新済みスキップ:", alreadyUpdated);
   console.log("成功:", succeeded);
   console.log("失敗:", failures.length);
   for (const failure of failures) {

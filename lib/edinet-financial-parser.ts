@@ -7,7 +7,10 @@ export type FinancialMetricProfile =
   | "securities"
   | "insurance"
   | "special-finance"
-  | "commodity";
+  | "commodity"
+  | "ifrs"
+  | "insurance-ifrs"
+  | "operating-revenue";
 
 export type FinancialMetricMetadata = {
   financialProfile: FinancialMetricProfile;
@@ -89,6 +92,88 @@ const PROFILE_DEFINITIONS: Record<FinancialMetricProfile, ProfileDefinition> = {
       "現金及び預金",
     ],
   },
+  ifrs: {
+    financialProfile: "ifrs",
+    revenueLabel: "売上収益",
+    operatingIncomeLabel: "営業利益",
+    currentRatioApplicable: true,
+    revenueElements: [
+      "RevenueIFRSSummaryOfBusinessResults",
+      "Revenue2IFRS",
+      "RevenueIFRS",
+      "RevenueFromExternalCustomers2IFRS",
+      "OperatingRevenueIFRS",
+    ],
+    revenueLabels: ["売上収益（IFRS）、経営指標等", "売上収益（IFRS）", "収益（IFRS）"],
+    operatingIncomeElements: [
+      "OperatingProfitLossIFRSKeyFinancialData",
+      "OperatingProfitLossIFRS",
+      "OperatingProfitIFRS",
+      "OperatingIncomeLossUSGAAPSummaryOfBusinessResults",
+    ],
+    operatingIncomeLabels: ["営業利益（△損失）（IFRS）", "営業利益（IFRS）"],
+    cashElements: [
+      "CashAndCashEquivalentsSummaryOfBusinessResults",
+      "CashAndCashEquivalentsIFRS",
+      "CashAndCashEquivalents",
+      "CashAndDeposits",
+    ],
+    cashLabels: ["現金及び現金同等物の残高、経営指標等", "現金及び現金同等物"],
+  },
+  "insurance-ifrs": {
+    financialProfile: "insurance-ifrs",
+    revenueLabel: "収益",
+    operatingIncomeLabel: "税引前利益",
+    currentRatioApplicable: false,
+    revenueElements: [
+      "Revenue2IFRS",
+      "InsuranceRevenueIFRSKeyFinancialData",
+      "InsuranceRevenueIFRS",
+      "RevenueIFRSSummaryOfBusinessResults",
+    ],
+    revenueLabels: ["収益（IFRS）", "保険収益"],
+    operatingIncomeElements: [
+      "ProfitLossBeforeTaxIFRSSummaryOfBusinessResults",
+      "ProfitLossBeforeTaxIFRS",
+    ],
+    operatingIncomeLabels: ["税引前利益又は税引前損失", "税引前利益"],
+    cashElements: [
+      "CashAndCashEquivalentsSummaryOfBusinessResults",
+      "CashAndCashEquivalentsIFRS",
+      "CashAndCashEquivalents",
+      "CashAndDepositsAssetsINS",
+      "CashAndDeposits",
+    ],
+    cashLabels: ["現金及び現金同等物の残高、経営指標等", "現金及び現金同等物", "現金及び預貯金"],
+  },
+  "operating-revenue": {
+    financialProfile: "operating-revenue",
+    revenueLabel: "営業収益",
+    operatingIncomeLabel: "営業利益",
+    currentRatioApplicable: true,
+    revenueElements: [
+      "OperatingRevenue1SummaryOfBusinessResults",
+      "OperatingRevenue1",
+      "OperatingRevenueIVT",
+      "OperatingRevenues",
+      "OperatingRevenue",
+    ],
+    revenueLabels: ["営業収益、経営指標等", "営業収益"],
+    operatingIncomeElements: [
+      "OperatingIncome",
+      "OperatingProfit",
+      "OperatingIncomeLoss",
+      "OrdinaryIncomeLossSummaryOfBusinessResults",
+      "OrdinaryIncome",
+    ],
+    operatingIncomeLabels: ["営業利益又は営業損失", "営業利益", "営業損失"],
+    cashElements: [
+      "CashAndCashEquivalentsSummaryOfBusinessResults",
+      "CashAndCashEquivalents",
+      "CashAndDeposits",
+    ],
+    cashLabels: ["現金及び現金同等物の残高、経営指標等", "現金及び現金同等物の残高", "現金及び預金"],
+  },
   bank: {
     financialProfile: "bank",
     revenueLabel: "経常収益",
@@ -102,7 +187,11 @@ const PROFILE_DEFINITIONS: Record<FinancialMetricProfile, ProfileDefinition> = {
     ],
     revenueLabels: ["経常収益、経営指標等", "経常収益"],
     // 銀行業には営業利益の概念がないため、経常利益を比較利益として使用する。
-    operatingIncomeElements: ["OrdinaryIncome", "OrdinaryProfitLoss"],
+    operatingIncomeElements: [
+      "OrdinaryIncomeLossSummaryOfBusinessResults",
+      "OrdinaryIncome",
+      "OrdinaryProfitLoss",
+    ],
     operatingIncomeLabels: ["経常利益又は経常損失", "経常利益", "経常損失"],
     cashElements: [
       "CashAndCashEquivalentsSummaryOfBusinessResults",
@@ -159,13 +248,17 @@ const PROFILE_DEFINITIONS: Record<FinancialMetricProfile, ProfileDefinition> = {
     currentRatioApplicable: false,
     // 保険業タクソノミでは OperatingIncomeINS が「経常収益」を表す。
     revenueElements: [
-      "OperatingIncomeINS",
       "OrdinaryIncomeSummaryOfBusinessResults",
+      "OperatingIncomeINS",
       "OperatingRevenueINS",
     ],
     revenueLabels: ["経常収益、経営指標等", "経常収益"],
     // 保険業には営業利益の概念がないため、経常利益を比較利益として使用する。
-    operatingIncomeElements: ["OrdinaryIncome", "OrdinaryProfitLoss"],
+    operatingIncomeElements: [
+      "OrdinaryIncomeLossSummaryOfBusinessResults",
+      "OrdinaryIncome",
+      "OrdinaryProfitLoss",
+    ],
     operatingIncomeLabels: ["経常利益又は経常損失", "経常利益", "経常損失"],
     cashElements: [
       "CashAndCashEquivalentsSummaryOfBusinessResults",
@@ -479,17 +572,54 @@ function pickFact({
 
 function detectFinancialProfile(rows: Row[]): FinancialMetricProfile {
   const elements = new Set(rows.map((row) => localElement(row)));
-  if (elements.has("OrdinaryIncomeBNK") || elements.has("CashAndDueFromBanksAssetsBNK")) {
+
+  if (
+    elements.has("OrdinaryIncomeBNK") ||
+    elements.has("CashAndDueFromBanksAssetsBNK")
+  ) {
     return "bank";
   }
-  if (elements.has("OperatingIncomeINS") || elements.has("CashAndDepositsAssetsINS")) {
-    return "insurance";
+
+  const insuranceMarkers = [
+    "OperatingIncomeINS",
+    "CashAndDepositsAssetsINS",
+    "InsuranceRevenueIFRSKeyFinancialData",
+    "InsuranceRevenueIFRS",
+    "NetPremiumsWrittenSummaryOfBusinessResultsINS",
+  ];
+  if (insuranceMarkers.some((element) => elements.has(element))) {
+    return elements.has("OrdinaryIncomeSummaryOfBusinessResults")
+      ? "insurance"
+      : "insurance-ifrs";
   }
-  if (elements.has("OperatingRevenueSEC") || elements.has("NetOperatingRevenueSEC")) {
+
+  if (
+    elements.has("OperatingRevenueSEC") ||
+    elements.has("NetOperatingRevenueSEC")
+  ) {
     return "securities";
   }
   if (elements.has("OperatingRevenueSPF")) return "special-finance";
   if (elements.has("OperatingRevenueCMD")) return "commodity";
+
+  if (
+    elements.has("RevenueIFRSSummaryOfBusinessResults") ||
+    elements.has("Revenue2IFRS") ||
+    elements.has("RevenueIFRS") ||
+    elements.has("OperatingProfitLossIFRS")
+  ) {
+    return "ifrs";
+  }
+
+  if (
+    elements.has("OperatingRevenue1SummaryOfBusinessResults") ||
+    elements.has("OperatingRevenue1") ||
+    elements.has("OperatingRevenueIVT") ||
+    elements.has("OperatingRevenues")
+  ) {
+    return "operating-revenue";
+  }
+
   return "general";
 }
 
@@ -660,6 +790,8 @@ export function extractFinancials(rows: Row[]): ExtractedFinancials {
   });
 
   const operatingCFElements = [
+    "CashFlowsFromUsedInOperatingActivitiesIFRSSummaryOfBusinessResults",
+    "NetCashProvidedByUsedInOperatingActivitiesIFRS",
     "NetCashProvidedByUsedInOperatingActivitiesSummaryOfBusinessResults",
     "NetCashProvidedByUsedInOperatingActivities",
     "CashFlowsFromUsedInOperatingActivities",
@@ -717,6 +849,7 @@ export function extractFinancials(rows: Row[]): ExtractedFinancials {
       "Assets",
       "TotalAssets",
       "AssetsIFRS",
+      "TotalAssetsIFRS",
     ],
     nameNames: ["総資産額、経営指標等", "資産合計", "総資産", "資産"],
     kind: "instant",
@@ -734,6 +867,9 @@ export function extractFinancials(rows: Row[]): ExtractedFinancials {
       "NetAssets",
       "TotalEquity",
       "EquityAttributableToOwnersOfParent",
+      "EquityAttributableToOwnersOfParentIFRS",
+      "EquityIFRS",
+      "TotalEquityIFRS",
     ],
     nameNames: ["純資産額、経営指標等", "純資産合計", "純資産", "資本合計"],
     kind: "instant",
