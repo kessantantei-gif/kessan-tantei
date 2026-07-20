@@ -52,3 +52,12 @@ jobs:
 
       - name: Audit financial-sector data
         run: npm run audit:financial-sector-data
+
+      - name: Upload financial-sector audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: financial-sector-audit
+          path: reports/financial-sector-audit.json
+          if-no-files-found: error
+          retention-days: 7
