@@ -13,6 +13,13 @@ const REQUIRED_RANKINGS = [
   "net-margin",
   "net-income-growth",
 ] as const;
+const MIN_VISIBLE_COMPANIES = 3;
+
+function maximumAllowedValue(slug: (typeof REQUIRED_RANKINGS)[number]) {
+  if (slug === "gross-margin") return 105;
+  if (slug === "net-margin") return 300;
+  return null;
+}
 
 async function main() {
   const results = [];
@@ -25,21 +32,36 @@ async function main() {
       if (!definition) throw new Error(`Ranking definition not found: ${slug}`);
 
       const ranked = rankCompanies(companies, definition);
+      const top = ranked.slice(0, 5).map((item, index) => ({
+        rank: index + 1,
+        ticker: item.company.ticker,
+        companyName: item.company.company_name,
+        value: item.value,
+      }));
       const entry = {
         market,
         slug,
         title: definition.title,
         companies: ranked.length,
-        top: ranked.slice(0, 5).map((item, index) => ({
-          rank: index + 1,
-          ticker: item.company.ticker,
-          companyName: item.company.company_name,
-          value: item.value,
-        })),
+        maximumValue: ranked[0]?.value ?? null,
+        top,
       };
 
-      if (ranked.length === 0) {
-        failures.push(`${market}/${slug} has no ranking entries`);
+      if (ranked.length < MIN_VISIBLE_COMPANIES) {
+        failures.push(
+          `${market}/${slug} has only ${ranked.length} entries; at least ${MIN_VISIBLE_COMPANIES} are required`
+        );
+      }
+
+      const maximum = maximumAllowedValue(slug);
+      if (
+        maximum !== null &&
+        ranked[0] &&
+        ranked[0].value > maximum
+      ) {
+        failures.push(
+          `${market}/${slug} maximum value ${ranked[0].value} exceeds ${maximum}`
+        );
       }
 
       return entry;
@@ -55,6 +77,7 @@ async function main() {
   const report = {
     generatedAt: new Date().toISOString(),
     ok: failures.length === 0,
+    minimumVisibleCompanies: MIN_VISIBLE_COMPANIES,
     failures,
     results,
   };
@@ -70,7 +93,9 @@ async function main() {
   for (const market of results) {
     console.log(`${market.market}: analyzed=${market.analyzedCompanies}`);
     for (const ranking of market.rankings) {
-      console.log(`- ${ranking.slug}: ${ranking.companies} companies`);
+      console.log(
+        `- ${ranking.slug}: ${ranking.companies} companies, max=${ranking.maximumValue}`
+      );
     }
   }
 
