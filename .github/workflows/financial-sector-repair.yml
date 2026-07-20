@@ -12,6 +12,7 @@ on:
       - "scripts/reprocess-financial-sector-data.ts"
       - "scripts/check-financial-sector-parser.ts"
       - "scripts/audit-financial-sector-data.ts"
+      - "scripts/diagnose-financial-sector-tags.ts"
       - ".github/workflows/financial-sector-repair.yml"
   pull_request:
     paths:
@@ -51,7 +52,13 @@ jobs:
         run: npm run repair:financial-sector-data
 
       - name: Audit financial-sector data
+        id: financial-audit
+        continue-on-error: true
         run: npm run audit:financial-sector-data
+
+      - name: Diagnose remaining financial tags
+        if: steps.financial-audit.outcome == 'failure'
+        run: npm run diagnose:financial-sector-tags
 
       - name: Upload financial-sector audit
         if: always()
@@ -61,3 +68,16 @@ jobs:
           path: reports/financial-sector-audit.json
           if-no-files-found: error
           retention-days: 7
+
+      - name: Upload financial tag diagnostics
+        if: steps.financial-audit.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: financial-sector-tag-diagnostics
+          path: reports/financial-sector-tag-diagnostics.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Fail when financial audit has issues
+        if: steps.financial-audit.outcome == 'failure'
+        run: exit 1
