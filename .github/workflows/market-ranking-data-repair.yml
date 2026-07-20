@@ -1,0 +1,62 @@
+name: Market Ranking Data Repair
+
+on:
+  push:
+    branches:
+      - agent/fix-market-rankings-global-search
+    paths:
+      - "lib/edinet-parser.ts"
+      - "scripts/analyze-company.ts"
+      - "scripts/repair-market-ranking-data.ts"
+      - "scripts/audit-market-ranking-data.ts"
+      - "scripts/check-market-ranking-parser.ts"
+      - ".github/workflows/market-ranking-data-repair.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: market-ranking-data-repair
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate ranking parser
+        run: npm run check:market-ranking-parser
+
+      - name: Repair Prime and Standard ranking data
+        id: repair
+        continue-on-error: true
+        run: npm run repair:market-ranking-data -- --concurrency=8
+
+      - name: Audit ranking availability
+        run: npm run audit:market-ranking-data
+
+      - name: Upload ranking repair reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-ranking-data-reports
+          path: |
+            reports/market-ranking-data-repair.json
+            reports/market-ranking-data-audit.json
+          if-no-files-found: warn
+          retention-days: 7
