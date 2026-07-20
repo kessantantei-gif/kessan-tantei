@@ -51,8 +51,12 @@ function prepareExtractorModule() {
   const sourcePath = path.join(process.cwd(), "scripts", "repair-sector-financials.ts");
   const tempPath = path.join(process.cwd(), "scripts", ".tmp-sector-extractor.ts");
   let source = fs.readFileSync(sourcePath, "utf8");
-  source = source.replace(/main\(\)\.catch\([\s\S]*?\);\s*$/m, "");
-  source += "\nexport { extractDocument, detectProfile };\n";
+  const mainCallIndex = source.lastIndexOf("main().catch(");
+  if (mainCallIndex < 0) {
+    throw new Error("repair-sector-financials.ts の main 呼出しを特定できません");
+  }
+  source = source.slice(0, mainCallIndex).trimEnd();
+  source += "\n\nexport { extractDocument, detectProfile };\n";
   fs.writeFileSync(tempPath, source);
   return tempPath;
 }
