@@ -11,6 +11,14 @@ on:
       - "scripts/audit-market-ranking-data.ts"
       - "scripts/check-market-ranking-parser.ts"
       - ".github/workflows/market-ranking-data-repair.yml"
+  pull_request:
+    paths:
+      - "lib/edinet-parser.ts"
+      - "scripts/analyze-company.ts"
+      - "scripts/repair-market-ranking-data.ts"
+      - "scripts/audit-market-ranking-data.ts"
+      - "scripts/check-market-ranking-parser.ts"
+      - ".github/workflows/market-ranking-data-repair.yml"
   workflow_dispatch:
 
 concurrency:
