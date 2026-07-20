@@ -6,6 +6,7 @@ on:
       - agent/run-financial-sector-repair
     paths:
       - "scripts/apply-financial-sector-taxonomy-fix.mjs"
+      - "scripts/apply-financial-sector-taxonomy-fix.trigger"
 
 permissions:
   contents: write
