@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
+// One-time patch for the company page critical rendering path.
 const path = "app/company/[ticker]/page.tsx";
 let source = readFileSync(path, "utf8");
 
