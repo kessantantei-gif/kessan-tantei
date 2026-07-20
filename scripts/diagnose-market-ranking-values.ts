@@ -18,13 +18,16 @@ type CsvRow = Record<string, string>;
 
 const EDINET_BASE = "https://api.edinet-fsa.go.jp/api/v2";
 const TARGET_TICKERS = [
-  "6080",
-  "5016",
-  "5076",
-  "6758",
-  "7203",
-  "2656",
-  "3350",
+  "9409",
+  "4099",
+  "6420",
+  "6674",
+  "3076",
+  "416A",
+  "1443",
+  "3791",
+  "6927",
+  "3159",
 ] as const;
 
 function field(row: CsvRow, keys: string[]) {
@@ -59,8 +62,9 @@ function isRelevant(row: CsvRow) {
   const text = `${localElement(row)} ${label(row)}`;
   return [
     "Revenue",
-    "NetSales",
-    "OperatingRevenue",
+    "Sales",
+    "OperatingIncome",
+    "OrdinaryIncome",
     "ProfitLoss",
     "NetIncome",
     "当期純利益",
@@ -68,6 +72,7 @@ function isRelevant(row: CsvRow) {
     "売上高",
     "売上収益",
     "営業収益",
+    "経常収益",
   ].some((keyword) => text.includes(keyword));
 }
 
