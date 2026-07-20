@@ -1,0 +1,36 @@
+name: Apply Operating Revenue Profile Fix
+
+on:
+  push:
+    branches:
+      - agent/fix-market-rankings-global-search
+    paths:
+      - "scripts/apply-operating-revenue-profile-fix.mjs"
+      - ".github/workflows/apply-operating-revenue-profile-fix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/fix-market-rankings-global-search
+          fetch-depth: 0
+      - run: node scripts/apply-operating-revenue-profile-fix.mjs
+      - run: npm ci
+      - run: npm run check:market-ranking-parser
+      - name: Commit patched files
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No patch changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/edinet-financial-parser.ts lib/edinet-parser.ts
+          git commit -m "Prefer consolidated net sales for holding companies"
+          git push origin HEAD:agent/fix-market-rankings-global-search
