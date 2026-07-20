@@ -12,6 +12,9 @@ on:
       - "scripts/reprocess-financial-sector-data.ts"
       - "scripts/check-financial-sector-parser.ts"
       - ".github/workflows/financial-sector-repair.yml"
+  pull_request:
+    paths:
+      - ".github/workflows/financial-sector-repair.yml"
   workflow_dispatch:
 
 concurrency:
