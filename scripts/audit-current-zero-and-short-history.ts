@@ -157,7 +157,7 @@ async function main() {
     historyEligibilityUnknownCompanies: unknownRows.length,
     historySourceParseFailedCompanies: parseFailedRows.length,
     historyNotEligibleCompanies: notEligibleRows.length,
-    both,
+    both: bothRows.length,
     zeroFieldBreakdown: Object.fromEntries(
       FIELDS.map((field) => [field, zeroRows.filter((row) => row.zeroFields.includes(field)).length])
         .filter(([, count]) => count > 0)
@@ -185,7 +185,7 @@ async function main() {
     historyEligibilityUnknownCompanies: report.historyEligibilityUnknownCompanies,
     historySourceParseFailedCompanies: report.historySourceParseFailedCompanies,
     historyNotEligibleCompanies: report.historyNotEligibleCompanies,
-    both: bothRows.length,
+    both: report.both,
     zeroFieldBreakdown: report.zeroFieldBreakdown,
     outputPath,
   });
