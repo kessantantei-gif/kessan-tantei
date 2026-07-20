@@ -8,18 +8,6 @@ import "./globals.css";
 import AuthButton from "@/components/auth-button";
 import FeedbackButton from "@/components/feedback-button";
 import SiteNav from "@/components/site-nav";
-import CompanyTrendChartEnhancer from "@/components/company-trend-chart-enhancer";
-import ScoreExplanationInjector from "@/components/score-explanation-injector";
-import CompanyAiSummaryInjector from "@/components/company-ai-summary-injector";
-import CompanyFinancialSignalsInjector from "@/components/company-financial-signals-injector";
-import CompanyPeerComparisonInjector from "@/components/company-peer-comparison-injector";
-import CompanyEarningsFlashInjector from "@/components/company-earnings-flash-injector";
-import CompanyProAnalysisInjector from "@/components/company-pro-analysis-injector";
-import CompanyWatchlistInjector from "@/components/company-watchlist-injector";
-import CompanyCompareFloatingButton from "@/components/company-compare-floating-button";
-import CompanyPageOrderController from "@/components/company-page-order-controller";
-import CompanyProBoundaryController from "@/components/company-pro-boundary-controller";
-import CompanyDataQualityWarning from "@/components/company-data-quality-warning";
 import CompareTray from "@/components/compare-tray";
 import AcquisitionTracker from "@/components/acquisition-tracker";
 import RecentCompanyTracker from "@/components/recent-company-tracker";
@@ -84,18 +72,6 @@ export default function RootLayout({
           <RecentCompanyTracker />
           <SiteNav />
           {children}
-          <CompanyTrendChartEnhancer />
-          <ScoreExplanationInjector />
-          <CompanyAiSummaryInjector />
-          <CompanyFinancialSignalsInjector />
-          <CompanyPeerComparisonInjector />
-          <CompanyEarningsFlashInjector />
-          <CompanyProAnalysisInjector />
-          <CompanyWatchlistInjector />
-          <CompanyCompareFloatingButton />
-          <CompanyPageOrderController />
-          <CompanyProBoundaryController />
-          <CompanyDataQualityWarning />
           <CompareTray />
           <FeedbackButton />
           <AuthButton />
