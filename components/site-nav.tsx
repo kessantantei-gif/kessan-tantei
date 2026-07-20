@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import GlobalCompanySearch from "@/components/global-company-search";
 
 type NavItem = {
   href: string;
@@ -43,6 +44,8 @@ export default function SiteNav() {
         >
           決算探偵
         </Link>
+
+        <GlobalCompanySearch />
 
         <div className="no-scrollbar -mr-3 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain pr-3 text-[11px] font-bold sm:mr-0 sm:gap-2 sm:pr-0 sm:text-sm">
           {items.map((item) => {
