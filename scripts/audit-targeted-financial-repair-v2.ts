@@ -55,11 +55,14 @@ function explicitZeroFields(row: Json | null | undefined) {
   return SUPPORTED_FIELDS.filter((key) => key in row && finite(row[key]) && row[key] === 0);
 }
 
-function periodKey(row: Json | Period) {
+function periodKey(row: Json | Period | null | undefined) {
+  if (!row) return "";
   return String(
     (row as Json).periodEnd ??
+      (row as Json).period_end ??
       (row as Period).period_end ??
       (row as Json).fiscalYear ??
+      (row as Json).fiscal_year ??
       (row as Period).fiscal_year ??
       (row as Json).year ??
       ""
@@ -87,6 +90,13 @@ function uniquePeriods(rows: Period[]) {
 
 function latestPeriod(rows: Period[]) {
   return uniquePeriods(rows).at(-1) ?? null;
+}
+
+function samePeriod(analysis: Json | null, normalized: Period | null) {
+  const analysisKey = periodKey(analysis);
+  const normalizedKey = periodKey(normalized);
+  if (!analysisKey || !normalizedKey) return false;
+  return analysisKey === normalizedKey;
 }
 
 function missingOnlyInAnalysis(analysis: Json | null, normalized: Json | null) {
@@ -147,19 +157,42 @@ async function main() {
 
   const incorrectValues: Json[] = [];
   const threePeriodShortage: Json[] = [];
+  const breakdown = {
+    analysisExplicitZero: 0,
+    normalizedExplicitZero: 0,
+    historyExplicitZero: 0,
+    missingOnlyInAnalysis: 0,
+    differingSamePeriod: 0,
+    skippedPeriodMismatch: 0,
+  };
 
   for (const company of companies) {
     const analysis = analysisMap.get(company.ticker);
     if (!analysis) continue;
 
     const companyPeriods = uniquePeriods(periodsByCompany.get(company.id) ?? []);
-    const normalizedLatest = latestPeriod(companyPeriods)?.financials ?? null;
+    const normalizedLatestRow = latestPeriod(companyPeriods);
+    const normalizedLatest = normalizedLatestRow?.financials ?? null;
+    const periodsAligned = samePeriod(analysis.financials, normalizedLatestRow);
 
     const latestZeroFields = explicitZeroFields(analysis.financials);
     const normalizedLatestZeroFields = explicitZeroFields(normalizedLatest);
     const historyZeroPeriods = zeroFieldsInHistory(analysis.history);
-    const missingInAnalysis = missingOnlyInAnalysis(analysis.financials, normalizedLatest);
-    const differingFields = materiallyDifferentFields(analysis.financials, normalizedLatest);
+    const missingInAnalysis = periodsAligned
+      ? missingOnlyInAnalysis(analysis.financials, normalizedLatest)
+      : [];
+    const differingFields = periodsAligned
+      ? materiallyDifferentFields(analysis.financials, normalizedLatest)
+      : [];
+
+    if (!periodsAligned && analysis.financials && normalizedLatestRow) {
+      breakdown.skippedPeriodMismatch += 1;
+    }
+    if (latestZeroFields.length > 0) breakdown.analysisExplicitZero += 1;
+    if (normalizedLatestZeroFields.length > 0) breakdown.normalizedExplicitZero += 1;
+    if (historyZeroPeriods.length > 0) breakdown.historyExplicitZero += 1;
+    if (missingInAnalysis.length > 0) breakdown.missingOnlyInAnalysis += 1;
+    if (differingFields.length > 0) breakdown.differingSamePeriod += 1;
 
     if (
       latestZeroFields.length > 0 ||
@@ -171,6 +204,9 @@ async function main() {
       incorrectValues.push({
         ticker: company.ticker,
         companyName: company.company_name,
+        analysisPeriod: periodKey(analysis.financials),
+        normalizedPeriod: periodKey(normalizedLatestRow),
+        periodsAligned,
         latestZeroFields,
         normalizedLatestZeroFields,
         historyZeroPeriods,
@@ -204,7 +240,7 @@ async function main() {
   const reportPath = path.join(
     process.cwd(),
     "logs",
-    `targeted-financial-repair-audit-v3-${new Date().toISOString().replace(/[:.]/g, "-")}.json`
+    `targeted-financial-repair-audit-v4-${new Date().toISOString().replace(/[:.]/g, "-")}.json`
   );
   fs.mkdirSync(path.dirname(reportPath), { recursive: true });
   fs.writeFileSync(
@@ -215,14 +251,15 @@ async function main() {
         readOnly: true,
         rules: {
           zero: "保存済みの対象項目が明示的に0",
-          missing: "正規化最新期には非ゼロ値があるが分析最新期に値がない",
-          mismatch: "同じ最新期の両テーブルで非ゼロ数値が不一致",
+          missing: "同一決算期の正規化最新期には非ゼロ値があるが分析最新期に値がない",
+          mismatch: "同一決算期の両テーブルで非ゼロ数値が不一致",
           history: "正規化年次データが3期以上あるのに分析履歴が3期未満",
         },
         summary: {
           incorrectValues: incorrectValues.length,
           threePeriodShortage: threePeriodShortage.length,
           uniqueTargets: targetTickers.size,
+          breakdown,
         },
         incorrectValues,
         threePeriodShortage,
@@ -232,12 +269,13 @@ async function main() {
     )
   );
 
-  console.log("===== 修復対象限定・読取専用監査 v3 =====");
+  console.log("===== 修復対象限定・読取専用監査 v4 =====");
   console.log({
     readOnly: true,
     incorrectValues: incorrectValues.length,
     threePeriodShortage: threePeriodShortage.length,
     uniqueTargets: targetTickers.size,
+    breakdown,
     reportPath,
   });
 }
