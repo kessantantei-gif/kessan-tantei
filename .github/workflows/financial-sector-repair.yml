@@ -3,6 +3,7 @@ name: Financial Sector Data Repair
 on:
   push:
     branches:
+      - main
       - agent/fix-financial-sector-data
     paths:
       - "lib/edinet-parser.ts"
