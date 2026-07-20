@@ -41,6 +41,7 @@ jobs:
         id: patch
         shell: bash
         run: |
+          node scripts/fix-financial-sector-patch-script.mjs
           node scripts/apply-financial-sector-taxonomy-fix.mjs
           if git diff --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -49,7 +50,7 @@ jobs:
           echo "changed=true" >> "$GITHUB_OUTPUT"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lib/edinet-parser.ts lib/edinet-financial-parser.ts scripts/reprocess-financial-sector-data.ts scripts/audit-financial-sector-data.ts scripts/check-financial-sector-parser.ts
+          git add lib/edinet-parser.ts lib/edinet-financial-parser.ts scripts/reprocess-financial-sector-data.ts scripts/audit-financial-sector-data.ts scripts/check-financial-sector-parser.ts scripts/apply-financial-sector-taxonomy-fix.mjs scripts/fix-financial-sector-patch-script.mjs
           git commit -m "Complete financial sector taxonomy support"
           git push origin HEAD:agent/run-financial-sector-repair
 
