@@ -4,9 +4,23 @@ import CompanyPageScrollReset from "@/components/company-page-scroll-reset";
 import { loadRuntimeCompanyMasterMap } from "@/lib/company-master-runtime";
 import { supabaseAdmin } from "@/lib/supabase";
 
- type Props = {
+type Props = {
   children: React.ReactNode;
   params: Promise<{ ticker: string }>;
+};
+
+type FinancialHistoryRow = {
+  year?: number | string;
+  fiscalYear?: number | string;
+  fiscalMonth?: number | string;
+  fiscalPeriod?: string;
+  periodEnd?: string;
+  revenue?: number;
+  operatingIncome?: number;
+  operatingCF?: number;
+  cash?: number;
+  assets?: number;
+  netAssets?: number;
 };
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://kessan-tantei.jp";
@@ -28,6 +42,68 @@ const marketTones: Record<string, string> = {
 function yenOku(value: number | null | undefined) {
   if (!value) return "";
   return `${(value / 100000000).toFixed(1)}億円`;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function formatFinancialValue(value: unknown) {
+  if (!isFiniteNumber(value)) return "—";
+  return `${(value / 100000000).toLocaleString("ja-JP", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} 億円`;
+}
+
+function historyPeriodKey(row: FinancialHistoryRow, index: number) {
+  return String(
+    row.periodEnd ??
+      row.fiscalPeriod ??
+      row.fiscalYear ??
+      row.year ??
+      `unknown-${index}`
+  );
+}
+
+function historyPeriodOrder(row: FinancialHistoryRow) {
+  if (row.periodEnd) {
+    const timestamp = Date.parse(row.periodEnd);
+    if (Number.isFinite(timestamp)) return timestamp;
+  }
+
+  const year = Number(row.fiscalYear ?? row.year ?? 0);
+  const month = Number(row.fiscalMonth ?? 12);
+  return year * 100 + month;
+}
+
+function historyPeriodLabel(row: FinancialHistoryRow) {
+  if (row.fiscalPeriod) return row.fiscalPeriod;
+
+  if (row.periodEnd) {
+    const date = new Date(`${row.periodEnd}T00:00:00Z`);
+    if (!Number.isNaN(date.getTime())) {
+      return `${date.getUTCFullYear()}年${date.getUTCMonth() + 1}月期`;
+    }
+  }
+
+  const year = row.fiscalYear ?? row.year;
+  return year ? `${year}年期` : "決算期不明";
+}
+
+function latestThreeHistory(history: unknown) {
+  if (!Array.isArray(history)) return [] as FinancialHistoryRow[];
+
+  const byPeriod = new Map<string, FinancialHistoryRow>();
+  history.forEach((value, index) => {
+    if (!value || typeof value !== "object") return;
+    const row = value as FinancialHistoryRow;
+    byPeriod.set(historyPeriodKey(row, index), row);
+  });
+
+  return [...byPeriod.values()]
+    .sort((a, b) => historyPeriodOrder(a) - historyPeriodOrder(b))
+    .slice(-3);
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -80,7 +156,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function CompanyLayout({ children, params }: Props) {
   const { ticker } = await params;
-  const [masterMap, marketResult] = await Promise.all([
+  const [masterMap, marketResult, analysisResult] = await Promise.all([
     loadRuntimeCompanyMasterMap(),
     supabaseAdmin
       .from("all_market_companies")
@@ -89,12 +165,18 @@ export default async function CompanyLayout({ children, params }: Props) {
       )
       .eq("ticker", ticker)
       .maybeSingle(),
+    supabaseAdmin
+      .from("company_analyses")
+      .select("history")
+      .eq("ticker", ticker)
+      .maybeSingle(),
   ]);
   const master = masterMap.get(ticker);
   const market = marketResult.data;
   const marketSegment = market?.market_segment || "growth";
   const marketHref = marketSegment === "growth" ? "/" : `/${marketSegment}`;
   const rankingHref = marketSegment === "growth" ? "/ranking" : `/${marketSegment}/ranking`;
+  const historyRows = latestThreeHistory(analysisResult.data?.history);
 
   return (
     <>
@@ -128,6 +210,49 @@ export default async function CompanyLayout({ children, params }: Props) {
           </div>
         </section>
       ) : null}
+
+      {historyRows.length > 0 ? (
+        <section className="bg-[#050816] px-4 pt-5 text-white sm:px-8">
+          <div className="mx-auto max-w-7xl rounded-3xl border border-cyan-300/20 bg-cyan-400/5 p-4 backdrop-blur-xl sm:p-6">
+            <p className="text-xs font-black tracking-[0.24em] text-cyan-300">FINANCIAL HISTORY</p>
+            <h2 className="mt-2 text-2xl font-black">財務数値（直近3期）</h2>
+            <p className="mt-2 text-sm text-slate-400">
+              EDINET原本から取得した決算期ごとの数値です。
+            </p>
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-[940px] w-full border-separate border-spacing-0 text-right text-sm">
+                <thead>
+                  <tr className="text-slate-400">
+                    <th className="border-b border-white/10 px-3 py-3 text-left">決算期</th>
+                    <th className="border-b border-white/10 px-3 py-3">売上高</th>
+                    <th className="border-b border-white/10 px-3 py-3">営業利益</th>
+                    <th className="border-b border-white/10 px-3 py-3">営業CF</th>
+                    <th className="border-b border-white/10 px-3 py-3">現金</th>
+                    <th className="border-b border-white/10 px-3 py-3">総資産</th>
+                    <th className="border-b border-white/10 px-3 py-3">純資産</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyRows.map((row, index) => (
+                    <tr key={historyPeriodKey(row, index)} className="text-slate-100">
+                      <td className="border-b border-white/5 px-3 py-3 text-left font-black text-cyan-100">
+                        {historyPeriodLabel(row)}
+                      </td>
+                      <td className="border-b border-white/5 px-3 py-3">{formatFinancialValue(row.revenue)}</td>
+                      <td className="border-b border-white/5 px-3 py-3">{formatFinancialValue(row.operatingIncome)}</td>
+                      <td className="border-b border-white/5 px-3 py-3">{formatFinancialValue(row.operatingCF)}</td>
+                      <td className="border-b border-white/5 px-3 py-3">{formatFinancialValue(row.cash)}</td>
+                      <td className="border-b border-white/5 px-3 py-3">{formatFinancialValue(row.assets)}</td>
+                      <td className="border-b border-white/5 px-3 py-3">{formatFinancialValue(row.netAssets)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {children}
       <section className="bg-[#050816] px-4 pb-12 text-white sm:px-8">
         <div className="mx-auto max-w-7xl rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-8">
