@@ -1,41 +1,42 @@
 import dotenv from "dotenv";
 import { supabaseAdmin } from "../lib/supabase";
 import { calculateScores } from "../lib/scoring-engine";
+import { loadAllSupabaseRows } from "../lib/load-all-supabase-rows";
 
 dotenv.config({ path: ".env.local" });
 
 type AnalysisRow = {
   ticker: string;
-  doc_id: string | null;
-  financials: any;
-  history: any[] | null;
+  financials: Record<string, unknown> | null;
+  history: Record<string, unknown>[] | null;
 };
 
 async function main() {
   console.log("===== Rescore Existing Analyses Start =====");
 
-  const { data, error } = await supabaseAdmin
-    .from("company_analyses")
-    .select("ticker, doc_id, financials, history")
-    .limit(1000);
-
-  if (error) throw error;
-
-  const rows = (data ?? []) as AnalysisRow[];
+  const rows = await loadAllSupabaseRows<AnalysisRow>("分析取得失敗", (from, to) =>
+    supabaseAdmin
+      .from("company_analyses")
+      .select("ticker, financials, history")
+      .order("ticker", { ascending: true })
+      .range(from, to)
+  );
 
   console.log("Targets:", rows.length);
 
   let success = 0;
   let failed = 0;
+  let skipped = 0;
 
-  for (const row of rows) {
+  for (const [index, row] of rows.entries()) {
     try {
       if (!row.financials) {
-        throw new Error("financials がありません");
+        skipped += 1;
+        console.log(`[${index + 1}/${rows.length}] SKIPPED ${row.ticker}: financialsなし`);
+        continue;
       }
 
       const scores = calculateScores(row.financials, row.history ?? []);
-
       const scoreBreakdown = {
         growth: scores.growthScore,
         quality: scores.qualityScore,
@@ -53,20 +54,20 @@ async function main() {
       if (updateError) throw updateError;
 
       success += 1;
-
       console.log(
-        `UPDATED ${row.ticker}: score=${scores.totalScore} growth=${scores.growthScore} quality=${scores.qualityScore} safety=${scores.safetyScore}`
+        `[${index + 1}/${rows.length}] UPDATED ${row.ticker}: score=${scores.totalScore}`
       );
     } catch (error) {
       failed += 1;
-      console.log("FAILED:", row.ticker);
+      console.log(`[${index + 1}/${rows.length}] FAILED ${row.ticker}`);
       console.log(error);
     }
   }
 
   console.log("===== Rescore Existing Analyses Done =====");
-  console.log("Success:", success);
-  console.log("Failed:", failed);
+  console.log({ targets: rows.length, success, failed, skipped });
+
+  if (failed > 0) process.exitCode = 1;
 }
 
 main().catch((error) => {
