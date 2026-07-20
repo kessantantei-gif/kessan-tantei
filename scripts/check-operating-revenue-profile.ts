@@ -1,8 +1,10 @@
+import { mkdirSync, writeFileSync } from "node:fs";
 import { extractFinancials } from "../lib/edinet-financial-parser";
 import { parseEdinetFinancialsFromXbrl } from "../lib/edinet-parser";
 
-function assert(condition: boolean, message: string) {
-  if (!condition) throw new Error(message);
+const failures: string[] = [];
+function check(condition: boolean, message: string) {
+  if (!condition) failures.push(message);
 }
 
 const csv = extractFinancials([
@@ -36,8 +38,14 @@ const csv = extractFinancials([
   },
 ]);
 
-assert(csv.metadata.financialProfile === "general", "連結売上高がある持株会社を営業収益型に誤分類しています");
-assert(csv.current.revenue === 339487000000, "連結売上高より単体営業収益を優先しています");
+check(
+  csv.metadata.financialProfile === "general",
+  "CSVで連結売上高がある持株会社を営業収益型に誤分類しています"
+);
+check(
+  csv.current.revenue === 339487000000,
+  "CSVで連結売上高より単体営業収益を優先しています"
+);
 
 const xbrl = parseEdinetFinancialsFromXbrl(`
 <xbrli:context id="CurrentYearDuration">
@@ -52,7 +60,37 @@ const xbrl = parseEdinetFinancialsFromXbrl(`
 <jppfs_cor:ProfitLossAttributableToOwnersOfParentSummaryOfBusinessResults contextRef="CurrentYearDuration">29654000000</jppfs_cor:ProfitLossAttributableToOwnersOfParentSummaryOfBusinessResults>
 `);
 
-assert(xbrl.financialProfile === "general", "XBRLで持株会社を営業収益型に誤分類しています");
-assert(xbrl.revenue === 339487000000, "XBRLで連結売上高より単体営業収益を優先しています");
+check(
+  xbrl.financialProfile === "general",
+  "XBRLで連結売上高がある持株会社を営業収益型に誤分類しています"
+);
+check(
+  xbrl.revenue === 339487000000,
+  "XBRLで連結売上高より単体営業収益を優先しています"
+);
 
+const report = {
+  generatedAt: new Date().toISOString(),
+  ok: failures.length === 0,
+  failures,
+  csv: {
+    financialProfile: csv.metadata.financialProfile,
+    revenue: csv.current.revenue,
+    priorRevenue: csv.prior.revenue,
+  },
+  xbrl: {
+    financialProfile: xbrl.financialProfile,
+    revenue: xbrl.revenue,
+  },
+};
+
+mkdirSync("reports", { recursive: true });
+writeFileSync(
+  "reports/operating-revenue-profile-check.json",
+  JSON.stringify(report, null, 2),
+  "utf8"
+);
+console.log(report);
+
+if (failures.length > 0) process.exit(1);
 console.log("Operating revenue profile checks: OK");
