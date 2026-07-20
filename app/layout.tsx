@@ -8,7 +8,6 @@ import "./globals.css";
 import AuthButton from "@/components/auth-button";
 import FeedbackButton from "@/components/feedback-button";
 import SiteNav from "@/components/site-nav";
-import DeferredCompanyEnhancements from "@/components/deferred-company-enhancements";
 import CompareTray from "@/components/compare-tray";
 import AcquisitionTracker from "@/components/acquisition-tracker";
 import RecentCompanyTracker from "@/components/recent-company-tracker";
@@ -73,7 +72,6 @@ export default function RootLayout({
           <RecentCompanyTracker />
           <SiteNav />
           {children}
-          <DeferredCompanyEnhancements />
           <CompareTray />
           <FeedbackButton />
           <AuthButton />
