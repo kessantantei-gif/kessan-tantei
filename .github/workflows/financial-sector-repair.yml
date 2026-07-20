@@ -11,6 +11,7 @@ on:
       - "lib/redflag-engine.ts"
       - "scripts/reprocess-financial-sector-data.ts"
       - "scripts/check-financial-sector-parser.ts"
+      - "scripts/audit-financial-sector-data.ts"
       - ".github/workflows/financial-sector-repair.yml"
   pull_request:
     paths:
@@ -49,6 +50,5 @@ jobs:
       - name: Reprocess listed financial companies
         run: npm run repair:financial-sector-data
 
-      - name: Audit financial data
-        if: always()
-        run: npm run audit:financial-data
+      - name: Audit financial-sector data
+        run: npm run audit:financial-sector-data
