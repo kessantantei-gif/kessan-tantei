@@ -15,16 +15,47 @@ on:
       - "scripts/diagnose-financial-sector-tags.ts"
       - ".github/workflows/financial-sector-repair.yml"
   pull_request:
-    paths:
-      - ".github/workflows/financial-sector-repair.yml"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 concurrency:
   group: financial-sector-data-repair
   cancel-in-progress: true
 
 jobs:
+  apply-taxonomy-fix:
+    if: github.event_name == 'pull_request' && github.head_ref == 'agent/run-financial-sector-repair'
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.patch.outputs.changed }}
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/run-financial-sector-repair
+          fetch-depth: 0
+
+      - name: Apply deterministic taxonomy patch
+        id: patch
+        shell: bash
+        run: |
+          node scripts/apply-financial-sector-taxonomy-fix.mjs
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/edinet-parser.ts lib/edinet-financial-parser.ts scripts/reprocess-financial-sector-data.ts scripts/audit-financial-sector-data.ts scripts/check-financial-sector-parser.ts
+          git commit -m "Complete financial sector taxonomy support"
+          git push origin HEAD:agent/run-financial-sector-repair
+
   repair:
+    needs: apply-taxonomy-fix
+    if: always() && (needs.apply-taxonomy-fix.result == 'skipped' || needs.apply-taxonomy-fix.outputs.changed != 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
