@@ -1,3 +1,5 @@
+import { cache } from "react";
+import { after } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -16,7 +18,7 @@ function adminEmails() {
   );
 }
 
-export async function isAdminPreviewUser() {
+export const isAdminPreviewUser = cache(async () => {
   const allowedEmails = adminEmails();
   if (allowedEmails.size === 0) return false;
 
@@ -28,7 +30,7 @@ export async function isAdminPreviewUser() {
     .filter(Boolean);
 
   return emails.some((email) => allowedEmails.has(email));
-}
+});
 
 export function isSRankCompany(company: {
   score?: number | null;
@@ -38,19 +40,19 @@ export function isSRankCompany(company: {
   return Number(company.score ?? 0) >= 90 && company.risk_level !== "EXCLUDED";
 }
 
-export async function getCurrentProfile() {
+export const getCurrentProfile = cache(async () => {
   const { userId } = await auth();
 
   if (!userId) return null;
 
   const { data } = await supabaseAdmin
     .from("profiles")
-    .select("*")
+    .select("clerk_user_id, plan, subscription_status, free_ai_uses")
     .eq("clerk_user_id", userId)
     .maybeSingle();
 
   return data;
-}
+});
 
 export function profileIsPro(profile: any) {
   if (!profile) return false;
@@ -63,15 +65,19 @@ export function profileIsPro(profile: any) {
 }
 
 export async function isProUser() {
-  const profile = await getCurrentProfile();
-  if (profileIsPro(profile)) return true;
+  const [profile, adminPreview] = await Promise.all([
+    getCurrentProfile(),
+    isAdminPreviewUser(),
+  ]);
 
-  return isAdminPreviewUser();
+  return profileIsPro(profile) || adminPreview;
 }
 
 export async function canViewAiAnalysis() {
-  const profile = await getCurrentProfile();
-  const adminPreview = await isAdminPreviewUser();
+  const [profile, adminPreview] = await Promise.all([
+    getCurrentProfile(),
+    isAdminPreviewUser(),
+  ]);
 
   if (!profile) {
     return {
@@ -97,21 +103,23 @@ export async function canViewAiAnalysis() {
 }
 
 export async function consumeFreeAiUseIfNeeded() {
-  const profile = await getCurrentProfile();
+  const [profile, adminPreview] = await Promise.all([
+    getCurrentProfile(),
+    isAdminPreviewUser(),
+  ]);
 
-  if (!profile) return;
-  if (profileIsPro(profile)) return;
-  if (await isAdminPreviewUser()) return;
+  if (!profile || profileIsPro(profile) || adminPreview) return;
 
   const freeUses = Number(profile.free_ai_uses ?? 0);
-
   if (freeUses >= 3) return;
 
-  await supabaseAdmin
-    .from("profiles")
-    .update({
-      free_ai_uses: freeUses + 1,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("clerk_user_id", profile.clerk_user_id);
+  after(async () => {
+    await supabaseAdmin
+      .from("profiles")
+      .update({
+        free_ai_uses: freeUses + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("clerk_user_id", profile.clerk_user_id);
+  });
 }
