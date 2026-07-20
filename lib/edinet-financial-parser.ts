@@ -98,13 +98,29 @@ const PROFILE_DEFINITIONS: Record<FinancialMetricProfile, ProfileDefinition> = {
     operatingIncomeLabel: "営業利益",
     currentRatioApplicable: true,
     revenueElements: [
+      "SalesAndFinancialServicesRevenueIFRSKeyFinancialData",
+      "OperatingRevenuesIFRSKeyFinancialData",
+      "NetSalesIFRSKeyFinancialData",
+      "RevenueIFRSKeyFinancialData",
       "RevenueIFRSSummaryOfBusinessResults",
+      "NetSalesSummaryOfBusinessResults",
+      "OperatingRevenueSummaryOfBusinessResults",
+      "TotalNetRevenuesIFRS",
+      "NetSalesIFRS",
+      "SalesRevenuesIFRS",
       "Revenue2IFRS",
       "RevenueIFRS",
       "RevenueFromExternalCustomers2IFRS",
       "OperatingRevenueIFRS",
     ],
-    revenueLabels: ["売上収益（IFRS）、経営指標等", "売上収益（IFRS）", "収益（IFRS）"],
+    revenueLabels: [
+      "売上収益（IFRS）、経営指標等",
+      "売上高、経営指標等",
+      "営業収益、経営指標等",
+      "売上収益（IFRS）",
+      "売上高（IFRS）",
+      "収益（IFRS）",
+    ],
     operatingIncomeElements: [
       "OperatingProfitLossIFRSKeyFinancialData",
       "OperatingProfitLossIFRS",
@@ -153,12 +169,17 @@ const PROFILE_DEFINITIONS: Record<FinancialMetricProfile, ProfileDefinition> = {
     currentRatioApplicable: true,
     revenueElements: [
       "OperatingRevenue1SummaryOfBusinessResults",
+      "OperatingRevenueSummaryOfBusinessResults",
+      "NetSalesSummaryOfBusinessResults",
+      "RevenueSummaryOfBusinessResults",
       "OperatingRevenue1",
       "OperatingRevenueIVT",
       "OperatingRevenues",
       "OperatingRevenue",
+      "NetSales",
+      "Revenue",
     ],
-    revenueLabels: ["営業収益、経営指標等", "営業収益"],
+    revenueLabels: ["営業収益、経営指標等", "売上高、経営指標等", "営業収益", "売上高"],
     operatingIncomeElements: [
       "OperatingIncome",
       "OperatingProfit",
@@ -603,6 +624,10 @@ function detectFinancialProfile(rows: Row[]): FinancialMetricProfile {
   if (elements.has("OperatingRevenueCMD")) return "commodity";
 
   if (
+    elements.has("SalesAndFinancialServicesRevenueIFRSKeyFinancialData") ||
+    elements.has("OperatingRevenuesIFRSKeyFinancialData") ||
+    elements.has("NetSalesIFRSKeyFinancialData") ||
+    elements.has("RevenueIFRSKeyFinancialData") ||
     elements.has("RevenueIFRSSummaryOfBusinessResults") ||
     elements.has("Revenue2IFRS") ||
     elements.has("RevenueIFRS") ||
@@ -611,11 +636,18 @@ function detectFinancialProfile(rows: Row[]): FinancialMetricProfile {
     return "ifrs";
   }
 
+  const hasConsolidatedNetSalesSummary = rows.some(
+    (row) =>
+      localElement(row) === "NetSalesSummaryOfBusinessResults" &&
+      !context(row).includes("NonConsolidatedMember")
+  );
+
   if (
-    elements.has("OperatingRevenue1SummaryOfBusinessResults") ||
-    elements.has("OperatingRevenue1") ||
-    elements.has("OperatingRevenueIVT") ||
-    elements.has("OperatingRevenues")
+    !hasConsolidatedNetSalesSummary &&
+    (elements.has("OperatingRevenue1SummaryOfBusinessResults") ||
+      elements.has("OperatingRevenue1") ||
+      elements.has("OperatingRevenueIVT") ||
+      elements.has("OperatingRevenues"))
   ) {
     return "operating-revenue";
   }
@@ -727,7 +759,14 @@ export function extractFinancials(rows: Row[]): ExtractedFinancials {
 
   const grossProfit = pickFact({
     rows,
-    elementNames: ["GrossProfit", "GrossProfitLoss"],
+    elementNames: [
+      "GrossProfitSummaryOfBusinessResults",
+      "GrossProfitLossSummaryOfBusinessResults",
+      "GrossProfitIFRS",
+      "GrossProfitLossIFRS",
+      "GrossProfit",
+      "GrossProfitLoss",
+    ],
     nameNames: ["売上総利益", "営業総利益", "売上総損失"],
     kind: "duration",
     period: "current",
@@ -735,7 +774,14 @@ export function extractFinancials(rows: Row[]): ExtractedFinancials {
   });
   const priorGrossProfit = pickFact({
     rows,
-    elementNames: ["GrossProfit", "GrossProfitLoss"],
+    elementNames: [
+      "GrossProfitSummaryOfBusinessResults",
+      "GrossProfitLossSummaryOfBusinessResults",
+      "GrossProfitIFRS",
+      "GrossProfitLossIFRS",
+      "GrossProfit",
+      "GrossProfitLoss",
+    ],
     nameNames: ["売上総利益", "営業総利益", "売上総損失"],
     kind: "duration",
     period: "prior",
@@ -760,11 +806,16 @@ export function extractFinancials(rows: Row[]): ExtractedFinancials {
   });
 
   const netIncomeElements = [
+    "ProfitLossAttributableToOwnersOfParentSummaryOfBusinessResults",
+    "ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults",
+    "NetIncomeSummaryOfBusinessResults",
     "ProfitLossAttributableToOwnersOfParent",
     "ProfitAttributableToOwnersOfParent",
-    "ProfitLoss",
+    "ProfitLossAttributableToOwnersOfParentIFRS",
+    "ProfitAttributableToOwnersOfParentIFRS",
     "NetIncome",
     "NetIncomeLoss",
+    "ProfitLoss",
   ];
   const netIncomeLabels = [
     "親会社株主に帰属する当期純利益",

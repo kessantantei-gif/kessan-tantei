@@ -16,23 +16,6 @@ import { isProUser, FREE_VISIBLE_S_RANK_LIMIT } from "@/lib/pro-engine";
 
 type MarketPageSlug = Exclude<MarketSlug, "growth">;
 
-const COMPARISON_REQUIRED_SLUGS = new Set([
-  "revenue-growth",
-  "high-growth",
-  "profitable-high-growth",
-  "featured-companies",
-  "recommended",
-  "rule-of-40",
-  "rule40-excellent",
-  "gross-profit-growth",
-  "operating-income-growth",
-  "net-income-growth",
-  "ocf-growth",
-  "revenue-cagr-3y",
-  "margin-improvement",
-  "ocf-improvement",
-]);
-
 const toneClasses = {
   standard: {
     eyebrow: "text-cyan-300",
@@ -49,15 +32,10 @@ const toneClasses = {
 } as const;
 
 
-function shouldKeepEmptyRanking(ranking: RankingDefinition) {
-  return COMPARISON_REQUIRED_SLUGS.has(ranking.slug);
-}
-
 function getVisibleRankings(companies: RankingCompany[]) {
-  return rankingDefinitions.filter((ranking) => {
-    const hasCompanies = rankCompanies(companies, ranking).length > 0;
-    return hasCompanies || shouldKeepEmptyRanking(ranking);
-  });
+  return rankingDefinitions.filter(
+    (ranking) => rankCompanies(companies, ranking).length > 0
+  );
 }
 
 function getVisibleRankingsByCategory(

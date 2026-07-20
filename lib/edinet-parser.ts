@@ -15,6 +15,8 @@ export type FinancialMetricProfile =
 
 export type EdinetFinancials = {
   revenue: number;
+  grossProfit: number | null;
+  netIncome: number | null;
   operatingIncome: number;
   operatingCF: number;
   cash: number;
@@ -60,6 +62,9 @@ type ProfileDefinition = {
 const PROFILE_DEFINITIONS: Record<FinancialMetricProfile, ProfileDefinition> = {
   general: {
     revenueElements: [
+      "NetSalesSummaryOfBusinessResults",
+      "RevenueSummaryOfBusinessResults",
+      "OperatingRevenueSummaryOfBusinessResults",
       "NetSales",
       "Sales",
       "Revenue",
@@ -81,7 +86,16 @@ const PROFILE_DEFINITIONS: Record<FinancialMetricProfile, ProfileDefinition> = {
   },
   ifrs: {
     revenueElements: [
+      "SalesAndFinancialServicesRevenueIFRSKeyFinancialData",
+      "OperatingRevenuesIFRSKeyFinancialData",
+      "NetSalesIFRSKeyFinancialData",
+      "RevenueIFRSKeyFinancialData",
       "RevenueIFRSSummaryOfBusinessResults",
+      "NetSalesSummaryOfBusinessResults",
+      "OperatingRevenueSummaryOfBusinessResults",
+      "TotalNetRevenuesIFRS",
+      "NetSalesIFRS",
+      "SalesRevenuesIFRS",
       "Revenue2IFRS",
       "RevenueIFRS",
       "RevenueFromExternalCustomers2IFRS",
@@ -126,10 +140,15 @@ const PROFILE_DEFINITIONS: Record<FinancialMetricProfile, ProfileDefinition> = {
   "operating-revenue": {
     revenueElements: [
       "OperatingRevenue1SummaryOfBusinessResults",
+      "OperatingRevenueSummaryOfBusinessResults",
+      "NetSalesSummaryOfBusinessResults",
+      "RevenueSummaryOfBusinessResults",
       "OperatingRevenue1",
       "OperatingRevenueIVT",
       "OperatingRevenues",
       "OperatingRevenue",
+      "NetSales",
+      "Revenue",
     ],
     operatingIncomeElements: [
       "OperatingIncome",
@@ -274,6 +293,8 @@ export function parseEdinetFinancialsFromXbrl(text: string): EdinetFinancials {
 function emptyFinancials(): EdinetFinancials {
   return {
     revenue: 0,
+    grossProfit: null,
+    netIncome: null,
     operatingIncome: 0,
     operatingCF: 0,
     cash: 0,
@@ -300,6 +321,8 @@ function mergeFinancials(
 
   return {
     revenue: chooseNumber(primary.revenue, fallback.revenue),
+    grossProfit: chooseNullableNumber(primary.grossProfit, fallback.grossProfit),
+    netIncome: chooseNullableNumber(primary.netIncome, fallback.netIncome),
     operatingIncome: chooseNumber(primary.operatingIncome, fallback.operatingIncome),
     operatingCF: chooseNumber(primary.operatingCF, fallback.operatingCF),
     cash: chooseNumber(primary.cash, fallback.cash),
@@ -320,6 +343,13 @@ function mergeFinancials(
 
 function chooseNumber(primary: number, fallback: number) {
   return primary !== 0 ? primary : fallback;
+}
+
+function chooseNullableNumber(
+  primary: number | null,
+  fallback: number | null
+) {
+  return primary !== null ? primary : fallback;
 }
 
 function parseInlineXbrl(text: string): EdinetFinancials {
@@ -429,6 +459,36 @@ function buildFinancials(
       durationContext,
       definition.revenueElements
     ),
+    grossProfit: extractNullableFact(
+      facts,
+      contexts,
+      durationContext,
+      [
+        "GrossProfitSummaryOfBusinessResults",
+        "GrossProfitLossSummaryOfBusinessResults",
+        "GrossProfitIFRS",
+        "GrossProfitLossIFRS",
+        "GrossProfit",
+        "GrossProfitLoss",
+      ]
+    ),
+    netIncome: extractNullableFact(
+      facts,
+      contexts,
+      durationContext,
+      [
+        "ProfitLossAttributableToOwnersOfParentSummaryOfBusinessResults",
+        "ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults",
+        "ProfitLossAttributableToOwnersOfParent",
+        "ProfitAttributableToOwnersOfParent",
+        "ProfitLossAttributableToOwnersOfParentIFRS",
+        "ProfitAttributableToOwnersOfParentIFRS",
+        "NetIncomeSummaryOfBusinessResults",
+        "NetIncome",
+        "NetIncomeLoss",
+        "ProfitLoss",
+      ]
+    ),
     operatingIncome: extractFact(
       facts,
       contexts,
@@ -518,6 +578,10 @@ function detectFinancialProfile(facts: NumericFact[]): FinancialMetricProfile {
   if (elements.has("OperatingRevenueCMD")) return "commodity";
 
   if (
+    elements.has("SalesAndFinancialServicesRevenueIFRSKeyFinancialData") ||
+    elements.has("OperatingRevenuesIFRSKeyFinancialData") ||
+    elements.has("NetSalesIFRSKeyFinancialData") ||
+    elements.has("RevenueIFRSKeyFinancialData") ||
     elements.has("RevenueIFRSSummaryOfBusinessResults") ||
     elements.has("Revenue2IFRS") ||
     elements.has("RevenueIFRS") ||
@@ -526,11 +590,18 @@ function detectFinancialProfile(facts: NumericFact[]): FinancialMetricProfile {
     return "ifrs";
   }
 
+  const hasConsolidatedNetSalesSummary = facts.some(
+    (fact) =>
+      localName(fact.name) === "NetSalesSummaryOfBusinessResults" &&
+      !fact.contextRef.includes("NonConsolidatedMember")
+  );
+
   if (
-    elements.has("OperatingRevenue1SummaryOfBusinessResults") ||
-    elements.has("OperatingRevenue1") ||
-    elements.has("OperatingRevenueIVT") ||
-    elements.has("OperatingRevenues")
+    !hasConsolidatedNetSalesSummary &&
+    (elements.has("OperatingRevenue1SummaryOfBusinessResults") ||
+      elements.has("OperatingRevenue1") ||
+      elements.has("OperatingRevenueIVT") ||
+      elements.has("OperatingRevenues"))
   ) {
     return "operating-revenue";
   }
@@ -590,6 +661,37 @@ function extractFact(
     });
 
   return candidates[0]?.fact.value ?? 0;
+}
+
+function extractNullableFact(
+  facts: NumericFact[],
+  contexts: Map<string, ContextInfo>,
+  preferredContext: ContextInfo | undefined,
+  suffixes: string[]
+): number | null {
+  const rank = new Map(suffixes.map((suffix, index) => [suffix, index]));
+  const candidates = facts
+    .filter((fact) => rank.has(localName(fact.name)))
+    .map((fact) => ({ fact, context: contexts.get(fact.contextRef) }))
+    .sort((a, b) => {
+      const score = (candidate: {
+        fact: NumericFact;
+        context: ContextInfo | undefined;
+      }) => {
+        const preferred =
+          preferredContext && candidate.fact.contextRef === preferredContext.id
+            ? 10_000
+            : 0;
+        const elementRank =
+          rank.get(localName(candidate.fact.name)) ?? suffixes.length;
+        const elementPriority = (suffixes.length - elementRank) * 10;
+        return preferred + contextScoreSafe(candidate.context) * 10 + elementPriority;
+      };
+
+      return score(b) - score(a);
+    });
+
+  return candidates[0]?.fact.value ?? null;
 }
 
 function contextScoreSafe(context: ContextInfo | undefined) {
