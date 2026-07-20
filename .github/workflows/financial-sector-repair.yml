@@ -1,0 +1,50 @@
+name: Financial Sector Data Repair
+
+on:
+  push:
+    branches:
+      - agent/fix-financial-sector-data
+    paths:
+      - "lib/edinet-parser.ts"
+      - "lib/edinet-financial-parser.ts"
+      - "lib/redflag-engine.ts"
+      - "scripts/reprocess-financial-sector-data.ts"
+      - "scripts/check-financial-sector-parser.ts"
+      - ".github/workflows/financial-sector-repair.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: financial-sector-data-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate financial-sector parser
+        run: npm run check:financial-sector-parser
+
+      - name: Reprocess listed financial companies
+        run: npm run repair:financial-sector-data
+
+      - name: Audit financial data
+        if: always()
+        run: npm run audit:financial-data
