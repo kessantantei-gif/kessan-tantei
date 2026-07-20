@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { supabaseAdmin } from "../lib/supabase";
 import { loadAllSupabaseRows } from "../lib/load-all-supabase-rows";
 
@@ -64,14 +65,19 @@ function nearlyEqual(left: number, right: number, tolerance = 0.02) {
 }
 
 function latestHistoryRow(history: HistoryRow[]) {
-  return [...history].sort((left, right) => {
-    const leftKey = left.periodEnd ?? String(left.fiscalYear ?? left.year ?? "");
-    const rightKey = right.periodEnd ?? String(right.fiscalYear ?? right.year ?? "");
-    return leftKey.localeCompare(rightKey);
-  }).at(-1);
+  return [...history]
+    .sort((left, right) => {
+      const leftKey = left.periodEnd ?? String(left.fiscalYear ?? left.year ?? "");
+      const rightKey = right.periodEnd ?? String(right.fiscalYear ?? right.year ?? "");
+      return leftKey.localeCompare(rightKey);
+    })
+    .at(-1);
 }
 
-function auditCompany(company: FinancialCompany, analysis: AnalysisRow | undefined): Issue[] {
+function auditCompany(
+  company: FinancialCompany,
+  analysis: AnalysisRow | undefined
+): Issue[] {
   const issues: Issue[] = [];
   const add = (field: string, message: string) => {
     issues.push({
@@ -91,7 +97,10 @@ function auditCompany(company: FinancialCompany, analysis: AnalysisRow | undefin
   const financials = analysis.financials ?? {};
   const profile = financials.financialProfile;
   if (!profile || !KNOWN_PROFILES.has(profile)) {
-    add("financialProfile", `金融業プロファイルが未設定または不正です: ${String(profile)}`);
+    add(
+      "financialProfile",
+      `金融業プロファイルが未設定または不正です: ${String(profile)}`
+    );
   }
   if (!financials.revenueLabel?.trim()) {
     add("revenueLabel", "収益項目の表示名がありません");
@@ -118,13 +127,22 @@ function auditCompany(company: FinancialCompany, analysis: AnalysisRow | undefin
       add("revenueLabel", `${profile} は「経常収益」で表示する必要があります`);
     }
     if (financials.operatingIncomeLabel !== "経常利益") {
-      add("operatingIncomeLabel", `${profile} は「経常利益」で表示する必要があります`);
+      add(
+        "operatingIncomeLabel",
+        `${profile} は「経常利益」で表示する必要があります`
+      );
     }
     if (financials.currentRatioApplicable !== false) {
-      add("currentRatioApplicable", `${profile} に一般会社の流動比率を適用しています`);
+      add(
+        "currentRatioApplicable",
+        `${profile} に一般会社の流動比率を適用しています`
+      );
     }
     if (cash === null || cash <= 0) {
-      add("cash", `${profile} の現金系項目が未取得または0以下です: ${String(financials.cash)}`);
+      add(
+        "cash",
+        `${profile} の現金系項目が未取得または0以下です: ${String(financials.cash)}`
+      );
     }
   }
 
@@ -137,7 +155,10 @@ function auditCompany(company: FinancialCompany, analysis: AnalysisRow | undefin
       add("revenueLabel", `${profile} は「営業収益」で表示する必要があります`);
     }
     if (financials.operatingIncomeLabel !== "営業利益") {
-      add("operatingIncomeLabel", `${profile} は「営業利益」で表示する必要があります`);
+      add(
+        "operatingIncomeLabel",
+        `${profile} は「営業利益」で表示する必要があります`
+      );
     }
   }
 
@@ -155,9 +176,16 @@ function auditCompany(company: FinancialCompany, analysis: AnalysisRow | undefin
 
   const latestRevenue = finite(latest.revenue);
   if (latestRevenue === null || latestRevenue <= 0) {
-    add("history.revenue", `最新期の収益が未取得または0以下です: ${String(latest.revenue)}`);
+    add(
+      "history.revenue",
+      `最新期の収益が未取得または0以下です: ${String(latest.revenue)}`
+    );
   }
-  if (revenue !== null && latestRevenue !== null && !nearlyEqual(revenue, latestRevenue)) {
+  if (
+    revenue !== null &&
+    latestRevenue !== null &&
+    !nearlyEqual(revenue, latestRevenue)
+  ) {
     add(
       "revenue",
       `financialsと最新履歴が不一致です: financials=${revenue}, history=${latestRevenue}`
@@ -205,32 +233,54 @@ async function main() {
     ),
   ]);
 
-  const analysisByTicker = new Map(analyses.map((analysis) => [analysis.ticker, analysis]));
+  const analysisByTicker = new Map(
+    analyses.map((analysis) => [analysis.ticker, analysis])
+  );
   const issues = companies.flatMap((company) =>
     auditCompany(company, analysisByTicker.get(company.ticker))
   );
 
   const profileCounts = new Map<string, number>();
   for (const company of companies) {
-    const profile = analysisByTicker.get(company.ticker)?.financials?.financialProfile ?? "missing";
+    const profile =
+      analysisByTicker.get(company.ticker)?.financials?.financialProfile ??
+      "missing";
     profileCounts.set(profile, (profileCounts.get(profile) ?? 0) + 1);
   }
 
-  console.log("=== financial sector data audit ===");
-  console.log({
+  const flaggedCompanies = new Set(issues.map((issue) => issue.ticker)).size;
+  const summary = {
     listedFinancialCompanies: companies.length,
-    cleanCompanies: companies.length - new Set(issues.map((issue) => issue.ticker)).size,
-    flaggedCompanies: new Set(issues.map((issue) => issue.ticker)).size,
+    cleanCompanies: companies.length - flaggedCompanies,
+    flaggedCompanies,
     totalIssues: issues.length,
     profiles: Object.fromEntries([...profileCounts.entries()].sort()),
-  });
+  };
+  const report = {
+    generatedAt: new Date().toISOString(),
+    summary,
+    issues,
+  };
+
+  mkdirSync("reports", { recursive: true });
+  writeFileSync(
+    "reports/financial-sector-audit.json",
+    JSON.stringify(report, null, 2),
+    "utf8"
+  );
+
+  console.log("=== financial sector data audit ===");
+  console.log(summary);
+  console.log("Report: reports/financial-sector-audit.json");
 
   for (const issue of issues.slice(0, 100)) {
     console.log(
       `[ERROR] ${issue.ticker} ${issue.companyName} / ${issue.field}: ${issue.message}`
     );
   }
-  if (issues.length > 100) console.log(`...and ${issues.length - 100} more issues`);
+  if (issues.length > 100) {
+    console.log(`...and ${issues.length - 100} more issues`);
+  }
 
   if (issues.length > 0) process.exit(1);
 }
