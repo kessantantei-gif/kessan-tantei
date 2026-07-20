@@ -3,6 +3,7 @@ import path from "path";
 import { execSync } from "child_process";
 import { parseEdinetFinancials } from "../lib/edinet-parser";
 import { calculateMarketScores } from "../lib/market-scoring-engine";
+import { calculateFinancialMetrics } from "../lib/financial-metrics";
 import {
   classifyAuditor,
   parseDisclosureSignals,
@@ -38,6 +39,8 @@ type HistoryRow = {
   fiscalPeriod: string;
   periodEnd: string;
   revenue: number;
+  grossProfit: number | null;
+  netIncome: number | null;
   operatingIncome: number;
   operatingCF: number;
   docID: string;
@@ -147,6 +150,8 @@ function buildHistoryRow(id: string): HistoryRow {
     fiscalPeriod,
     periodEnd,
     revenue: financials.revenue,
+    grossProfit: financials.grossProfit,
+    netIncome: financials.netIncome,
     operatingIncome: financials.operatingIncome,
     operatingCF: financials.operatingCF,
     docID: id,
@@ -335,6 +340,25 @@ async function main() {
   const currentAuditorType = classifyAuditor(
     disclosureSignals.currentAuditorName
   );
+  const previousFinancials = history.length >= 2 ? history.at(-2) : undefined;
+  const calculatedFinancials = calculateFinancialMetrics(
+    {
+      revenue: financials.revenue,
+      grossProfit: financials.grossProfit,
+      netIncome: financials.netIncome,
+      operatingIncome: financials.operatingIncome,
+      operatingCF: financials.operatingCF,
+      cash: financials.cash,
+      currentLiabilities: financials.currentLiabilities,
+      assets: financials.assets,
+      netAssets: financials.netAssets,
+    },
+    previousFinancials
+  );
+  const storedFinancials = {
+    ...financials,
+    ...calculatedFinancials,
+  };
 
   const redFlags = analyzeRedFlags({
     industryType,
@@ -375,7 +399,7 @@ async function main() {
     score: scores.totalScore,
     danger_score: redFlags.dangerScore,
     risk_level: redFlags.riskLevel,
-    financials,
+    financials: storedFinancials,
     history,
     risk: redFlags,
     score_breakdown: scoreBreakdown,
@@ -385,7 +409,7 @@ async function main() {
   if (allMarketCompany) {
     await saveNormalizedData({
       company: allMarketCompany,
-      financials,
+      financials: storedFinancials,
       history,
       scores,
       redFlags,
