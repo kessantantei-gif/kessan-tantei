@@ -106,6 +106,7 @@ export default async function CompanyLayout({ children, params }: Props) {
       {children}
       {market ? (
         <CompanyMarketBadges
+          ticker={ticker}
           marketSegment={marketSegment}
           marketLabel={marketLabel}
           industryName={market.industry_name}
