@@ -8,7 +8,9 @@ function textOf(node: Element | null) {
 }
 
 function companyRoot() {
-  const main = document.querySelector("main[data-company-page='true']") as HTMLElement | null;
+  const main = document.querySelector(
+    "main[data-company-page='true']"
+  ) as HTMLElement | null;
   return main?.querySelector(":scope > section") as HTMLElement | null;
 }
 
@@ -48,7 +50,9 @@ function moveAfter(anchor: HTMLElement, card: HTMLElement | null) {
 function tagSection(card: HTMLElement | null, label: string, description?: string) {
   if (!card) return;
 
-  const existing = card.querySelector(":scope > [data-company-section-label='true']") as HTMLElement | null;
+  const existing = card.querySelector(
+    ":scope > [data-company-section-label='true']"
+  ) as HTMLElement | null;
   if (existing) {
     const title = existing.querySelector("[data-section-title='true']");
     const note = existing.querySelector("[data-section-note='true']");
@@ -63,7 +67,8 @@ function tagSection(card: HTMLElement | null, label: string, description?: strin
 
   const title = document.createElement("span");
   title.dataset.sectionTitle = "true";
-  title.className = "rounded-full border border-white/10 bg-white/10 px-3 py-1 font-black text-slate-200";
+  title.className =
+    "rounded-full border border-white/10 bg-white/10 px-3 py-1 font-black text-slate-200";
   title.textContent = label;
   badge.appendChild(title);
 
@@ -97,7 +102,11 @@ function reorderCompanyPage() {
   const heroGrid = findHeroGrid(root);
   if (!heroGrid) return;
 
-  const news = findCardByHeading(root, ["ニュース / IR要約", "ニュース", "IR要約"]);
+  const news = findCardByHeading(root, [
+    "ニュース / IR要約",
+    "ニュース",
+    "IR要約",
+  ]);
   const comments = findCardByHeading(root, ["みんなのコメント", "掲示板"]);
   const earnings =
     findDataCard(root, "[data-company-earnings-flash='true']") ||
@@ -106,13 +115,20 @@ function reorderCompanyPage() {
   const scoreReason =
     findDataCard(root, "[data-score-explanation='true']") ||
     findCardByHeading(root, ["スコア根拠", "スコアの見える化"]);
-  const signals = findDataCard(root, "[data-company-financial-signals='true']");
+  const signals = findDataCard(
+    root,
+    "[data-company-financial-signals='true']"
+  );
   const proAnalysis =
     findDataCard(root, "[data-company-pro-analysis='true']") ||
     findCardByHeading(root, ["Pro分析", "AI詳細財務分析"]);
   const detectiveAndRisk =
-    (findCardByHeading(root, ["決算探偵の見立て"])?.parentElement as HTMLElement | null) ||
-    (findCardByHeading(root, ["Danger内訳", "Red Flags"])?.parentElement as HTMLElement | null);
+    (findCardByHeading(root, ["決算探偵の見立て"])?.parentElement as
+      | HTMLElement
+      | null) ||
+    (findCardByHeading(root, ["Danger内訳", "Red Flags"])?.parentElement as
+      | HTMLElement
+      | null);
   const trends =
     (findCardByHeading(root, ["売上推移"])?.parentElement as HTMLElement | null) ||
     findCardByHeading(root, ["営業利益推移", "営業CF推移"]);
@@ -152,13 +168,9 @@ export default function CompanyPageOrderController() {
     if (!isCompanyPage) return;
 
     reorderCompanyPage();
-    requestAnimationFrame(reorderCompanyPage);
+    const frame = window.requestAnimationFrame(reorderCompanyPage);
 
-    const timers = [250, 700, 1400, 2400].map((delay) =>
-      window.setTimeout(reorderCompanyPage, delay)
-    );
-
-    return () => timers.forEach((timer) => window.clearTimeout(timer));
+    return () => window.cancelAnimationFrame(frame);
   }, [isCompanyPage, pathname]);
 
   return null;
