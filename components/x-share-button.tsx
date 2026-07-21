@@ -34,9 +34,11 @@ Danger Score：${dangerScore}
       href={shareUrl}
       target="_blank"
       rel="noreferrer"
-      className="rounded-2xl border border-white/10 bg-black/30 px-5 py-3 text-center text-sm font-black text-white hover:bg-white/10"
+      data-pressable="true"
+      className="inline-flex min-h-10 w-fit items-center justify-center rounded-full border border-white/10 bg-black/30 px-4 py-2 text-xs font-black text-slate-200 transition hover:bg-white/10 hover:text-white sm:text-sm"
+      aria-label={`${companyName}の分析結果をXで共有`}
     >
-      Xで共有
+      Xで共有 ↗
     </a>
   );
 }
