@@ -11,6 +11,7 @@ import FeedbackButton from "@/components/feedback-button";
 import SiteNav from "@/components/site-nav";
 import NavigationFeedback from "@/components/navigation-feedback";
 import CompanyPageOrderController from "@/components/company-page-order-controller";
+import CompanyStockChart from "@/components/company-stock-chart";
 import CompareTray from "@/components/compare-tray";
 import AcquisitionTracker from "@/components/acquisition-tracker";
 import RecentCompanyTracker from "@/components/recent-company-tracker";
@@ -80,6 +81,7 @@ export default function RootLayout({
           <NavigationFeedback />
           {children}
           <CompanyPageOrderController />
+          <CompanyStockChart />
           <CompareTray />
           <FeedbackButton />
           <AuthButton />
