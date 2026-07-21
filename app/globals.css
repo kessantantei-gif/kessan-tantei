@@ -166,17 +166,45 @@ main[data-company-page="true"] [data-company-section="board"] { grid-area: board
     flex-direction: column;
     padding: 0.75rem 0.625rem 1rem;
   }
-  main[data-company-page="true"] [data-company-section="overview"] { order: 1; }
-  main[data-company-page="true"] [data-company-priority-flow="true"] {
-    order: 2;
+
+  /* Only direct page sections participate in the mobile reading order. */
+  main[data-company-page="true"] > section > [data-company-section="overview"] {
+    order: 0 !important;
+  }
+  main[data-company-page="true"] > section > [data-company-priority-flow="true"] {
+    order: 1 !important;
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "news" "board" "earnings" "ai";
     gap: 0.75rem;
     margin-top: 0.75rem;
   }
-  main[data-company-page="true"] [data-company-section="financial-trends"] { order: 3; margin-top: 0.75rem; }
-  main[data-company-page="true"] [data-company-section="financial-details"] { order: 4; margin-top: 0.75rem; }
-  main[data-company-page="true"] [data-company-section="disclaimer"] { order: 5; margin-top: 0.75rem; }
+  main[data-company-page="true"] > section > [data-company-section="financial-trends"] {
+    order: 2 !important;
+    margin-top: 0.75rem;
+  }
+  main[data-company-page="true"] > section > [data-company-section="financial-details"] {
+    order: 3 !important;
+    margin-top: 0.75rem;
+  }
+  main[data-company-page="true"] > section > [data-company-section="disclaimer"] {
+    order: 4 !important;
+    margin-top: 0.75rem;
+  }
+
+  /* Keep the board's visible hierarchy stable: heading, summary, then board body. */
+  main[data-company-page="true"] [data-company-section="board"] {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  main[data-company-page="true"] [data-company-section="board"] > h2 {
+    order: 0 !important;
+  }
+  main[data-company-page="true"] [data-company-section="board"] > p {
+    order: 1 !important;
+  }
+  main[data-company-page="true"] [data-company-section="board"] > div {
+    order: 2 !important;
+  }
 
   main[data-company-page="true"] h1,
   main[data-company-page="true"] h2,
@@ -228,4 +256,3 @@ main[data-company-page="true"] [data-company-section="board"] { grid-area: board
   main[data-company-page="true"] button:active,
   main[data-company-page="true"] a:active { transform: scale(0.97); opacity: 0.82; }
 }
-
