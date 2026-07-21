@@ -3,15 +3,22 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
-function textOf(node: Element | null) {
-  return node?.textContent?.replace(/\s+/g, " ").trim() ?? "";
-}
-
 function companyRoot() {
   const main = document.querySelector(
     "main[data-company-page='true']"
   ) as HTMLElement | null;
-  return main?.querySelector(":scope > section") as HTMLElement | null;
+
+  if (!main) return null;
+
+  return (
+    Array.from(main.children).find(
+      (child) => child.tagName.toLowerCase() === "section"
+    ) as HTMLElement | undefined
+  ) ?? null;
+}
+
+function textOf(node: Element | null) {
+  return node?.textContent?.replace(/\s+/g, " ").trim() ?? "";
 }
 
 function findHeroGrid(root: HTMLElement) {
@@ -20,144 +27,48 @@ function findHeroGrid(root: HTMLElement) {
   return heroCard?.parentElement as HTMLElement | null;
 }
 
-function findCardByHeading(root: HTMLElement, labels: string[]) {
-  const headings = Array.from(root.querySelectorAll("h2, h3, p"));
+function findSectionCard(root: HTMLElement, titles: string[]) {
+  const heading = Array.from(root.querySelectorAll("h2")).find((node) =>
+    titles.some((title) => textOf(node).includes(title))
+  );
 
-  for (const heading of headings) {
-    const text = textOf(heading);
-    if (!labels.some((label) => text.includes(label))) continue;
+  if (!heading) return null;
 
-    const card = heading.closest(
-      "[data-company-ai-summary='true'], [data-company-financial-signals='true'], [data-company-peer-comparison='true'], [data-company-earnings-flash='true'], [data-company-pro-analysis='true'], [data-score-explanation='true'], div.rounded-3xl, section.rounded-3xl, div.rounded-2xl, section.rounded-2xl"
-    ) as HTMLElement | null;
-
-    if (card && root.contains(card)) return card;
-  }
-
-  return null;
-}
-
-function findDataCard(root: HTMLElement, selector: string) {
-  return root.querySelector(selector) as HTMLElement | null;
-}
-
-function moveAfter(anchor: HTMLElement, card: HTMLElement | null) {
-  if (!card || card === anchor || !card.parentElement) return anchor;
-  anchor.insertAdjacentElement("afterend", card);
-  return card;
-}
-
-function tagSection(card: HTMLElement | null, label: string, description?: string) {
-  if (!card) return;
-
-  const existing = card.querySelector(
-    ":scope > [data-company-section-label='true']"
+  const card = heading.closest(
+    "div.rounded-3xl, section.rounded-3xl"
   ) as HTMLElement | null;
-  if (existing) {
-    const title = existing.querySelector("[data-section-title='true']");
-    const note = existing.querySelector("[data-section-note='true']");
-    if (title) title.textContent = label;
-    if (note) note.textContent = description ?? "";
-    return;
-  }
 
-  const badge = document.createElement("div");
-  badge.dataset.companySectionLabel = "true";
-  badge.className = "mb-3 flex flex-wrap items-center gap-2 text-xs";
-
-  const title = document.createElement("span");
-  title.dataset.sectionTitle = "true";
-  title.className =
-    "rounded-full border border-white/10 bg-white/10 px-3 py-1 font-black text-slate-200";
-  title.textContent = label;
-  badge.appendChild(title);
-
-  if (description) {
-    const note = document.createElement("span");
-    note.dataset.sectionNote = "true";
-    note.className = "text-slate-500";
-    note.textContent = description;
-    badge.appendChild(note);
-  }
-
-  card.insertBefore(badge, card.firstElementChild);
+  return card && root.contains(card) ? card : null;
 }
 
-function normalizeSectionSpacing(root: HTMLElement) {
-  const sections = Array.from(
-    root.querySelectorAll(
-      "[data-company-ai-summary='true'], [data-company-financial-signals='true'], [data-company-peer-comparison='true'], [data-company-earnings-flash='true'], [data-company-pro-analysis='true'], [data-score-explanation='true']"
-    )
-  ) as HTMLElement[];
-
-  for (const section of sections) {
-    section.classList.add("w-full", "min-w-0");
-  }
-}
-
-function reorderCompanyPage() {
+function reorderPrimarySections() {
   const root = companyRoot();
-  if (!root) return;
+  if (!root) return false;
 
-  const heroGrid = findHeroGrid(root);
-  if (!heroGrid) return;
-
-  const news = findCardByHeading(root, [
+  const hero = findHeroGrid(root);
+  const news = findSectionCard(root, [
     "ニュース / IR要約",
     "ニュース",
     "IR要約",
   ]);
-  const comments = findCardByHeading(root, ["みんなのコメント", "掲示板"]);
-  const earnings =
-    findDataCard(root, "[data-company-earnings-flash='true']") ||
-    findCardByHeading(root, ["決算速報", "決算変化速報"]);
-  const aiSummary = findDataCard(root, "[data-company-ai-summary='true']");
-  const scoreReason =
-    findDataCard(root, "[data-score-explanation='true']") ||
-    findCardByHeading(root, ["スコア根拠", "スコアの見える化"]);
-  const signals = findDataCard(
-    root,
-    "[data-company-financial-signals='true']"
-  );
-  const proAnalysis =
-    findDataCard(root, "[data-company-pro-analysis='true']") ||
-    findCardByHeading(root, ["Pro分析", "AI詳細財務分析"]);
-  const detectiveAndRisk =
-    (findCardByHeading(root, ["決算探偵の見立て"])?.parentElement as
-      | HTMLElement
-      | null) ||
-    (findCardByHeading(root, ["Danger内訳", "Red Flags"])?.parentElement as
-      | HTMLElement
-      | null);
-  const trends =
-    (findCardByHeading(root, ["売上推移"])?.parentElement as HTMLElement | null) ||
-    findCardByHeading(root, ["営業利益推移", "営業CF推移"]);
-  const peer =
-    findDataCard(root, "[data-company-peer-comparison='true']") ||
-    findCardByHeading(root, ["比較候補", "事業テーマ比較", "同業比較"]);
+  const board = findSectionCard(root, ["みんなのコメント", "掲示板"]);
 
-  let anchor = heroGrid;
-  anchor = moveAfter(anchor, news);
-  anchor = moveAfter(anchor, comments);
-  anchor = moveAfter(anchor, earnings);
-  anchor = moveAfter(anchor, aiSummary);
-  anchor = moveAfter(anchor, scoreReason);
-  anchor = moveAfter(anchor, signals);
-  anchor = moveAfter(anchor, proAnalysis);
-  anchor = moveAfter(anchor, detectiveAndRisk);
-  anchor = moveAfter(anchor, trends);
-  moveAfter(anchor, peer);
+  if (!hero || !news || !board) return false;
 
-  tagSection(news, "NEWS / IR", "直近の開示と材料");
-  tagSection(comments, "COMMUNITY", "投資家の反応");
-  tagSection(earnings, "EARNINGS", "前回決算からの変化");
-  tagSection(aiSummary, "AI SUMMARY", "決算の要点");
-  tagSection(scoreReason, "SCORE", "評価の根拠");
-  tagSection(signals, "SIGNALS", "財務上の強みと注意点");
-  tagSection(proAnalysis, "PRO ANALYSIS", "詳細な判断材料");
-  tagSection(peer, "COMPARISON", "比較すべき企業");
+  news.classList.add("w-full", "min-w-0");
+  board.classList.add("w-full", "min-w-0");
+  news.dataset.companyPrimarySection = "news";
+  board.dataset.companyPrimarySection = "board";
 
-  normalizeSectionSpacing(root);
+  if (hero.nextElementSibling !== news) {
+    hero.insertAdjacentElement("afterend", news);
+  }
+
+  if (news.nextElementSibling !== board) {
+    news.insertAdjacentElement("afterend", board);
+  }
+
+  return hero.nextElementSibling === news && news.nextElementSibling === board;
 }
 
 export default function CompanyPageOrderController() {
@@ -167,10 +78,44 @@ export default function CompanyPageOrderController() {
   useEffect(() => {
     if (!isCompanyPage) return;
 
-    reorderCompanyPage();
-    const frame = window.requestAnimationFrame(reorderCompanyPage);
+    let frame: number | null = null;
+    let stopped = false;
 
-    return () => window.cancelAnimationFrame(frame);
+    const run = () => {
+      frame = null;
+      if (!stopped) reorderPrimarySections();
+    };
+
+    const schedule = () => {
+      if (stopped || frame !== null) return;
+      frame = window.requestAnimationFrame(run);
+    };
+
+    schedule();
+
+    const observer = new MutationObserver(schedule);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    const timers = [50, 200, 500, 1000, 2000, 4000, 7000].map((delay) =>
+      window.setTimeout(schedule, delay)
+    );
+
+    const stopTimer = window.setTimeout(() => {
+      stopped = true;
+      observer.disconnect();
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    }, 10000);
+
+    return () => {
+      stopped = true;
+      observer.disconnect();
+      timers.forEach((timer) => window.clearTimeout(timer));
+      window.clearTimeout(stopTimer);
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
   }, [isCompanyPage, pathname]);
 
   return null;
