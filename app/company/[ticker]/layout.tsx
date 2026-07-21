@@ -99,6 +99,38 @@ export default async function CompanyLayout({ children, params }: Props) {
   const marketLabel = marketLabels[marketSegment] || marketLabels.other;
   const rankingHref =
     marketSegment === "growth" ? "/ranking" : `/${marketSegment}/ranking`;
+  const themeHref =
+    master && master.themeId !== "other"
+      ? `/themes/${master.themeId}`
+      : "/themes";
+  const themeLabel =
+    master && master.themeId !== "other"
+      ? `${master.theme}の企業一覧`
+      : "テーマ別企業一覧";
+  const relatedLinks = [
+    { href: themeHref, kicker: "THEME", label: themeLabel },
+    { href: rankingHref, kicker: "MARKET", label: "市場別ランキング" },
+    {
+      href: "/ranking/revenue-growth",
+      kicker: "GROWTH",
+      label: "売上成長率",
+    },
+    {
+      href: "/ranking/operating-margin",
+      kicker: "PROFIT",
+      label: "営業利益率",
+    },
+    {
+      href: "/ranking/operating-cash-flow",
+      kicker: "CASH FLOW",
+      label: "営業CF",
+    },
+    {
+      href: "/ranking/risk-signal",
+      kicker: "RISK",
+      label: "リスクシグナル",
+    },
+  ];
 
   return (
     <>
@@ -113,68 +145,36 @@ export default async function CompanyLayout({ children, params }: Props) {
         />
       ) : null}
       <section className="bg-[#050816] px-4 pb-12 text-white sm:px-8">
-        <div className="mx-auto max-w-7xl rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-8">
+        <div className="mx-auto max-w-7xl rounded-3xl border border-white/10 bg-white/5 p-5 sm:p-8">
           <p className="text-xs font-black tracking-[0.25em] text-cyan-300">
             RELATED ANALYSIS
           </p>
-          <h2 className="mt-2 text-2xl font-black">
-            関連する企業・ランキングを確認
+          <h2 className="mt-2 text-2xl font-black sm:text-3xl">
+            関連する分析を見る
           </h2>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-400">
-            同じ事業テーマの企業や、成長性・収益性・営業CF・リスクのランキングとあわせて確認できます。
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400 sm:leading-7">
+            同じテーマの企業や、市場・財務指標・リスクのランキングを確認できます。
           </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            {master && master.themeId !== "other" ? (
+
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {relatedLinks.map((item) => (
               <Link
-                href={`/themes/${master.themeId}`}
-                className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2 text-sm font-black text-cyan-200 hover:bg-cyan-400/20"
+                key={`${item.kicker}-${item.href}`}
+                href={item.href}
+                data-pressable="true"
+                className="group flex min-h-[92px] min-w-0 flex-col justify-between rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:border-cyan-300/35 hover:bg-white/[0.07]"
               >
-                {master.theme}の企業一覧
+                <span className="text-[10px] font-bold tracking-[0.18em] text-slate-500">
+                  {item.kicker}
+                </span>
+                <span className="mt-2 text-sm font-black leading-5 text-slate-100 sm:text-base">
+                  {item.label}
+                </span>
+                <span className="mt-3 text-xs font-bold text-cyan-300">
+                  確認する →
+                </span>
               </Link>
-            ) : (
-              <Link
-                href="/themes"
-                className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2 text-sm font-black text-cyan-200 hover:bg-cyan-400/20"
-              >
-                テーマ別企業一覧
-              </Link>
-            )}
-            <Link
-              href={rankingHref}
-              className="rounded-full border border-violet-300/20 bg-violet-400/10 px-4 py-2 text-sm font-black text-violet-200"
-            >
-              市場別ランキング
-            </Link>
-            <Link
-              href="/ranking/revenue-growth"
-              className="rounded-full border border-green-300/20 bg-green-400/10 px-4 py-2 text-sm font-black text-green-200"
-            >
-              売上成長率
-            </Link>
-            <Link
-              href="/ranking/operating-margin"
-              className="rounded-full border border-yellow-300/20 bg-yellow-400/10 px-4 py-2 text-sm font-black text-yellow-200"
-            >
-              営業利益率
-            </Link>
-            <Link
-              href="/ranking/operating-cash-flow"
-              className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2 text-sm font-black text-cyan-200"
-            >
-              営業CF
-            </Link>
-            <Link
-              href="/ranking/risk-signal"
-              className="rounded-full border border-red-300/20 bg-red-400/10 px-4 py-2 text-sm font-black text-red-200"
-            >
-              リスクシグナル
-            </Link>
-            <Link
-              href="/features"
-              className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-black text-slate-200"
-            >
-              財務特徴から探す
-            </Link>
+            ))}
           </div>
         </div>
       </section>
