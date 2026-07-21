@@ -48,6 +48,27 @@ function StockChartPanel({ ticker }: { ticker: string }) {
     container.replaceChildren();
     setLoadState("loading");
 
+    let timeout: number | null = null;
+    let stopped = false;
+
+    const markError = () => {
+      if (stopped) return;
+      setLoadState("error");
+    };
+
+    const markReady = (iframe: HTMLIFrameElement) => {
+      if (stopped) return;
+      iframe.dataset.kessanLoaded = "true";
+      if (timeout !== null) window.clearTimeout(timeout);
+      setLoadState("ready");
+    };
+
+    const watchIframe = (iframe: HTMLIFrameElement) => {
+      if (iframe.dataset.kessanWatched === "true") return;
+      iframe.dataset.kessanWatched = "true";
+      iframe.addEventListener("load", () => markReady(iframe), { once: true });
+    };
+
     const widget = document.createElement("div");
     widget.className = "tradingview-widget-container__widget";
     widget.style.height = "100%";
@@ -55,9 +76,8 @@ function StockChartPanel({ ticker }: { ticker: string }) {
     container.appendChild(widget);
 
     const observer = new MutationObserver(() => {
-      if (container.querySelector("iframe")) {
-        setLoadState("ready");
-      }
+      const iframe = container.querySelector("iframe");
+      if (iframe instanceof HTMLIFrameElement) watchIframe(iframe);
     });
 
     observer.observe(container, { childList: true, subtree: true });
@@ -65,43 +85,56 @@ function StockChartPanel({ ticker }: { ticker: string }) {
     const script = document.createElement("script");
     script.type = "text/javascript";
     script.src =
-      "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+      "https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js";
     script.async = true;
     script.text = JSON.stringify({
+      symbols: [[`TSE:${ticker}`, `TSE:${ticker}|1D`]],
+      chartOnly: false,
+      width: "100%",
+      height: "100%",
       autosize: true,
-      symbol: `TSE:${ticker}`,
-      interval: "D",
-      timezone: "Asia/Tokyo",
-      theme: "dark",
-      style: "1",
       locale: "ja",
+      colorTheme: "dark",
+      isTransparent: false,
       backgroundColor: "#070b17",
-      gridColor: "rgba(148, 163, 184, 0.08)",
-      allow_symbol_change: false,
-      calendar: false,
-      details: false,
-      hide_side_toolbar: true,
-      hide_top_toolbar: false,
-      hide_legend: false,
-      hide_volume: false,
-      hotlist: false,
-      save_image: false,
-      withdateranges: true,
-      watchlist: [],
-      compareSymbols: [],
-      studies: [],
+      widgetFontColor: "#e2e8f0",
+      fontColor: "#94a3b8",
+      gridLineColor: "rgba(148, 163, 184, 0.08)",
+      lineWidth: 2,
+      lineType: 0,
+      chartType: "area",
+      scalePosition: "right",
+      scaleMode: "Normal",
+      valuesTracking: "1",
+      changeMode: "price-and-percent",
+      dateRanges: [
+        "1d|1",
+        "1m|30",
+        "3m|60",
+        "12m|1D",
+        "60m|1W",
+        "all|1M",
+      ],
+      noTimeScale: false,
+      hideDateRanges: false,
+      hideMarketStatus: false,
+      hideSymbolLogo: false,
+      fontSize: "10",
+      headerFontSize: "medium",
     });
-    script.onerror = () => setLoadState("error");
+    script.onerror = markError;
     container.appendChild(script);
 
-    const timeout = window.setTimeout(() => {
-      if (!container.querySelector("iframe")) {
-        setLoadState("error");
-      }
-    }, 15000);
+    timeout = window.setTimeout(() => {
+      const loadedIframe = container.querySelector(
+        "iframe[data-kessan-loaded='true']"
+      );
+      if (!loadedIframe) markError();
+    }, 8000);
 
     return () => {
-      window.clearTimeout(timeout);
+      stopped = true;
+      if (timeout !== null) window.clearTimeout(timeout);
       observer.disconnect();
       container.replaceChildren();
     };
@@ -143,12 +176,12 @@ function StockChartPanel({ ticker }: { ticker: string }) {
             株価チャートを表示する
           </button>
           <p className="mt-3 text-xs leading-5 text-slate-500">
-            押すとTradingViewの外部コンテンツを読み込みます。
+            押すとTradingViewの軽量チャートを読み込みます。
           </p>
         </div>
       ) : (
         <>
-          <div className="relative mt-5 h-[430px] overflow-hidden rounded-2xl border border-white/10 bg-[#070b17] sm:h-[560px]">
+          <div className="relative mt-5 h-[350px] overflow-hidden rounded-2xl border border-white/10 bg-[#070b17] sm:h-[460px]">
             <div
               ref={widgetContainerRef}
               className={`tradingview-widget-container h-full w-full ${
@@ -161,24 +194,36 @@ function StockChartPanel({ ticker }: { ticker: string }) {
                 <span className="scale-125">
                   <Spinner />
                 </span>
-                <p className="text-sm font-bold">株価チャートを読み込んでいます...</p>
+                <p className="text-sm font-bold">軽量チャートを読み込んでいます...</p>
+                <p className="text-xs text-slate-500">最長8秒で切り替わります</p>
               </div>
             ) : null}
 
             {loadState === "error" ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#070b17] px-6 text-center">
-                <p className="font-black text-white">チャートを読み込めませんでした</p>
+                <p className="font-black text-white">チャートの読み込みに時間がかかっています</p>
                 <p className="text-sm leading-6 text-slate-400">
-                  通信状況またはTradingView側の状態をご確認ください。
+                  待たせ続けないよう停止しました。再読み込みするか、TradingViewで直接確認できます。
                 </p>
-                <button
-                  type="button"
-                  data-pressable="true"
-                  onClick={() => setAttempt((current) => current + 1)}
-                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/20 bg-white/10 px-5 py-2 text-sm font-black text-white transition hover:bg-white/15"
-                >
-                  再読み込み
-                </button>
+                <div className="flex flex-wrap justify-center gap-3">
+                  <button
+                    type="button"
+                    data-pressable="true"
+                    onClick={() => setAttempt((current) => current + 1)}
+                    className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/20 bg-white/10 px-5 py-2 text-sm font-black text-white transition hover:bg-white/15"
+                  >
+                    再読み込み
+                  </button>
+                  <a
+                    href={tradingViewUrl}
+                    target="_blank"
+                    rel="noopener nofollow noreferrer"
+                    data-pressable="true"
+                    className="inline-flex min-h-11 items-center justify-center rounded-full border border-sky-300/40 bg-sky-400 px-5 py-2 text-sm font-black text-slate-950 transition hover:bg-sky-300"
+                  >
+                    TradingViewで開く
+                  </a>
+                </div>
               </div>
             ) : null}
           </div>
