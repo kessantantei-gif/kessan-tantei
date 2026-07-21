@@ -1,0 +1,123 @@
+/* Mobile interaction fixes that must load after globals.css. */
+
+.navigation-progress-bar {
+  width: 42%;
+  animation: navigation-progress 1.05s ease-in-out infinite;
+}
+
+@keyframes navigation-progress {
+  0% {
+    transform: translateX(-110%);
+    width: 32%;
+  }
+  55% {
+    width: 58%;
+  }
+  100% {
+    transform: translateX(250%);
+    width: 32%;
+  }
+}
+
+@media (max-width: 640px) {
+  /* The order controller moves the real news panel and tags it with this attribute. */
+  [data-company-primary-section="news"][data-company-news-carousel="true"] {
+    overflow: hidden;
+  }
+
+  [data-company-primary-section="news"] [data-company-news-track="true"] {
+    display: grid !important;
+    grid-auto-flow: column !important;
+    grid-auto-columns: minmax(84%, 84%) !important;
+    align-items: stretch;
+    gap: 0.625rem !important;
+    width: 100%;
+    max-width: 100%;
+    margin-top: 0.75rem !important;
+    padding: 0.125rem 0.125rem 0.45rem !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 0.125rem;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  [data-company-primary-section="news"] [data-company-news-track="true"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  [data-company-primary-section="news"] [data-company-news-item="true"] {
+    display: flex !important;
+    min-width: 0 !important;
+    height: auto !important;
+    margin-top: 0 !important;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  [data-company-primary-section="news"] [data-company-news-item="true"] > * {
+    width: 100%;
+  }
+
+  [data-company-primary-section="news"]::after {
+    content: "← 横にスワイプして全5件を見る →";
+    display: block;
+    margin-top: 0.25rem;
+    text-align: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: rgb(148 163 184);
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  a[data-pressable="true"],
+  button,
+  [role="button"] {
+    touch-action: manipulation;
+    transform-origin: center;
+    -webkit-tap-highlight-color: rgba(74, 222, 128, 0.28);
+    transition:
+      transform 90ms ease,
+      opacity 90ms ease,
+      filter 90ms ease,
+      box-shadow 90ms ease,
+      background-color 90ms ease,
+      border-color 90ms ease !important;
+  }
+
+  a[data-pressable="true"]:active,
+  button:active,
+  [role="button"]:active {
+    transform: translateY(2px) scale(0.94) !important;
+    opacity: 0.72 !important;
+    filter: brightness(0.72) saturate(0.9) !important;
+    box-shadow:
+      inset 0 3px 12px rgba(0, 0, 0, 0.62),
+      0 0 0 2px rgba(74, 222, 128, 0.2) !important;
+  }
+
+  html[data-navigation-pending="true"] a[data-pressable="true"][aria-busy="true"] {
+    animation: pending-button-pulse 0.75s ease-in-out infinite;
+  }
+}
+
+@keyframes pending-button-pulse {
+  0%,
+  100% {
+    filter: brightness(0.9);
+  }
+  50% {
+    filter: brightness(1.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navigation-progress-bar,
+  html[data-navigation-pending="true"] a[data-pressable="true"][aria-busy="true"] {
+    animation: none;
+  }
+}
