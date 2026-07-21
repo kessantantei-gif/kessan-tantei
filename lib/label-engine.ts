@@ -14,20 +14,10 @@ export function generateLabels(data: {
 }): FinancialLabel[] {
   const labels: FinancialLabel[] = [];
 
-  if (data.score >= 80) {
-    labels.push({ title: "高スコア", tone: "good" });
-  } else if (data.score < 50) {
-    labels.push({ title: "低スコア", tone: "watch" });
-  }
-
   if (data.dangerScore >= 80 || data.riskLevel === "REJECT") {
     labels.push({ title: "重大リスク", tone: "danger" });
   } else if (data.dangerScore >= 45) {
     labels.push({ title: "要注意", tone: "watch" });
-  }
-
-  if (data.revenue > 0) {
-    labels.push({ title: "売上計上あり", tone: "neutral" });
   }
 
   if (data.operatingIncome > 0) {
@@ -66,5 +56,5 @@ export function generateLabels(data: {
     }
   }
 
-  return Array.from(unique.values()).slice(0, 6);
+  return Array.from(unique.values()).slice(0, 5);
 }
