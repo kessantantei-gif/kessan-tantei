@@ -38,6 +38,24 @@ export default function SiteNav() {
     setPendingHref(null);
   }, [pathname]);
 
+  useEffect(() => {
+    if (!pendingHref) return;
+
+    const clearPending = () => setPendingHref(null);
+    const safetyTimer = window.setTimeout(clearPending, 8000);
+
+    window.addEventListener("navigation-settled", clearPending);
+    window.addEventListener("pageshow", clearPending);
+    window.addEventListener("popstate", clearPending);
+
+    return () => {
+      window.clearTimeout(safetyTimer);
+      window.removeEventListener("navigation-settled", clearPending);
+      window.removeEventListener("pageshow", clearPending);
+      window.removeEventListener("popstate", clearPending);
+    };
+  }, [pendingHref]);
+
   return (
     <nav
       aria-label="グローバルナビゲーション"
