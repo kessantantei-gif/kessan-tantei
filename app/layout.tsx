@@ -5,9 +5,11 @@ import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
+import "./mobile-interactions.css";
 import AuthButton from "@/components/auth-button";
 import FeedbackButton from "@/components/feedback-button";
 import SiteNav from "@/components/site-nav";
+import NavigationFeedback from "@/components/navigation-feedback";
 import CompanyPageOrderController from "@/components/company-page-order-controller";
 import CompareTray from "@/components/compare-tray";
 import AcquisitionTracker from "@/components/acquisition-tracker";
@@ -75,6 +77,7 @@ export default function RootLayout({
           </Suspense>
           <RecentCompanyTracker />
           <SiteNav />
+          <NavigationFeedback />
           {children}
           <CompanyPageOrderController />
           <CompareTray />
