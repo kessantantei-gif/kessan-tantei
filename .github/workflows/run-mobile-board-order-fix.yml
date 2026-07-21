@@ -1,0 +1,45 @@
+name: Run mobile board order fix
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - synchronize
+
+permissions:
+  contents: write
+
+jobs:
+  run-fix:
+    if: github.head_ref == 'agent/fix-mobile-board-order'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/fix-mobile-board-order
+          fetch-depth: 0
+
+      - name: Execute embedded patch
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/apply-mobile-board-order-fix.yml').read_text()
+          marker_start = "          python <<'PY'\n"
+          marker_end = "\n          PY\n"
+          script = workflow.split(marker_start, 1)[1].split(marker_end, 1)[0]
+          script = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in script.splitlines()
+          )
+          exec(compile(script, 'mobile-board-fix', 'exec'))
+          PY
+
+      - name: Commit repaired layout
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/company/'[ticker]'/page.tsx app/globals.css .github/workflows/apply-mobile-board-order-fix.yml
+          git commit -m "Fix mobile company board ordering"
+          git push origin HEAD:agent/fix-mobile-board-order
