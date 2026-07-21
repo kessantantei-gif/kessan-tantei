@@ -8,10 +8,14 @@ import "./globals.css";
 import AuthButton from "@/components/auth-button";
 import FeedbackButton from "@/components/feedback-button";
 import SiteNav from "@/components/site-nav";
+import CompanyPageOrderController from "@/components/company-page-order-controller";
 import CompareTray from "@/components/compare-tray";
 import AcquisitionTracker from "@/components/acquisition-tracker";
 import RecentCompanyTracker from "@/components/recent-company-tracker";
-import SeoJsonLd, { organizationJsonLd, websiteJsonLd } from "@/components/seo-json-ld";
+import SeoJsonLd, {
+  organizationJsonLd,
+  websiteJsonLd,
+} from "@/components/seo-json-ld";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -72,6 +76,7 @@ export default function RootLayout({
           <RecentCompanyTracker />
           <SiteNav />
           {children}
+          <CompanyPageOrderController />
           <CompareTray />
           <FeedbackButton />
           <AuthButton />
