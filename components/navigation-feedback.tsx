@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Spinner from "@/components/spinner";
 
-function isInternalNavigation(event: MouseEvent) {
+function internalNavigationDestination(event: MouseEvent) {
   if (
     event.defaultPrevented ||
     event.button !== 0 ||
@@ -13,55 +13,112 @@ function isInternalNavigation(event: MouseEvent) {
     event.shiftKey ||
     event.altKey
   ) {
-    return false;
+    return null;
   }
 
   const target = event.target;
-  if (!(target instanceof Element)) return false;
+  if (!(target instanceof Element)) return null;
 
   const anchor = target.closest("a[href]") as HTMLAnchorElement | null;
   if (!anchor || anchor.target === "_blank" || anchor.hasAttribute("download")) {
-    return false;
+    return null;
   }
 
   const destination = new URL(anchor.href, window.location.href);
-  if (destination.origin !== window.location.origin) return false;
+  if (destination.origin !== window.location.origin) return null;
+
+  const current = new URL(window.location.href);
   if (
-    destination.pathname === window.location.pathname &&
-    destination.search === window.location.search
+    destination.pathname === current.pathname &&
+    destination.search === current.search
   ) {
-    return false;
+    return null;
   }
 
-  return true;
+  return destination;
 }
 
 export default function NavigationFeedback() {
   const pathname = usePathname();
-  const [pending, setPending] = useState(false);
+  const [pendingDestination, setPendingDestination] = useState<string | null>(null);
 
   useEffect(() => {
-    setPending(false);
+    setPendingDestination(null);
   }, [pathname]);
 
   useEffect(() => {
-    const handleClick = (event: MouseEvent) => {
-      if (isInternalNavigation(event)) setPending(true);
+    const finishNavigation = () => {
+      setPendingDestination(null);
+      window.dispatchEvent(new Event("navigation-settled"));
     };
 
-    const handlePageShow = () => setPending(false);
+    const handleClick = (event: MouseEvent) => {
+      const destination = internalNavigationDestination(event);
+      if (destination) setPendingDestination(destination.href);
+    };
 
     document.addEventListener("click", handleClick, true);
-    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("pageshow", finishNavigation);
+    window.addEventListener("popstate", finishNavigation);
+    window.addEventListener("hashchange", finishNavigation);
 
     return () => {
       document.removeEventListener("click", handleClick, true);
-      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("pageshow", finishNavigation);
+      window.removeEventListener("popstate", finishNavigation);
+      window.removeEventListener("hashchange", finishNavigation);
     };
   }, []);
 
   useEffect(() => {
-    if (pending) {
+    if (!pendingDestination) return;
+
+    const destination = new URL(pendingDestination);
+    let finished = false;
+    let frameOne: number | null = null;
+    let frameTwo: number | null = null;
+
+    const finishNavigation = () => {
+      if (finished) return;
+      finished = true;
+      setPendingDestination(null);
+      window.dispatchEvent(new Event("navigation-settled"));
+    };
+
+    const currentUrlMatchesDestination = () =>
+      window.location.pathname === destination.pathname &&
+      window.location.search === destination.search;
+
+    const checkForCompletedNavigation = () => {
+      if (!currentUrlMatchesDestination()) return;
+
+      frameOne = window.requestAnimationFrame(() => {
+        frameTwo = window.requestAnimationFrame(finishNavigation);
+      });
+    };
+
+    checkForCompletedNavigation();
+    const urlCheckTimer = window.setInterval(checkForCompletedNavigation, 100);
+    const safetyTimer = window.setTimeout(finishNavigation, 8000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") checkForCompletedNavigation();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      finished = true;
+      window.clearInterval(urlCheckTimer);
+      window.clearTimeout(safetyTimer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (frameOne !== null) window.cancelAnimationFrame(frameOne);
+      if (frameTwo !== null) window.cancelAnimationFrame(frameTwo);
+    };
+  }, [pendingDestination]);
+
+  useEffect(() => {
+    if (pendingDestination) {
       document.documentElement.dataset.navigationPending = "true";
     } else {
       delete document.documentElement.dataset.navigationPending;
@@ -70,9 +127,9 @@ export default function NavigationFeedback() {
     return () => {
       delete document.documentElement.dataset.navigationPending;
     };
-  }, [pending]);
+  }, [pendingDestination]);
 
-  if (!pending) return null;
+  if (!pendingDestination) return null;
 
   return (
     <div
