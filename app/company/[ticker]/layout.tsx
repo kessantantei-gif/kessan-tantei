@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import CompanyPageScrollReset from "@/components/company-page-scroll-reset";
+import CompanyMarketBadges from "@/components/company-market-badges";
 import { loadRuntimeCompanyMasterMap } from "@/lib/company-master-runtime";
 import { supabaseAdmin } from "@/lib/supabase";
 
- type Props = {
+type Props = {
   children: React.ReactNode;
   params: Promise<{ ticker: string }>;
 };
@@ -18,13 +19,6 @@ const marketLabels: Record<string, string> = {
   other: "その他市場",
 };
 
-const marketTones: Record<string, string> = {
-  growth: "border-green-400/20 bg-green-500/10 text-green-200",
-  standard: "border-cyan-400/20 bg-cyan-500/10 text-cyan-200",
-  prime: "border-violet-400/20 bg-violet-500/10 text-violet-200",
-  other: "border-white/10 bg-white/5 text-slate-300",
-};
-
 function yenOku(value: number | null | undefined) {
   if (!value) return "";
   return `${(value / 100000000).toFixed(1)}億円`;
@@ -36,7 +30,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const [{ data }, { data: marketData }] = await Promise.all([
     supabaseAdmin
       .from("company_analyses")
-      .select("ticker, company_name, score, danger_score, risk_level, financials, market_segment")
+      .select(
+        "ticker, company_name, score, danger_score, risk_level, financials, market_segment"
+      )
       .eq("ticker", ticker)
       .maybeSingle(),
     supabaseAdmin
@@ -56,10 +52,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const revenue = yenOku(data.financials?.revenue);
   const operatingIncome = yenOku(data.financials?.operatingIncome);
   const operatingCF = yenOku(data.financials?.operatingCF);
-  const marketSegment = marketData?.market_segment || data.market_segment || "growth";
+  const marketSegment =
+    marketData?.market_segment || data.market_segment || "growth";
   const marketLabel = marketLabels[marketSegment] || marketLabels.other;
   const title = `${data.company_name}（${data.ticker}）の財務分析・決算評価 | 決算探偵`;
-  const description = `${marketLabel}・${marketData?.industry_name || "業種未分類"}の${data.company_name}（${data.ticker}）。売上高${revenue ? ` ${revenue}` : ""}、営業利益${operatingIncome ? ` ${operatingIncome}` : ""}、営業CF${operatingCF ? ` ${operatingCF}` : ""}、総合スコア${data.score}、Danger Score${data.danger_score}を確認できます。`;
+  const description = `${marketLabel}・${
+    marketData?.industry_name || "業種未分類"
+  }の${data.company_name}（${data.ticker}）。売上高${
+    revenue ? ` ${revenue}` : ""
+  }、営業利益${operatingIncome ? ` ${operatingIncome}` : ""}、営業CF${
+    operatingCF ? ` ${operatingCF}` : ""
+  }、総合スコア${data.score}、Danger Score${
+    data.danger_score
+  }を確認できます。`;
   const url = `${appUrl}/company/${data.ticker}`;
 
   return {
@@ -84,55 +89,36 @@ export default async function CompanyLayout({ children, params }: Props) {
     loadRuntimeCompanyMasterMap(),
     supabaseAdmin
       .from("all_market_companies")
-      .select(
-        "market_segment, industry_name, scoring_model, data_quality, last_financial_update, listing_status"
-      )
+      .select("market_segment, industry_name")
       .eq("ticker", ticker)
       .maybeSingle(),
   ]);
   const master = masterMap.get(ticker);
   const market = marketResult.data;
   const marketSegment = market?.market_segment || "growth";
-  const marketHref = marketSegment === "growth" ? "/" : `/${marketSegment}`;
-  const rankingHref = marketSegment === "growth" ? "/ranking" : `/${marketSegment}/ranking`;
+  const marketLabel = marketLabels[marketSegment] || marketLabels.other;
+  const rankingHref =
+    marketSegment === "growth" ? "/ranking" : `/${marketSegment}/ranking`;
 
   return (
     <>
       <CompanyPageScrollReset ticker={ticker} />
-      {market ? (
-        <section className="bg-[#050816] px-4 pt-5 text-white sm:px-8">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs backdrop-blur-xl">
-            <Link
-              href={marketHref}
-              className={`rounded-full border px-3 py-1 font-black ${marketTones[marketSegment] || marketTones.other}`}
-            >
-              {marketLabels[marketSegment] || marketLabels.other}
-            </Link>
-            {market.industry_name ? (
-              <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 font-bold text-slate-300">
-                {market.industry_name}
-              </span>
-            ) : null}
-            <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 font-bold text-slate-400">
-              Score Model: {market.scoring_model}
-            </span>
-            <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 font-bold text-slate-400">
-              Data: {market.data_quality}
-            </span>
-            <Link
-              href={rankingHref}
-              className="ml-auto rounded-full border border-white/10 bg-white/5 px-3 py-1 font-black text-slate-200 hover:bg-white/10"
-            >
-              市場ランキング →
-            </Link>
-          </div>
-        </section>
-      ) : null}
       {children}
+      {market ? (
+        <CompanyMarketBadges
+          marketSegment={marketSegment}
+          marketLabel={marketLabel}
+          industryName={market.industry_name}
+        />
+      ) : null}
       <section className="bg-[#050816] px-4 pb-12 text-white sm:px-8">
         <div className="mx-auto max-w-7xl rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-8">
-          <p className="text-xs font-black tracking-[0.25em] text-cyan-300">RELATED ANALYSIS</p>
-          <h2 className="mt-2 text-2xl font-black">関連する企業・ランキングを確認</h2>
+          <p className="text-xs font-black tracking-[0.25em] text-cyan-300">
+            RELATED ANALYSIS
+          </p>
+          <h2 className="mt-2 text-2xl font-black">
+            関連する企業・ランキングを確認
+          </h2>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-400">
             同じ事業テーマの企業や、成長性・収益性・営業CF・リスクのランキングとあわせて確認できます。
           </p>
@@ -152,12 +138,42 @@ export default async function CompanyLayout({ children, params }: Props) {
                 テーマ別企業一覧
               </Link>
             )}
-            <Link href={rankingHref} className="rounded-full border border-violet-300/20 bg-violet-400/10 px-4 py-2 text-sm font-black text-violet-200">市場別ランキング</Link>
-            <Link href="/ranking/revenue-growth" className="rounded-full border border-green-300/20 bg-green-400/10 px-4 py-2 text-sm font-black text-green-200">売上成長率</Link>
-            <Link href="/ranking/operating-margin" className="rounded-full border border-yellow-300/20 bg-yellow-400/10 px-4 py-2 text-sm font-black text-yellow-200">営業利益率</Link>
-            <Link href="/ranking/operating-cash-flow" className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2 text-sm font-black text-cyan-200">営業CF</Link>
-            <Link href="/ranking/risk-signal" className="rounded-full border border-red-300/20 bg-red-400/10 px-4 py-2 text-sm font-black text-red-200">リスクシグナル</Link>
-            <Link href="/features" className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-black text-slate-200">財務特徴から探す</Link>
+            <Link
+              href={rankingHref}
+              className="rounded-full border border-violet-300/20 bg-violet-400/10 px-4 py-2 text-sm font-black text-violet-200"
+            >
+              市場別ランキング
+            </Link>
+            <Link
+              href="/ranking/revenue-growth"
+              className="rounded-full border border-green-300/20 bg-green-400/10 px-4 py-2 text-sm font-black text-green-200"
+            >
+              売上成長率
+            </Link>
+            <Link
+              href="/ranking/operating-margin"
+              className="rounded-full border border-yellow-300/20 bg-yellow-400/10 px-4 py-2 text-sm font-black text-yellow-200"
+            >
+              営業利益率
+            </Link>
+            <Link
+              href="/ranking/operating-cash-flow"
+              className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2 text-sm font-black text-cyan-200"
+            >
+              営業CF
+            </Link>
+            <Link
+              href="/ranking/risk-signal"
+              className="rounded-full border border-red-300/20 bg-red-400/10 px-4 py-2 text-sm font-black text-red-200"
+            >
+              リスクシグナル
+            </Link>
+            <Link
+              href="/features"
+              className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-black text-slate-200"
+            >
+              財務特徴から探す
+            </Link>
           </div>
         </div>
       </section>
