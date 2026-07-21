@@ -41,6 +41,25 @@ function findSectionCard(root: HTMLElement, titles: string[]) {
   return card && root.contains(card) ? card : null;
 }
 
+function decorateNewsCard(news: HTMLElement) {
+  news.dataset.companyPrimarySection = "news";
+  news.dataset.companyNewsCarousel = "true";
+
+  const track = news.querySelector(".space-y-4") as HTMLElement | null;
+  if (!track) return;
+
+  track.dataset.companyNewsTrack = "true";
+  track.setAttribute("aria-label", "関連ニュース。横にスワイプして閲覧できます");
+
+  Array.from(track.children).forEach((child, index) => {
+    if (!(child instanceof HTMLElement)) return;
+    child.dataset.companyNewsItem = "true";
+    child.setAttribute("aria-label", `ニュース ${index + 1}件目`);
+  });
+
+  news.dataset.companyNewsCount = String(track.children.length);
+}
+
 function reorderPrimarySections() {
   const root = companyRoot();
   if (!root) return false;
@@ -57,7 +76,7 @@ function reorderPrimarySections() {
 
   news.classList.add("w-full", "min-w-0");
   board.classList.add("w-full", "min-w-0");
-  news.dataset.companyPrimarySection = "news";
+  decorateNewsCard(news);
   board.dataset.companyPrimarySection = "board";
 
   if (hero.nextElementSibling !== news) {
