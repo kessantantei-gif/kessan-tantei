@@ -327,7 +327,7 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
       </header>
 
       <section className="relative z-10 mx-auto w-full max-w-7xl px-3 py-4 sm:px-8 sm:py-8">
-        <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,420px)] lg:gap-5">
+        <div data-company-section="overview" className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,420px)] lg:gap-5">
           <div className="min-w-0 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-6">
             <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
@@ -430,13 +430,13 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
           </div>
         </div>
 
-        <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-3">
+        <div data-company-section="financial-trends" className="mt-4 grid min-w-0 gap-4 lg:grid-cols-3">
           <TrendPanel title="売上推移" data={history} keyName="revenue" />
           <TrendPanel title="営業利益推移" data={history} keyName="operatingIncome" />
           <TrendPanel title="営業CF推移" data={history} keyName="operatingCF" />
         </div>
 
-        <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
+        <div data-company-section="financial-details" className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
           <Panel title="決算探偵の見立て">{detectiveComment}</Panel>
 
           <Panel title="Danger内訳 / Red Flags">
@@ -472,98 +472,61 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
           </Panel>
         </div>
 
-        <div className="mt-4 rounded-3xl border border-purple-400/20 bg-purple-500/10 p-4 backdrop-blur-xl sm:p-6">
-          <p className="text-[11px] tracking-[0.24em] text-purple-300 sm:text-sm">
-            EARNINGS CHANGE
-          </p>
-          <h2 className="mt-2 text-2xl font-black sm:text-3xl">
-            決算変化速報
-          </h2>
+        <div data-company-priority-flow="true" className="mt-4 min-w-0">
+<div data-company-section="earnings" className="rounded-3xl border border-purple-400/20 bg-purple-500/10 p-4 backdrop-blur-xl sm:p-6">
+  <p className="text-[11px] tracking-[0.24em] text-purple-300 sm:text-sm">EARNINGS CHANGE</p>
+  <h2 className="mt-2 text-2xl font-black sm:text-3xl">決算変化速報</h2>
+  {canShowProDetail ? (
+    latest && previous ? (
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <ChangeMetric label="売上高" current={yenOku(latest.revenue ?? 0)} previous={yenOku(previous.revenue ?? 0)} change={formatPct(pctChange(latest.revenue ?? 0, previous.revenue ?? 0))} />
+        <ChangeMetric label="営業利益" current={yenOku(latest.operatingIncome ?? 0)} previous={yenOku(previous.operatingIncome ?? 0)} change={metricChangeLabel(latest.operatingIncome ?? 0, previous.operatingIncome ?? 0)} />
+        <ChangeMetric label="営業CF" current={yenOku(latest.operatingCF ?? 0)} previous={yenOku(previous.operatingCF ?? 0)} change={metricChangeLabel(latest.operatingCF ?? 0, previous.operatingCF ?? 0)} />
+      </div>
+    ) : (
+      <p className="mt-4 text-slate-400">比較できる履歴データが不足しています。</p>
+    )
+  ) : (
+    <ProLock title="決算変化速報はPro限定です" message="最新期と前期の変化、赤字転落・黒字化・CF悪化などをProで確認できます。" />
+  )}
+</div>
 
-          {canShowProDetail ? (
-            latest && previous ? (
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <ChangeMetric
-                  label="売上高"
-                  current={yenOku(latest.revenue ?? 0)}
-                  previous={yenOku(previous.revenue ?? 0)}
-                  change={formatPct(pctChange(latest.revenue ?? 0, previous.revenue ?? 0))}
-                />
-                <ChangeMetric
-                  label="営業利益"
-                  current={yenOku(latest.operatingIncome ?? 0)}
-                  previous={yenOku(previous.operatingIncome ?? 0)}
-                  change={metricChangeLabel(latest.operatingIncome ?? 0, previous.operatingIncome ?? 0)}
-                />
-                <ChangeMetric
-                  label="営業CF"
-                  current={yenOku(latest.operatingCF ?? 0)}
-                  previous={yenOku(previous.operatingCF ?? 0)}
-                  change={metricChangeLabel(latest.operatingCF ?? 0, previous.operatingCF ?? 0)}
-                />
-              </div>
-            ) : (
-              <p className="mt-4 text-slate-400">比較できる履歴データが不足しています。</p>
-            )
-          ) : (
-            <ProLock
-              title="決算変化速報はPro限定です"
-              message="最新期と前期の変化、赤字転落・黒字化・CF悪化などをProで確認できます。"
-            />
-          )}
+<div data-company-section="ai-analysis">
+  <Panel title="AI詳細財務分析">
+    {aiPermission.allowed ? (
+      <pre className="whitespace-pre-wrap break-words leading-8 text-slate-300">{aiAnalysis}</pre>
+    ) : (
+      <ProLock title="AI詳細分析はPro限定です" message="無料では1日1回まで。Proなら全銘柄の詳細分析を制限なく確認できます。" />
+    )}
+  </Panel>
+</div>
+
+<div data-company-section="news">
+  <Panel title="ニュース / IR要約">
+    <div className="space-y-4">
+      {companyNews.length === 0 ? (
+        <p className="text-slate-400">関連ニュースはまだ取得されていません。</p>
+      ) : (
+        companyNews.map((item) => (
+          <a key={item.url} href={item.url} target="_blank" rel="noreferrer" className="block rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:border-green-400/40">
+            <p className="text-sm text-slate-500">{formatNewsDate(item.published_at)}</p>
+            <p className="mt-1 font-black text-white">{item.title}</p>
+            <p className="mt-2 text-sm leading-6 text-slate-400">{item.summary}</p>
+          </a>
+        ))
+      )}
+    </div>
+  </Panel>
+</div>
+
+<div data-company-section="board" className="rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl sm:p-6">
+  <h2 className="text-2xl font-black">みんなのコメント</h2>
+  <p className="mt-2 text-sm leading-6 text-slate-400">{boardSummary}</p>
+  <CompanyBoard ticker={data.ticker} companyName={data.company_name} comments={comments as BoardComment[]} isLoggedIn={isLoggedIn} />
+</div>
         </div>
 
-        <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
-          <Panel title="AI詳細財務分析">
-            {aiPermission.allowed ? (
-              <pre className="whitespace-pre-wrap break-words leading-8 text-slate-300">
-                {aiAnalysis}
-              </pre>
-            ) : (
-              <ProLock
-                title="AI詳細分析はPro限定です"
-                message="無料では1日1回まで。Proなら全銘柄の詳細分析を制限なく確認できます。"
-              />
-            )}
-          </Panel>
-
-          <Panel title="ニュース / IR要約">
-            <div className="space-y-4">
-              {companyNews.length === 0 ? (
-                <p className="text-slate-400">関連ニュースはまだ取得されていません。</p>
-              ) : (
-                companyNews.map((item) => (
-                  <a
-                    key={item.url}
-                    href={item.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:border-green-400/40"
-                  >
-                    <p className="text-sm text-slate-500">{formatNewsDate(item.published_at)}</p>
-                    <p className="mt-1 font-black text-white">{item.title}</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-400">{item.summary}</p>
-                  </a>
-                ))
-              )}
-            </div>
-          </Panel>
-        </div>
-
-        <div className="mt-4 rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl sm:p-6">
-          <h2 className="text-2xl font-black">みんなのコメント</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-400">
-            {boardSummary}
-          </p>
-          <CompanyBoard
-            ticker={data.ticker}
-            companyName={data.company_name}
-            comments={comments as BoardComment[]}
-            isLoggedIn={isLoggedIn}
-          />
-        </div>
-
-        <p className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs leading-6 text-slate-400">
+        <p data-company-section="disclaimer" className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs leading-6 text-slate-400">
           本ページは開示情報の理解を補助するものであり、投資助言ではありません。投資判断はご自身の責任で行ってください。
         </p>
       </section>
