@@ -38,8 +38,9 @@ jobs:
 
       - name: Commit repaired layout
         run: |
+          rm -f .github/mobile-board-fix-trigger
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/company/'[ticker]'/page.tsx app/globals.css .github/workflows/apply-mobile-board-order-fix.yml
+          git add app/company/'[ticker]'/page.tsx app/globals.css .github/workflows/apply-mobile-board-order-fix.yml .github/mobile-board-fix-trigger
           git commit -m "Fix mobile company board ordering"
           git push origin HEAD:agent/fix-mobile-board-order
