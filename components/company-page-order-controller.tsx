@@ -11,10 +11,10 @@ function companyRoot() {
   if (!main) return null;
 
   return (
-    Array.from(main.children).find(
+    (Array.from(main.children).find(
       (child) => child.tagName.toLowerCase() === "section"
-    ) as HTMLElement | undefined
-  ) ?? null;
+    ) as HTMLElement | undefined) ?? null
+  );
 }
 
 function textOf(node: Element | null) {
@@ -41,25 +41,6 @@ function findSectionCard(root: HTMLElement, titles: string[]) {
   return card && root.contains(card) ? card : null;
 }
 
-function decorateNewsCard(news: HTMLElement) {
-  news.dataset.companyPrimarySection = "news";
-  news.dataset.companyNewsCarousel = "true";
-
-  const track = news.querySelector(".space-y-4") as HTMLElement | null;
-  if (!track) return;
-
-  track.dataset.companyNewsTrack = "true";
-  track.setAttribute("aria-label", "関連ニュース。横にスワイプして閲覧できます");
-
-  Array.from(track.children).forEach((child, index) => {
-    if (!(child instanceof HTMLElement)) return;
-    child.dataset.companyNewsItem = "true";
-    child.setAttribute("aria-label", `ニュース ${index + 1}件目`);
-  });
-
-  news.dataset.companyNewsCount = String(track.children.length);
-}
-
 function reorderPrimarySections() {
   const root = companyRoot();
   if (!root) return false;
@@ -76,8 +57,21 @@ function reorderPrimarySections() {
 
   news.classList.add("w-full", "min-w-0");
   board.classList.add("w-full", "min-w-0");
-  decorateNewsCard(news);
+  news.dataset.companyPrimarySection = "news";
   board.dataset.companyPrimarySection = "board";
+
+  // 旧カルーセル用の属性は横スワイプを阻害するため必ず除去する。
+  delete news.dataset.companyNewsCarousel;
+  delete news.dataset.companyNewsCount;
+  news
+    .querySelectorAll(
+      "[data-company-news-track], [data-company-news-item]"
+    )
+    .forEach((element) => {
+      if (!(element instanceof HTMLElement)) return;
+      delete element.dataset.companyNewsTrack;
+      delete element.dataset.companyNewsItem;
+    });
 
   if (hero.nextElementSibling !== news) {
     hero.insertAdjacentElement("afterend", news);
