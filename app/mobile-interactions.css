@@ -61,6 +61,45 @@
   }
 }
 
+/* PCではAI分析を横幅いっぱいに広げ、本文を2列にして縦長を抑える。 */
+@media (min-width: 1024px) {
+  main[data-company-page="true"] [data-company-priority-flow="true"] {
+    grid-template-areas:
+      "earnings earnings"
+      "ai ai"
+      "news news"
+      "board board";
+  }
+
+  main[data-company-page="true"] [data-company-section="ai-analysis"] {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  main[data-company-page="true"] [data-company-section="ai-analysis"] > div.rounded-3xl {
+    padding: 1.5rem 2rem;
+  }
+
+  main[data-company-page="true"] [data-company-section="ai-analysis"] > div.rounded-3xl > h2 {
+    font-size: 1.75rem;
+    line-height: 1.25;
+  }
+
+  main[data-company-page="true"] [data-company-section="ai-analysis"] > div.rounded-3xl > div {
+    margin-top: 1rem;
+  }
+
+  main[data-company-page="true"] [data-company-section="ai-analysis"] pre {
+    column-count: 2;
+    column-gap: 3rem;
+    column-fill: balance;
+    column-rule: 1px solid rgba(148, 163, 184, 0.16);
+    white-space: pre-line;
+    font-size: 0.95rem;
+    line-height: 1.75;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .navigation-progress-bar,
   html[data-navigation-pending="true"] a[data-pressable="true"][aria-busy="true"] {
