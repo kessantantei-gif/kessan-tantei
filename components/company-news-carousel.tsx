@@ -1,15 +1,22 @@
 "use client";
 
 import {
-  useCallback,
-  useEffect,
+  useMemo,
   useRef,
   useState,
   type TouchEvent,
 } from "react";
 import styles from "./company-news-carousel.module.css";
 
-export type CompanyNewsItem = {
+export type CompanyNewsRecord = {
+  url: string;
+  published_at: string | null;
+  title: string;
+  summary: string | null;
+  source: string | null;
+};
+
+type DisplayNewsItem = {
   href: string;
   date: string;
   title: string;
@@ -19,79 +26,166 @@ export type CompanyNewsItem = {
 };
 
 type Props = {
-  items: CompanyNewsItem[];
+  items: CompanyNewsRecord[];
 };
 
 type TouchStart = {
   x: number;
   y: number;
-  index: number;
 };
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-export default function CompanyNewsCarousel({ items }: Props) {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const touchStartRef = useRef<TouchStart | null>(null);
-  const suppressClickUntilRef = useRef(0);
-  const scrollFrameRef = useRef<number | null>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
+function normalizeText(value: string | null | undefined) {
+  return (value ?? "").replace(/\s+/g, " ").trim();
+}
 
-  const goTo = useCallback(
-    (requestedIndex: number, behavior: ScrollBehavior = "smooth") => {
-      const track = trackRef.current;
-      if (!track || items.length === 0) return;
+function formatNewsDate(value: string | null) {
+  if (!value) return "日付不明";
 
-      const index = clamp(requestedIndex, 0, items.length - 1);
-      const card = track.children.item(index);
-      if (!(card instanceof HTMLElement)) return;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "日付不明";
 
-      track.scrollTo({ left: card.offsetLeft, behavior });
-      setActiveIndex(index);
-    },
-    [items.length]
+  return date.toLocaleString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function cleanNewsTitle(rawTitle: string) {
+  const original = normalizeText(rawTitle);
+  let title = original;
+
+  title = title.replace(
+    /^.+?[（(]\d{4}[A-Z]?[）)]\s*[、,:：\-–—]\s*/,
+    ""
+  );
+  title = title.replace(/^.+?\[\d{4}[A-Z]?]\s*[、,:：\-–—]\s*/, "");
+  title = title.replace(
+    /\s+\d{4}年\d{1,2}月\d{1,2}日(?:\([^)]*\))?\s*[：:].*$/,
+    ""
+  );
+  title = title.replace(
+    /\s*(?:[-–—|｜]\s*)?(?:ログミー\s*Finance|日経会社情報\s*DIGITAL|日本経済新聞|PR TIMES|株探|Yahoo!ファイナンス|みんかぶ)\s*$/i,
+    ""
   );
 
-  const updateActiveFromScroll = useCallback(() => {
-    const track = trackRef.current;
-    if (!track) return;
+  return title.trim() || original;
+}
 
-    const cards = Array.from(track.children).filter(
-      (card): card is HTMLElement => card instanceof HTMLElement
-    );
-    if (cards.length === 0) return;
+function characterOverlap(left: string, right: string) {
+  const leftSet = new Set(left.replace(/[\s、。・,:：()（）\[\]【】\-–—]/g, ""));
+  const rightSet = new Set(right.replace(/[\s、。・,:：()（）\[\]【】\-–—]/g, ""));
+  if (leftSet.size === 0 || rightSet.size === 0) return 0;
 
-    const target = track.scrollLeft;
-    let closestIndex = 0;
-    let closestDistance = Number.POSITIVE_INFINITY;
+  let common = 0;
+  leftSet.forEach((character) => {
+    if (rightSet.has(character)) common += 1;
+  });
 
-    cards.forEach((card, index) => {
-      const distance = Math.abs(card.offsetLeft - target);
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        closestIndex = index;
-      }
-    });
+  return common / Math.min(leftSet.size, rightSet.size);
+}
 
-    setActiveIndex(closestIndex);
-  }, []);
+function cleanNewsSummary(rawSummary: string | null, rawTitle: string, title: string) {
+  let summary = normalizeText(rawSummary);
+  const originalTitle = normalizeText(rawTitle);
 
-  useEffect(() => {
-    return () => {
-      if (scrollFrameRef.current !== null) {
-        window.cancelAnimationFrame(scrollFrameRef.current);
-      }
+  if (!summary) return "";
+  if (originalTitle && summary.includes(originalTitle)) {
+    summary = summary.replace(originalTitle, "");
+  }
+  if (title && summary.startsWith(title)) {
+    summary = summary.slice(title.length);
+  }
+
+  summary = summary
+    .replace(/^[\s\-–—:：・|｜]+/, "")
+    .replace(
+      /\s*(?:[-–—|｜]\s*)?(?:ログミー\s*Finance|日経会社情報\s*DIGITAL|日本経済新聞|PR TIMES|株探|Yahoo!ファイナンス|みんかぶ).*$/i,
+      ""
+    )
+    .trim();
+
+  if (summary.length < 28) return "";
+  if (summary.includes(title) || title.includes(summary)) return "";
+  if (characterOverlap(title, summary) >= 0.72) return "";
+
+  return summary;
+}
+
+function getNewsCategory(title: string, summary: string) {
+  const text = `${title} ${summary}`;
+
+  if (/決算|業績|利益|売上|上方修正|下方修正|業績予想|赤字|黒字/.test(text)) {
+    return "決算";
+  }
+  if (/配当|株主総会|自己株|有価証券|適時開示|IR|資本政策|増資/.test(text)) {
+    return "IR";
+  }
+  if (/提携|受注|契約|導入|新製品|新サービス|開発|採用|出店/.test(text)) {
+    return "事業";
+  }
+
+  return "ニュース";
+}
+
+function getSourceLabel(item: CompanyNewsRecord) {
+  const supplied = normalizeText(item.source);
+  if (supplied) return supplied;
+
+  if (/ログミー\s*Finance/i.test(item.title)) return "ログミーFinance";
+  if (/日本経済新聞|日経会社情報/.test(item.title)) return "日本経済新聞";
+  if (/PR TIMES/i.test(item.title)) return "PR TIMES";
+  if (/Yahoo!ファイナンス/i.test(item.title)) return "Yahoo!ファイナンス";
+  if (/株探/.test(item.title)) return "株探";
+  if (/みんかぶ/.test(item.title)) return "みんかぶ";
+
+  try {
+    const hostname = new URL(item.url).hostname.replace(/^www\./, "");
+    const knownSources: Record<string, string> = {
+      "prtimes.jp": "PR TIMES",
+      "nikkei.com": "日本経済新聞",
+      "kabutan.jp": "株探",
+      "finance.yahoo.co.jp": "Yahoo!ファイナンス",
+      "minkabu.jp": "みんかぶ",
+      "logmi.jp": "ログミーFinance",
+      "finance.logmi.jp": "ログミーFinance",
+      "tdnet-pdf.kabutan.jp": "適時開示",
     };
-  }, []);
 
-  function handleScroll() {
-    if (scrollFrameRef.current !== null) return;
-    scrollFrameRef.current = window.requestAnimationFrame(() => {
-      scrollFrameRef.current = null;
-      updateActiveFromScroll();
-    });
+    return knownSources[hostname] ?? hostname;
+  } catch {
+    return "外部サイト";
+  }
+}
+
+function toDisplayItem(item: CompanyNewsRecord): DisplayNewsItem {
+  const title = cleanNewsTitle(item.title);
+  const summary = cleanNewsSummary(item.summary, item.title, title);
+
+  return {
+    href: item.url,
+    date: formatNewsDate(item.published_at),
+    title,
+    summary,
+    category: getNewsCategory(title, summary),
+    source: getSourceLabel(item),
+  };
+}
+
+export default function CompanyNewsCarousel({ items }: Props) {
+  const displayItems = useMemo(() => items.map(toDisplayItem), [items]);
+  const touchStartRef = useRef<TouchStart | null>(null);
+  const suppressClickUntilRef = useRef(0);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  function goTo(requestedIndex: number) {
+    setActiveIndex(clamp(requestedIndex, 0, displayItems.length - 1));
   }
 
   function handleTouchStart(event: TouchEvent<HTMLDivElement>) {
@@ -101,7 +195,6 @@ export default function CompanyNewsCarousel({ items }: Props) {
     touchStartRef.current = {
       x: touch.clientX,
       y: touch.clientY,
-      index: activeIndex,
     };
   }
 
@@ -114,81 +207,73 @@ export default function CompanyNewsCarousel({ items }: Props) {
     const deltaX = start.x - touch.clientX;
     const deltaY = start.y - touch.clientY;
     const isHorizontalSwipe =
-      Math.abs(deltaX) >= 28 && Math.abs(deltaX) > Math.abs(deltaY) * 1.15;
+      Math.abs(deltaX) >= 24 && Math.abs(deltaX) > Math.abs(deltaY) * 1.1;
 
-    if (isHorizontalSwipe) {
-      suppressClickUntilRef.current = Date.now() + 450;
-      goTo(start.index + (deltaX > 0 ? 1 : -1));
-      return;
-    }
+    if (!isHorizontalSwipe) return;
 
-    window.setTimeout(updateActiveFromScroll, 80);
+    suppressClickUntilRef.current = Date.now() + 500;
+    goTo(activeIndex + (deltaX > 0 ? 1 : -1));
   }
 
-  if (items.length === 0) {
-    return (
-      <p className={styles.empty}>関連ニュースはまだ取得されていません。</p>
-    );
+  if (displayItems.length === 0) {
+    return <p className={styles.empty}>関連ニュースはまだ取得されていません。</p>;
   }
 
   return (
     <div className={styles.root}>
       <div className={styles.toolbar}>
-        <span className={styles.count}>最新{items.length}件</span>
+        <span className={styles.count}>最新{displayItems.length}件</span>
         <span className={styles.position} aria-live="polite">
-          {activeIndex + 1} / {items.length}
+          {activeIndex + 1} / {displayItems.length}
         </span>
       </div>
 
       <div
-        ref={trackRef}
-        className={styles.track}
-        role="list"
-        aria-label="会社ニュース一覧"
-        onScroll={handleScroll}
+        className={styles.viewport}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {items.map((item, index) => (
-          <a
-            key={`${item.href}-${index}`}
-            href={item.href}
-            target="_blank"
-            rel="noreferrer"
-            role="listitem"
-            className={`${styles.card} ${
-              index === 0 ? styles.latestCard : ""
-            }`}
-            aria-label={`${item.title}を外部サイトで開く`}
-            draggable={false}
-            onDragStart={(event) => event.preventDefault()}
-            onClick={(event) => {
-              if (Date.now() < suppressClickUntilRef.current) {
-                event.preventDefault();
-              }
-            }}
-          >
-            <div className={styles.meta}>
-              <div className={styles.badges}>
-                {index === 0 ? (
-                  <span className={styles.latestBadge}>最新</span>
-                ) : null}
-                <span className={styles.categoryBadge}>{item.category}</span>
+        <div
+          className={styles.track}
+          role="list"
+          aria-label="会社ニュース一覧"
+          style={{ transform: `translate3d(-${activeIndex * 100}%, 0, 0)` }}
+        >
+          {displayItems.map((item, index) => (
+            <a
+              key={`${item.href}-${index}`}
+              href={item.href}
+              target="_blank"
+              rel="noreferrer"
+              role="listitem"
+              className={`${styles.card} ${index === 0 ? styles.latestCard : ""}`}
+              aria-label={`${item.title}を外部サイトで開く`}
+              draggable={false}
+              onDragStart={(event) => event.preventDefault()}
+              onClick={(event) => {
+                if (Date.now() < suppressClickUntilRef.current) {
+                  event.preventDefault();
+                }
+              }}
+            >
+              <div className={styles.meta}>
+                <div className={styles.badges}>
+                  {index === 0 ? <span className={styles.latestBadge}>最新</span> : null}
+                  <span className={styles.categoryBadge}>{item.category}</span>
+                </div>
+                <time className={styles.date}>{item.date}</time>
               </div>
-              <time className={styles.date}>{item.date}</time>
-            </div>
 
-            <h3 className={styles.title}>{item.title}</h3>
-            {item.summary ? (
-              <p className={styles.summary}>{item.summary}</p>
-            ) : null}
+              <h3 className={styles.title}>{item.title}</h3>
+              {item.summary ? <p className={styles.summary}>{item.summary}</p> : null}
 
-            <div className={styles.footer}>
-              <span className={styles.source}>{item.source}</span>
-              <span className={styles.open}>記事を読む ↗</span>
-            </div>
-          </a>
-        ))}
+              <div className={styles.footer}>
+                <span className={styles.source}>{item.source}</span>
+                <span className={styles.open}>記事を読む ↗</span>
+              </div>
+            </a>
+          ))}
+        </div>
       </div>
 
       <div className={styles.controls}>
@@ -203,13 +288,11 @@ export default function CompanyNewsCarousel({ items }: Props) {
         </button>
 
         <div className={styles.dots} aria-label="ニュース位置">
-          {items.map((item, index) => (
+          {displayItems.map((item, index) => (
             <button
               key={`${item.href}-dot-${index}`}
               type="button"
-              className={`${styles.dot} ${
-                activeIndex === index ? styles.activeDot : ""
-              }`}
+              className={`${styles.dot} ${activeIndex === index ? styles.activeDot : ""}`}
               onClick={() => goTo(index)}
               aria-label={`${index + 1}件目のニュースを表示`}
               aria-current={activeIndex === index ? "true" : undefined}
@@ -221,7 +304,7 @@ export default function CompanyNewsCarousel({ items }: Props) {
           type="button"
           className={styles.arrow}
           onClick={() => goTo(activeIndex + 1)}
-          disabled={activeIndex === items.length - 1}
+          disabled={activeIndex === displayItems.length - 1}
           aria-label="次のニュース"
         >
           →
