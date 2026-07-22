@@ -12,6 +12,7 @@ import {
 import ProLock from "@/components/pro-lock";
 import XShareButton from "@/components/x-share-button";
 import CompanyBoard, { type BoardComment } from "@/components/company-board";
+import CompanyNewsCarousel from "@/components/company-news-carousel";
 import FeedbackButton from "@/components/feedback-button";
 import type { Metadata } from "next";
 
@@ -39,18 +40,6 @@ type Reaction = {
   reaction_type: "like" | "report";
   clerk_user_id?: string | null;
 };
-
-function formatNewsDate(value?: string | null) {
-  if (!value) return "日付不明";
-
-  return new Date(value).toLocaleString("ja-JP", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function yenOku(value: number) {
   return `${(value / 100000000).toFixed(2)} 億円`;
@@ -473,57 +462,45 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
         </div>
 
         <div data-company-priority-flow="true" className="mt-4 min-w-0">
-<div data-company-section="earnings" className="rounded-3xl border border-purple-400/20 bg-purple-500/10 p-4 backdrop-blur-xl sm:p-6">
-  <p className="text-[11px] tracking-[0.24em] text-purple-300 sm:text-sm">EARNINGS CHANGE</p>
-  <h2 className="mt-2 text-2xl font-black sm:text-3xl">決算変化速報</h2>
-  {canShowProDetail ? (
-    latest && previous ? (
-      <div className="mt-5 grid gap-3 sm:grid-cols-3">
-        <ChangeMetric label="売上高" current={yenOku(latest.revenue ?? 0)} previous={yenOku(previous.revenue ?? 0)} change={formatPct(pctChange(latest.revenue ?? 0, previous.revenue ?? 0))} />
-        <ChangeMetric label="営業利益" current={yenOku(latest.operatingIncome ?? 0)} previous={yenOku(previous.operatingIncome ?? 0)} change={metricChangeLabel(latest.operatingIncome ?? 0, previous.operatingIncome ?? 0)} />
-        <ChangeMetric label="営業CF" current={yenOku(latest.operatingCF ?? 0)} previous={yenOku(previous.operatingCF ?? 0)} change={metricChangeLabel(latest.operatingCF ?? 0, previous.operatingCF ?? 0)} />
-      </div>
-    ) : (
-      <p className="mt-4 text-slate-400">比較できる履歴データが不足しています。</p>
-    )
-  ) : (
-    <ProLock title="決算変化速報はPro限定です" message="最新期と前期の変化、赤字転落・黒字化・CF悪化などをProで確認できます。" />
-  )}
-</div>
+          <div data-company-section="earnings" className="rounded-3xl border border-purple-400/20 bg-purple-500/10 p-4 backdrop-blur-xl sm:p-6">
+            <p className="text-[11px] tracking-[0.24em] text-purple-300 sm:text-sm">EARNINGS CHANGE</p>
+            <h2 className="mt-2 text-2xl font-black sm:text-3xl">決算変化速報</h2>
+            {canShowProDetail ? (
+              latest && previous ? (
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <ChangeMetric label="売上高" current={yenOku(latest.revenue ?? 0)} previous={yenOku(previous.revenue ?? 0)} change={formatPct(pctChange(latest.revenue ?? 0, previous.revenue ?? 0))} />
+                  <ChangeMetric label="営業利益" current={yenOku(latest.operatingIncome ?? 0)} previous={yenOku(previous.operatingIncome ?? 0)} change={metricChangeLabel(latest.operatingIncome ?? 0, previous.operatingIncome ?? 0)} />
+                  <ChangeMetric label="営業CF" current={yenOku(latest.operatingCF ?? 0)} previous={yenOku(previous.operatingCF ?? 0)} change={metricChangeLabel(latest.operatingCF ?? 0, previous.operatingCF ?? 0)} />
+                </div>
+              ) : (
+                <p className="mt-4 text-slate-400">比較できる履歴データが不足しています。</p>
+              )
+            ) : (
+              <ProLock title="決算変化速報はPro限定です" message="最新期と前期の変化、赤字転落・黒字化・CF悪化などをProで確認できます。" />
+            )}
+          </div>
 
-<div data-company-section="ai-analysis">
-  <Panel title="AI詳細財務分析">
-    {aiPermission.allowed ? (
-      <pre className="whitespace-pre-wrap break-words leading-8 text-slate-300">{aiAnalysis}</pre>
-    ) : (
-      <ProLock title="AI詳細分析はPro限定です" message="無料では1日1回まで。Proなら全銘柄の詳細分析を制限なく確認できます。" />
-    )}
-  </Panel>
-</div>
+          <div data-company-section="ai-analysis">
+            <Panel title="AI詳細財務分析">
+              {aiPermission.allowed ? (
+                <pre className="whitespace-pre-wrap break-words leading-8 text-slate-300">{aiAnalysis}</pre>
+              ) : (
+                <ProLock title="AI詳細分析はPro限定です" message="無料では1日1回まで。Proなら全銘柄の詳細分析を制限なく確認できます。" />
+              )}
+            </Panel>
+          </div>
 
-<div data-company-section="news">
-  <Panel title="ニュース / IR要約">
-    <div className="space-y-4">
-      {companyNews.length === 0 ? (
-        <p className="text-slate-400">関連ニュースはまだ取得されていません。</p>
-      ) : (
-        companyNews.map((item) => (
-          <a key={item.url} href={item.url} target="_blank" rel="noreferrer" className="block rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:border-green-400/40">
-            <p className="text-sm text-slate-500">{formatNewsDate(item.published_at)}</p>
-            <p className="mt-1 font-black text-white">{item.title}</p>
-            <p className="mt-2 text-sm leading-6 text-slate-400">{item.summary}</p>
-          </a>
-        ))
-      )}
-    </div>
-  </Panel>
-</div>
+          <div data-company-section="news">
+            <Panel title="ニュース / IR要約">
+              <CompanyNewsCarousel items={companyNews} />
+            </Panel>
+          </div>
 
-<div data-company-section="board" className="rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl sm:p-6">
-  <h2 className="text-2xl font-black">みんなのコメント</h2>
-  <p className="mt-2 text-sm leading-6 text-slate-400">{boardSummary}</p>
-  <CompanyBoard ticker={data.ticker} companyName={data.company_name} comments={comments as BoardComment[]} isLoggedIn={isLoggedIn} />
-</div>
+          <div data-company-section="board" className="rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl sm:p-6">
+            <h2 className="text-2xl font-black">みんなのコメント</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">{boardSummary}</p>
+            <CompanyBoard ticker={data.ticker} companyName={data.company_name} comments={comments as BoardComment[]} isLoggedIn={isLoggedIn} />
+          </div>
         </div>
 
         <p data-company-section="disclaimer" className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs leading-6 text-slate-400">
