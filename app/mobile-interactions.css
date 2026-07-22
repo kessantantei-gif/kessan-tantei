@@ -19,60 +19,6 @@
   }
 }
 
-@media (max-width: 640px) {
-  /* The order controller moves the real news panel and tags it with this attribute. */
-  [data-company-primary-section="news"][data-company-news-carousel="true"] {
-    overflow: hidden;
-  }
-
-  [data-company-primary-section="news"] [data-company-news-track="true"] {
-    display: grid !important;
-    grid-auto-flow: column !important;
-    grid-auto-columns: minmax(84%, 84%) !important;
-    align-items: stretch;
-    gap: 0.625rem !important;
-    width: 100%;
-    max-width: 100%;
-    margin-top: 0.75rem !important;
-    padding: 0.125rem 0.125rem 0.45rem !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    overscroll-behavior-inline: contain;
-    scroll-snap-type: x mandatory;
-    scroll-padding-inline: 0.125rem;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  [data-company-primary-section="news"] [data-company-news-track="true"]::-webkit-scrollbar {
-    display: none;
-  }
-
-  [data-company-primary-section="news"] [data-company-news-item="true"] {
-    display: flex !important;
-    min-width: 0 !important;
-    height: auto !important;
-    margin-top: 0 !important;
-    scroll-snap-align: start;
-    scroll-snap-stop: always;
-  }
-
-  [data-company-primary-section="news"] [data-company-news-item="true"] > * {
-    width: 100%;
-  }
-
-  [data-company-primary-section="news"]::after {
-    content: "← 横にスワイプして全5件を見る →";
-    display: block;
-    margin-top: 0.25rem;
-    text-align: center;
-    font-size: 0.7rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: rgb(148 163 184);
-  }
-}
-
 @media (hover: none) and (pointer: coarse) {
   a[data-pressable="true"],
   button,
