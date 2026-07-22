@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import CompanyPageScrollReset from "@/components/company-page-scroll-reset";
 import CompanyMarketBadges from "@/components/company-market-badges";
+import CompanyPageVisualEnhancer from "@/components/company-page-visual-enhancer";
 import { loadRuntimeCompanyMasterMap } from "@/lib/company-master-runtime";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -136,6 +137,7 @@ export default async function CompanyLayout({ children, params }: Props) {
     <>
       <CompanyPageScrollReset ticker={ticker} />
       {children}
+      <CompanyPageVisualEnhancer />
       {market ? (
         <CompanyMarketBadges
           ticker={ticker}
