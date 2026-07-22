@@ -141,7 +141,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 0.8rem;
+  margin-bottom: 0.75rem;
 }
 
 .newsCount,
@@ -167,24 +167,27 @@
 
 .newsList {
   display: grid;
+  min-width: 0;
   gap: 0.7rem;
-}
-
-.newsList > * {
-  margin: 0 !important;
 }
 
 .newsCard {
   position: relative;
   display: flex !important;
-  min-height: 12.5rem;
+  min-width: 0;
+  min-height: 11.5rem;
   flex-direction: column;
   overflow: hidden;
-  border-color: rgb(255 255 255 / 0.09) !important;
+  border: 1px solid rgb(255 255 255 / 0.09);
+  border-radius: 1rem;
+  padding: 0.9rem 0.95rem 0.85rem;
   background:
     radial-gradient(circle at top right, rgb(34 211 238 / 0.07), transparent 42%),
-    rgb(0 0 0 / 0.22) !important;
+    rgb(0 0 0 / 0.22);
+  color: inherit;
+  text-decoration: none;
   box-shadow: 0 12px 30px rgb(0 0 0 / 0.12);
+  box-sizing: border-box;
 }
 
 .newsCard::before {
@@ -196,10 +199,10 @@
 }
 
 .newsCardLatest {
-  border-color: rgb(52 211 153 / 0.25) !important;
+  border-color: rgb(52 211 153 / 0.25);
   background:
     radial-gradient(circle at top right, rgb(52 211 153 / 0.1), transparent 45%),
-    rgb(0 0 0 / 0.25) !important;
+    rgb(0 0 0 / 0.25);
 }
 
 .newsCardLatest::before {
@@ -208,6 +211,7 @@
 
 .newsMeta {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 0.65rem;
@@ -245,9 +249,8 @@
 
 .newsDate {
   flex: none;
-  margin: 0 !important;
-  color: rgb(100 116 139) !important;
-  font-size: 0.66rem !important;
+  color: rgb(100 116 139);
+  font-size: 0.66rem;
   font-weight: 700;
   line-height: 1.3;
 }
@@ -255,33 +258,34 @@
 .newsTitle {
   display: -webkit-box;
   overflow: hidden;
-  margin-top: 0.78rem !important;
-  color: rgb(248 250 252) !important;
+  margin: 0.8rem 0 0;
+  color: rgb(248 250 252);
   font-size: 0.98rem;
   font-weight: 900;
   line-height: 1.55;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
 }
 
 .newsSummary {
   display: -webkit-box;
   overflow: hidden;
-  margin-top: 0.55rem !important;
-  color: rgb(148 163 184) !important;
-  font-size: 0.78rem !important;
-  line-height: 1.65 !important;
+  margin: 0.55rem 0 0;
+  color: rgb(148 163 184);
+  font-size: 0.78rem;
+  line-height: 1.65;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
 }
 
 .newsFooter {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   margin-top: auto;
-  padding-top: 0.82rem;
+  padding-top: 0.8rem;
   border-top: 1px solid rgb(255 255 255 / 0.07);
 }
 
@@ -318,7 +322,7 @@
   }
 
   .newsToolbar {
-    margin-bottom: 0.62rem;
+    margin-bottom: 0.6rem;
   }
 
   .newsSwipeHint {
@@ -326,14 +330,17 @@
   }
 
   .newsList {
-    display: grid !important;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(86%, 1fr);
-    gap: 0.62rem !important;
+    display: flex !important;
+    width: 100%;
+    max-width: 100%;
+    gap: 0.65rem;
     overflow-x: auto;
     overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scroll-padding-inline: 0;
     scroll-snap-type: x mandatory;
     scrollbar-width: none;
+    touch-action: pan-x pan-y !important;
     -webkit-overflow-scrolling: touch;
   }
 
@@ -342,9 +349,14 @@
   }
 
   .newsCard {
-    min-height: 13.3rem;
+    width: 100%;
+    min-width: 100%;
+    max-width: 100%;
+    min-height: 11.75rem;
+    flex: 0 0 100%;
     scroll-snap-align: start;
     scroll-snap-stop: always;
+    touch-action: pan-x pan-y !important;
   }
 }
 
