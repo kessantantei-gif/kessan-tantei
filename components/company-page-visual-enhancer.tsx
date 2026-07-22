@@ -10,6 +10,52 @@ function parseOkuValue(text: string | null | undefined) {
   return match ? Number(match[1]) : 0;
 }
 
+function normalizeText(value: string | null | undefined) {
+  return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function cleanNewsTitle(rawTitle: string) {
+  const original = normalizeText(rawTitle);
+  let title = original;
+
+  title = title.replace(/^.+?\[\d{4}\]\s*[：:]\s*/, "");
+  title = title.replace(
+    /\s+\d{4}年\d{1,2}月\d{1,2}日(?:\([^)]*\))?\s*[：:].*$/,
+    ""
+  );
+  title = title.replace(
+    /\s*[：:]\s*(?:日経会社情報.*|日本経済新聞.*|PR TIMES.*|株探.*|Yahoo!ファイナンス.*|みんかぶ.*)$/i,
+    ""
+  );
+
+  return title.trim() || original;
+}
+
+function cleanNewsSummary(rawSummary: string, rawTitle: string, cleanTitle: string) {
+  let summary = normalizeText(rawSummary);
+  const originalTitle = normalizeText(rawTitle);
+
+  if (!summary) return "";
+
+  if (originalTitle && summary.includes(originalTitle)) {
+    summary = summary.replace(originalTitle, "");
+  }
+  if (cleanTitle && summary.startsWith(cleanTitle)) {
+    summary = summary.slice(cleanTitle.length);
+  }
+
+  summary = summary
+    .replace(/^[\s\-–—:：・|]+/, "")
+    .replace(
+      /(?:日経会社情報 DIGITAL|日本経済新聞|PR TIMES|株探|Yahoo!ファイナンス|みんかぶ).*$/i,
+      ""
+    )
+    .trim();
+
+  if (summary.length < 24 || summary === cleanTitle) return "";
+  return summary;
+}
+
 function getNewsCategory(title: string, summary: string) {
   const text = `${title} ${summary}`;
 
@@ -26,7 +72,13 @@ function getNewsCategory(title: string, summary: string) {
   return "ニュース";
 }
 
-function getSourceLabel(href: string) {
+function getSourceLabel(href: string, title: string) {
+  if (/日本経済新聞|日経会社情報/.test(title)) return "日本経済新聞";
+  if (/PR TIMES/i.test(title)) return "PR TIMES";
+  if (/Yahoo!ファイナンス/i.test(title)) return "Yahoo!ファイナンス";
+  if (/株探/.test(title)) return "株探";
+  if (/みんかぶ/.test(title)) return "みんかぶ";
+
   try {
     const hostname = new URL(href).hostname.replace(/^www\./, "");
     const knownSources: Record<string, string> = {
@@ -146,6 +198,81 @@ function enhanceTrendPanels() {
   });
 }
 
+type OriginalNewsItem = {
+  href: string;
+  date: string;
+  rawTitle: string;
+  title: string;
+  summary: string;
+  category: string;
+  source: string;
+};
+
+function createNewsCard(item: OriginalNewsItem, index: number) {
+  const card = document.createElement("a");
+  card.href = item.href;
+  card.target = "_blank";
+  card.rel = "noreferrer";
+  card.dataset.pressable = "true";
+  card.className = `${styles.newsCard}${
+    index === 0 ? ` ${styles.newsCardLatest}` : ""
+  }`;
+  card.setAttribute("aria-label", `${item.title}を外部サイトで開く`);
+
+  const meta = document.createElement("div");
+  meta.className = styles.newsMeta;
+
+  const badges = document.createElement("div");
+  badges.className = styles.newsBadges;
+
+  if (index === 0) {
+    const latest = document.createElement("span");
+    latest.className = styles.newsLatestBadge;
+    latest.textContent = "最新";
+    badges.appendChild(latest);
+  }
+
+  const category = document.createElement("span");
+  category.className = styles.newsCategoryBadge;
+  category.textContent = item.category;
+  badges.appendChild(category);
+
+  const date = document.createElement("time");
+  date.className = styles.newsDate;
+  date.textContent = item.date;
+
+  meta.append(badges, date);
+
+  const title = document.createElement("p");
+  title.className = styles.newsTitle;
+  title.textContent = item.title;
+
+  card.append(meta, title);
+
+  if (item.summary) {
+    const summary = document.createElement("p");
+    summary.className = styles.newsSummary;
+    summary.textContent = item.summary;
+    card.appendChild(summary);
+  }
+
+  const footer = document.createElement("div");
+  footer.className = styles.newsFooter;
+
+  const source = document.createElement("span");
+  source.className = styles.newsSource;
+  source.textContent = item.source;
+
+  const open = document.createElement("span");
+  open.className = styles.newsOpen;
+  open.textContent = "記事を読む ↗";
+
+  footer.append(source, open);
+  card.appendChild(footer);
+
+  return card;
+}
+
 function enhanceCompanyNews() {
   const section = document.querySelector(
     "main[data-company-page='true'] [data-company-section='news']"
@@ -156,89 +283,65 @@ function enhanceCompanyNews() {
   const panel = section.firstElementChild;
   const heading = panel?.querySelector("h2");
   const content = heading?.nextElementSibling;
-  const list = content?.querySelector(".space-y-4");
 
-  if (!(panel instanceof HTMLElement) || !(content instanceof HTMLElement) || !(list instanceof HTMLElement)) {
-    return;
-  }
+  if (!(panel instanceof HTMLElement) || !(content instanceof HTMLElement)) return;
+  if (content.querySelector("[data-news-carousel='true']")) return;
+
+  const originalList = content.querySelector(".space-y-4");
+  if (!(originalList instanceof HTMLElement)) return;
+
+  const originalCards = Array.from(originalList.children).filter(
+    (card): card is HTMLAnchorElement => card instanceof HTMLAnchorElement
+  );
+  if (originalCards.length === 0) return;
+
+  const items = originalCards.map((card) => {
+    const date = normalizeText(card.children.item(0)?.textContent);
+    const rawTitle = normalizeText(card.children.item(1)?.textContent);
+    const rawSummary = normalizeText(card.children.item(2)?.textContent);
+    const title = cleanNewsTitle(rawTitle);
+    const summary = cleanNewsSummary(rawSummary, rawTitle, title);
+
+    return {
+      href: card.href,
+      date,
+      rawTitle,
+      title,
+      summary,
+      category: getNewsCategory(title, summary),
+      source: getSourceLabel(card.href, rawTitle),
+    } satisfies OriginalNewsItem;
+  });
 
   panel.classList.add(styles.newsPanel);
   heading?.classList.add(styles.newsHeading);
-  list.classList.add(styles.newsList);
 
-  const cards = Array.from(list.children).filter(
-    (card): card is HTMLAnchorElement => card instanceof HTMLAnchorElement
-  );
+  const toolbar = document.createElement("div");
+  toolbar.className = styles.newsToolbar;
 
-  if (!content.querySelector("[data-news-toolbar='true']") && cards.length > 0) {
-    const toolbar = document.createElement("div");
-    toolbar.dataset.newsToolbar = "true";
-    toolbar.className = styles.newsToolbar;
-    toolbar.innerHTML = `
-      <span class="${styles.newsCount}">最新${cards.length}件</span>
-      <span class="${styles.newsSwipeHint}">横にスワイプして確認</span>
-    `;
-    content.insertBefore(toolbar, list);
-  }
+  const count = document.createElement("span");
+  count.className = styles.newsCount;
+  count.textContent = `最新${items.length}件`;
 
-  cards.forEach((card, index) => {
-    if (card.dataset.newsEnhanced === "true") return;
-    card.dataset.newsEnhanced = "true";
-    card.classList.add(styles.newsCard);
+  const hint = document.createElement("span");
+  hint.className = styles.newsSwipeHint;
+  hint.textContent = "1枚ずつ横にスワイプ";
 
-    if (index === 0) {
-      card.classList.add(styles.newsCardLatest);
-    }
+  toolbar.append(count, hint);
 
-    const date = card.children.item(0);
-    const title = card.children.item(1);
-    const summary = card.children.item(2);
-    const titleText = title?.textContent?.trim() ?? "";
-    const summaryText = summary?.textContent?.trim() ?? "";
-    const category = getNewsCategory(titleText, summaryText);
-    const source = getSourceLabel(card.href);
+  const carousel = document.createElement("div");
+  carousel.dataset.newsCarousel = "true";
+  carousel.className = styles.newsList;
+  carousel.setAttribute("role", "list");
+  carousel.setAttribute("aria-label", "会社ニュース一覧");
 
-    const meta = document.createElement("div");
-    meta.className = styles.newsMeta;
-
-    const badges = document.createElement("div");
-    badges.className = styles.newsBadges;
-
-    if (index === 0) {
-      const latest = document.createElement("span");
-      latest.className = styles.newsLatestBadge;
-      latest.textContent = "最新";
-      badges.appendChild(latest);
-    }
-
-    const categoryBadge = document.createElement("span");
-    categoryBadge.className = styles.newsCategoryBadge;
-    categoryBadge.textContent = category;
-    badges.appendChild(categoryBadge);
-    meta.appendChild(badges);
-
-    if (date instanceof HTMLElement) {
-      date.classList.add(styles.newsDate);
-      meta.appendChild(date);
-    }
-
-    card.insertBefore(meta, title ?? null);
-
-    if (title instanceof HTMLElement) {
-      title.classList.add(styles.newsTitle);
-    }
-    if (summary instanceof HTMLElement) {
-      summary.classList.add(styles.newsSummary);
-    }
-
-    const footer = document.createElement("div");
-    footer.className = styles.newsFooter;
-    footer.innerHTML = `
-      <span class="${styles.newsSource}">${source}</span>
-      <span class="${styles.newsOpen}">記事を開く ↗</span>
-    `;
-    card.appendChild(footer);
+  items.forEach((item, index) => {
+    const card = createNewsCard(item, index);
+    card.setAttribute("role", "listitem");
+    carousel.appendChild(card);
   });
+
+  content.replaceChildren(toolbar, carousel);
 }
 
 export default function CompanyPageVisualEnhancer() {
