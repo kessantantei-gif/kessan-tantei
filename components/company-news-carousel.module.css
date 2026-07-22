@@ -165,6 +165,18 @@
   -webkit-line-clamp: 3;
 }
 
+.summaryUnavailable {
+  margin: 0.65rem 0 0;
+  border: 1px dashed rgb(148 163 184 / 0.16);
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  background: rgb(148 163 184 / 0.045);
+  color: rgb(100 116 139);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
 .footer {
   display: flex;
   min-width: 0;

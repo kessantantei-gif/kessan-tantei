@@ -34,12 +34,23 @@ type TouchStart = {
   y: number;
 };
 
+const SOURCE_SUFFIX =
+  /\s*(?:[-–—|｜:：]\s*)?(?:ログミー\s*Finance|日経会社情報\s*DIGITAL|日本経済新聞|PR TIMES|株探|Yahoo!ファイナンス|みんかぶ)\s*$/i;
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
 function normalizeText(value: string | null | undefined) {
   return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function compactLength(value: string) {
+  return value.replace(/[\s、。・,:：()（）\[\]【】\-–—|｜]/g, "").length;
+}
+
+function stripSourceSuffix(value: string) {
+  return value.replace(SOURCE_SUFFIX, "").trim();
 }
 
 function formatNewsDate(value: string | null) {
@@ -59,61 +70,74 @@ function formatNewsDate(value: string | null) {
 
 function cleanNewsTitle(rawTitle: string) {
   const original = normalizeText(rawTitle);
-  let title = original;
+  const safeOriginal = stripSourceSuffix(original) || original;
 
-  title = title.replace(
-    /^.+?[（(]\d{4}[A-Z]?[）)]\s*[、,:：\-–—]\s*/,
-    ""
-  );
-  title = title.replace(/^.+?\[\d{4}[A-Z]?]\s*[、,:：\-–—]\s*/, "");
-  title = title.replace(
-    /\s+\d{4}年\d{1,2}月\d{1,2}日(?:\([^)]*\))?\s*[：:].*$/,
-    ""
-  );
-  title = title.replace(
-    /\s*(?:[-–—|｜]\s*)?(?:ログミー\s*Finance|日経会社情報\s*DIGITAL|日本経済新聞|PR TIMES|株探|Yahoo!ファイナンス|みんかぶ)\s*$/i,
-    ""
-  );
-
-  return title.trim() || original;
-}
-
-function characterOverlap(left: string, right: string) {
-  const leftSet = new Set(left.replace(/[\s、。・,:：()（）\[\]【】\-–—]/g, ""));
-  const rightSet = new Set(right.replace(/[\s、。・,:：()（）\[\]【】\-–—]/g, ""));
-  if (leftSet.size === 0 || rightSet.size === 0) return 0;
-
-  let common = 0;
-  leftSet.forEach((character) => {
-    if (rightSet.has(character)) common += 1;
-  });
-
-  return common / Math.min(leftSet.size, rightSet.size);
-}
-
-function cleanNewsSummary(rawSummary: string | null, rawTitle: string, title: string) {
-  let summary = normalizeText(rawSummary);
-  const originalTitle = normalizeText(rawTitle);
-
-  if (!summary) return "";
-  if (originalTitle && summary.includes(originalTitle)) {
-    summary = summary.replace(originalTitle, "");
-  }
-  if (title && summary.startsWith(title)) {
-    summary = summary.slice(title.length);
-  }
-
-  summary = summary
-    .replace(/^[\s\-–—:：・|｜]+/, "")
+  const candidate = safeOriginal
+    .replace(/^[（(]\d{4}[A-Z]?[）)]\s*[、,:：\-–—]\s*/, "")
+    .replace(/^\[\d{4}[A-Z]?]\s*[、,:：\-–—]\s*/, "")
     .replace(
-      /\s*(?:[-–—|｜]\s*)?(?:ログミー\s*Finance|日経会社情報\s*DIGITAL|日本経済新聞|PR TIMES|株探|Yahoo!ファイナンス|みんかぶ).*$/i,
+      /^[^「『【]{1,48}[（(]\d{4}[A-Z]?[）)]\s*[、,:：\-–—]\s*/,
+      ""
+    )
+    .replace(
+      /^[^「『【]{1,48}\[\d{4}[A-Z]?]\s*[、,:：\-–—]\s*/,
       ""
     )
     .trim();
 
-  if (summary.length < 28) return "";
-  if (summary.includes(title) || title.includes(summary)) return "";
-  if (characterOverlap(title, summary) >= 0.72) return "";
+  const candidateLength = compactLength(candidate);
+  const originalLength = compactLength(safeOriginal);
+  const wasOverTrimmed =
+    candidateLength < 8 ||
+    (originalLength >= 24 && candidateLength < originalLength * 0.3);
+
+  return wasOverTrimmed ? safeOriginal : candidate;
+}
+
+function fallbackTitleFromSummary(summary: string) {
+  const firstSentence = summary
+    .split(/[。！？!?]/)[0]
+    ?.replace(/^[\s\-–—:：・|｜]+/, "")
+    .trim();
+
+  if (!firstSentence || compactLength(firstSentence) < 8) return "";
+  return firstSentence.length > 54
+    ? `${firstSentence.slice(0, 54).trim()}…`
+    : firstSentence;
+}
+
+function cleanNewsSummary(
+  rawSummary: string | null,
+  rawTitle: string,
+  displayTitle: string
+) {
+  const original = normalizeText(rawSummary);
+  if (!original) return "";
+
+  let summary = stripSourceSuffix(original);
+  const titleCandidates = [normalizeText(rawTitle), displayTitle]
+    .map(stripSourceSuffix)
+    .filter((value, index, values) => value && values.indexOf(value) === index);
+
+  for (const title of titleCandidates) {
+    if (!summary.startsWith(title)) continue;
+
+    const remainder = summary
+      .slice(title.length)
+      .replace(/^[\s\-–—:：・|｜]+/, "")
+      .trim();
+
+    if (compactLength(remainder) >= 12) {
+      summary = remainder;
+      break;
+    }
+  }
+
+  summary = summary.replace(/^[\s\-–—:：・|｜]+/, "").trim();
+
+  const normalizedSummary = summary.replace(/\s+/g, "");
+  const normalizedTitle = displayTitle.replace(/\s+/g, "");
+  if (!normalizedSummary || normalizedSummary === normalizedTitle) return "";
 
   return summary;
 }
@@ -164,9 +188,17 @@ function getSourceLabel(item: CompanyNewsRecord) {
   }
 }
 
-function toDisplayItem(item: CompanyNewsRecord): DisplayNewsItem {
-  const title = cleanNewsTitle(item.title);
+function toDisplayItem(item: CompanyNewsRecord): DisplayNewsItem | null {
+  const rawSummary = normalizeText(item.summary);
+  const cleanedTitle = cleanNewsTitle(item.title);
+  const title =
+    compactLength(cleanedTitle) >= 8
+      ? cleanedTitle
+      : fallbackTitleFromSummary(rawSummary) || normalizeText(item.title);
   const summary = cleanNewsSummary(item.summary, item.title, title);
+
+  if (!/^https?:\/\//i.test(item.url)) return null;
+  if (compactLength(title) < 8 && compactLength(summary) < 12) return null;
 
   return {
     href: item.url,
@@ -179,7 +211,10 @@ function toDisplayItem(item: CompanyNewsRecord): DisplayNewsItem {
 }
 
 export default function CompanyNewsCarousel({ items }: Props) {
-  const displayItems = useMemo(() => items.map(toDisplayItem), [items]);
+  const displayItems = useMemo(
+    () => items.map(toDisplayItem).filter((item): item is DisplayNewsItem => item !== null),
+    [items]
+  );
   const touchStartRef = useRef<TouchStart | null>(null);
   const suppressClickUntilRef = useRef(0);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -216,7 +251,7 @@ export default function CompanyNewsCarousel({ items }: Props) {
   }
 
   if (displayItems.length === 0) {
-    return <p className={styles.empty}>関連ニュースはまだ取得されていません。</p>;
+    return <p className={styles.empty}>表示できる関連ニュースはまだありません。</p>;
   }
 
   return (
@@ -265,7 +300,13 @@ export default function CompanyNewsCarousel({ items }: Props) {
               </div>
 
               <h3 className={styles.title}>{item.title}</h3>
-              {item.summary ? <p className={styles.summary}>{item.summary}</p> : null}
+              {item.summary ? (
+                <p className={styles.summary}>{item.summary}</p>
+              ) : (
+                <p className={styles.summaryUnavailable}>
+                  要約を取得できなかったため、見出しのみ表示しています。
+                </p>
+              )}
 
               <div className={styles.footer}>
                 <span className={styles.source}>{item.source}</span>
