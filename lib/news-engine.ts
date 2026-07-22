@@ -15,6 +15,21 @@ type CommentLike = {
   body: string;
 };
 
+function normalizeNewsText(value: string | null | undefined) {
+  return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function isUsableNews(item: NewsItem) {
+  const title = normalizeNewsText(item.title);
+  const summary = normalizeNewsText(item.summary);
+
+  if (!/^https?:\/\//i.test(item.url)) return false;
+  if (title.length < 8 && summary.length < 28) return false;
+  if (/^(ニュース|記事|詳細|ザイン|お知らせ)$/u.test(title)) return false;
+
+  return true;
+}
+
 export async function getCompanyNews(ticker: string, limit = 5) {
   const { data } = await supabaseAdmin
     .from("growth_news")
@@ -25,6 +40,7 @@ export async function getCompanyNews(ticker: string, limit = 5) {
 
   return ((data ?? []) as NewsItem[])
     .filter((item) => !isBlockedNews(item))
+    .filter(isUsableNews)
     .slice(0, limit);
 }
 
