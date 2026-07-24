@@ -15,6 +15,8 @@ type CompanyMasterEntry = {
   reviewed: boolean;
   source: "curated" | "automatic";
   updatedAt: string | null;
+  marketSegment: string | null;
+  industryName: string | null;
 };
 
 type Props = {
@@ -22,6 +24,7 @@ type Props = {
 };
 
 type Filter = "all" | "reviewed" | "automatic" | "unclassified";
+type MarketFilter = "all" | "prime" | "standard" | "growth";
 
 function splitList(value: string) {
   return [...new Set(value.split(/[\s,、]+/).map((item) => item.trim()).filter(Boolean))];
@@ -31,10 +34,25 @@ function isUnclassified(entry: CompanyMasterEntry) {
   return entry.themeId === "other" || entry.theme === "その他";
 }
 
+function marketLabel(value: string | null) {
+  if (value === "prime") return "プライム";
+  if (value === "standard") return "スタンダード";
+  if (value === "growth") return "グロース";
+  return "市場不明";
+}
+
+function marketClass(value: string | null) {
+  if (value === "prime") return "bg-violet-500/15 text-violet-200";
+  if (value === "standard") return "bg-cyan-500/15 text-cyan-200";
+  if (value === "growth") return "bg-green-500/15 text-green-200";
+  return "bg-white/10 text-slate-300";
+}
+
 export default function AdminCompanyMasterManager({ initialEntries }: Props) {
   const [entries, setEntries] = useState(initialEntries);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [marketFilter, setMarketFilter] = useState<MarketFilter>("all");
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   const [draft, setDraft] = useState<CompanyMasterEntry | null>(null);
   const [saving, setSaving] = useState(false);
@@ -51,11 +69,14 @@ export default function AdminCompanyMasterManager({ initialEntries }: Props) {
       if (filter === "reviewed" && !entry.reviewed) return false;
       if (filter === "automatic" && entry.reviewed) return false;
       if (filter === "unclassified" && !isUnclassified(entry)) return false;
+      if (marketFilter !== "all" && entry.marketSegment !== marketFilter) return false;
 
       if (!normalized) return true;
       return [
         entry.ticker,
         entry.companyName,
+        entry.marketSegment ?? "",
+        entry.industryName ?? "",
         entry.theme,
         entry.subTheme,
         entry.businessModel,
@@ -65,7 +86,7 @@ export default function AdminCompanyMasterManager({ initialEntries }: Props) {
         .toLowerCase()
         .includes(normalized);
     });
-  }, [entries, filter, query]);
+  }, [entries, filter, marketFilter, query]);
 
   const summary = {
     total: entries.length,
@@ -73,6 +94,14 @@ export default function AdminCompanyMasterManager({ initialEntries }: Props) {
     automatic: entries.filter((entry) => !entry.reviewed).length,
     unclassified: entries.filter(isUnclassified).length,
   };
+
+  const marketSummary = ["prime", "standard", "growth"].map((market) => ({
+    market,
+    total: entries.filter((entry) => entry.marketSegment === market).length,
+    unclassified: entries.filter(
+      (entry) => entry.marketSegment === market && isUnclassified(entry)
+    ).length,
+  }));
 
   function openEditor(entry: CompanyMasterEntry) {
     setSelectedTicker(entry.ticker);
@@ -135,7 +164,7 @@ export default function AdminCompanyMasterManager({ initialEntries }: Props) {
     <div className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          ["全社", summary.total],
+          ["全市場の会社", summary.total],
           ["監修済み", summary.reviewed],
           ["自動分類", summary.automatic],
           ["未分類", summary.unclassified],
@@ -147,14 +176,40 @@ export default function AdminCompanyMasterManager({ initialEntries }: Props) {
         ))}
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-3">
+        {marketSummary.map((item) => (
+          <div key={item.market} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className={`rounded-full px-3 py-1 text-xs font-black ${marketClass(item.market)}`}>
+                {marketLabel(item.market)}
+              </span>
+              <span className="text-sm text-slate-400">未分類 {item.unclassified}</span>
+            </div>
+            <p className="mt-3 text-2xl font-black">{item.total}社</p>
+          </div>
+        ))}
+      </div>
+
       <div className="rounded-3xl border border-white/10 bg-white/5 p-5 sm:p-6">
-        <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
+        <div className="grid gap-3 xl:grid-cols-[1fr_auto_auto]">
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="証券コード・会社名・テーマ・キーワードで検索"
+            placeholder="証券コード・会社名・市場・業種・テーマで検索"
             className="min-h-12 rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none placeholder:text-slate-500 focus:border-green-400/50"
           />
+
+          <select
+            value={marketFilter}
+            onChange={(event) => setMarketFilter(event.target.value as MarketFilter)}
+            className="min-h-12 rounded-2xl border border-white/10 bg-black/30 px-4 text-sm font-bold text-white outline-none focus:border-green-400/50"
+          >
+            <option value="all">全市場</option>
+            <option value="prime">プライム</option>
+            <option value="standard">スタンダード</option>
+            <option value="growth">グロース</option>
+          </select>
+
           <div className="flex flex-wrap gap-2">
             {[
               ["all", "すべて"],
@@ -181,10 +236,11 @@ export default function AdminCompanyMasterManager({ initialEntries }: Props) {
         <p className="mt-4 text-sm text-slate-400">表示中：{filtered.length}社</p>
 
         <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
-          <table className="min-w-[980px] w-full text-left text-sm">
+          <table className="min-w-[1080px] w-full text-left text-sm">
             <thead className="bg-white/10 text-slate-300">
               <tr>
                 <th className="p-4">会社</th>
+                <th className="p-4">市場・業種</th>
                 <th className="p-4">分類</th>
                 <th className="p-4">ビジネスモデル</th>
                 <th className="p-4">ライバル</th>
@@ -198,6 +254,12 @@ export default function AdminCompanyMasterManager({ initialEntries }: Props) {
                   <td className="p-4">
                     <p className="font-black text-white">{entry.companyName}</p>
                     <p className="mt-1 text-xs text-slate-500">{entry.ticker}</p>
+                  </td>
+                  <td className="p-4">
+                    <span className={`rounded-full px-3 py-1 text-xs font-black ${marketClass(entry.marketSegment)}`}>
+                      {marketLabel(entry.marketSegment)}
+                    </span>
+                    <p className="mt-2 text-xs text-slate-400">{entry.industryName || "業種不明"}</p>
                   </td>
                   <td className="p-4">
                     <p className="font-bold text-green-300">{entry.theme}</p>
@@ -241,7 +303,9 @@ export default function AdminCompanyMasterManager({ initialEntries }: Props) {
               <div>
                 <p className="text-xs font-black tracking-[0.25em] text-green-300">COMPANY MASTER</p>
                 <h2 className="mt-2 text-2xl font-black">{draft.companyName}</h2>
-                <p className="mt-1 text-sm text-slate-500">{draft.ticker}</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {draft.ticker} / {marketLabel(draft.marketSegment)} / {draft.industryName || "業種不明"}
+                </p>
               </div>
               <button type="button" onClick={closeEditor} className="rounded-full border border-white/10 px-3 py-2 text-slate-300">閉じる</button>
             </div>
