@@ -1,7 +1,13 @@
 name: All Markets Nightly
 
 on:
+  schedule:
+    # 平日19:15 UTC（日本時間 翌日04:15）にJPX・EDINET差分を同期する。
+    - cron: "15 19 * * 1-5"
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: all-markets-nightly
