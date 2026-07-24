@@ -4,8 +4,11 @@ const path = "app/company/[ticker]/page.tsx";
 let source = fs.readFileSync(path, "utf8");
 
 function replaceOnce(before, after, label) {
-  if (source.includes(after)) return;
-  if (!source.includes(before)) throw new Error(`${label}の置換元が見つかりません`);
+  if (after && source.includes(after)) return;
+  if (!source.includes(before)) {
+    if (!after || !source.includes(after)) throw new Error(`${label}の置換元が見つかりません`);
+    return;
+  }
   source = source.replace(before, after);
 }
 
@@ -21,11 +24,13 @@ replaceOnce(
   "quarterly query"
 );
 
-replaceOnce(
-  '  const { latest, previous } = getLatestAndPrevious(history);\n',
-  '',
-  "legacy comparison"
-);
+source = source.replace('  const { latest, previous } = getLatestAndPrevious(history);\n', '');
+
+const comparisonHelpersStart = source.indexOf("function pctChange(");
+const metadataStart = source.indexOf("export async function generateMetadata", comparisonHelpersStart);
+if (comparisonHelpersStart >= 0 && metadataStart > comparisonHelpersStart) {
+  source = source.slice(0, comparisonHelpersStart) + source.slice(metadataStart);
+}
 
 replaceOnce(
   `        <div data-company-section="financial-trends" className="mt-4 grid min-w-0 gap-4 lg:grid-cols-3">\n          <TrendPanel title="売上推移" data={history} keyName="revenue" />\n          <TrendPanel title="営業利益推移" data={history} keyName="operatingIncome" />\n          <TrendPanel title="営業CF推移" data={history} keyName="operatingCF" />\n        </div>`,
@@ -36,8 +41,7 @@ replaceOnce(
 const earningsStart = source.indexOf('          <div data-company-section="earnings"');
 const earningsEndMarker = '          <div data-company-section="ai-analysis">';
 const earningsEnd = source.indexOf(earningsEndMarker, earningsStart);
-if (earningsStart < 0 || earningsEnd < 0) throw new Error("決算変化速報ブロックが見つかりません");
-if (!source.slice(earningsStart, earningsEnd).includes("CompanyEarningsChange")) {
+if (earningsStart >= 0 && earningsEnd > earningsStart) {
   source =
     source.slice(0, earningsStart) +
     `          <CompanyEarningsChange\n            annualHistory={history}\n            quarterlyHistory={quarterlyHistory}\n            canShowProDetail={canShowProDetail}\n            lockedContent={\n              <ProLock\n                title="決算変化速報はPro限定です"\n                message="最新四半期の前年同期比、赤字転落・黒字化・CF悪化などをProで確認できます。"\n              />\n            }\n          />\n\n` +
