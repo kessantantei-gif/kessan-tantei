@@ -14,6 +14,8 @@ import XShareButton from "@/components/x-share-button";
 import CompanyBoard, { type BoardComment } from "@/components/company-board";
 import CompanyNewsCarousel from "@/components/company-news-carousel";
 import FeedbackButton from "@/components/feedback-button";
+import { CompanyEarningsChange, CompanyFinancialTrends } from "@/components/company-quarterly-panels";
+import type { QuarterlyFinancialRow } from "@/lib/quarterly-financials";
 import type { Metadata } from "next";
 
 type PageProps = {
@@ -66,38 +68,6 @@ function labelClass(tone: "good" | "watch" | "danger" | "neutral") {
   if (tone === "watch") return "border-yellow-400/30 bg-yellow-500/10 text-yellow-300";
   if (tone === "danger") return "border-red-400/30 bg-red-500/10 text-red-300";
   return "border-white/10 bg-white/10 text-slate-300";
-}
-
-function pctChange(current: number, previous: number) {
-  if (!previous) return null;
-  return ((current - previous) / Math.abs(previous)) * 100;
-}
-
-function formatPct(value: number | null) {
-  if (value === null || !Number.isFinite(value)) return "比較不可";
-  const sign = value >= 0 ? "+" : "";
-  return `${sign}${value.toFixed(1)}%`;
-}
-
-function metricChangeLabel(current: number, previous: number) {
-  if (previous < 0 && current > 0) return "赤字 → 黒字";
-  if (previous > 0 && current < 0) return "黒字 → 赤字";
-  return formatPct(pctChange(current, previous));
-}
-
-function getLatestAndPrevious(history: any[]) {
-  if (!Array.isArray(history) || history.length < 2) {
-    return { latest: null, previous: null };
-  }
-
-  const sorted = [...history].sort(
-    (a, b) => Number(a.year ?? 0) - Number(b.year ?? 0)
-  );
-
-  return {
-    previous: sorted[sorted.length - 2],
-    latest: sorted[sorted.length - 1],
-  };
 }
 
 export async function generateMetadata({
@@ -225,6 +195,36 @@ export default async function CompanyPage({ params }: PageProps) {
 
   const companyNews = await getCompanyNews(ticker, 5);
 
+  const { data: quarterlyRows } = await supabaseAdmin
+    .from("company_quarterly_financials")
+    .select(
+      "fiscal_year, fiscal_period_end, quarter, cumulative, revenue, operating_income, ordinary_income, profit_attributable_to_owners, operating_cf, created_at, disclosure_id, company_disclosures(source, source_url, disclosed_at, is_correction)"
+    )
+    .eq("ticker", ticker)
+    .order("fiscal_period_end", { ascending: true })
+    .order("quarter", { ascending: true });
+
+  const quarterlyHistory: QuarterlyFinancialRow[] = (quarterlyRows ?? []).map((row: any) => {
+    const disclosure = Array.isArray(row.company_disclosures)
+      ? row.company_disclosures[0]
+      : row.company_disclosures;
+    return {
+      fiscalYear: row.fiscal_year,
+      fiscalPeriodEnd: row.fiscal_period_end,
+      quarter: row.quarter,
+      cumulative: row.cumulative,
+      revenue: row.revenue,
+      operatingIncome: row.operating_income,
+      ordinaryIncome: row.ordinary_income,
+      profitAttributableToOwners: row.profit_attributable_to_owners,
+      operatingCF: row.operating_cf,
+      disclosedAt: disclosure?.disclosed_at ?? row.created_at,
+      source: disclosure?.source ?? "tdnet",
+      sourceUrl: disclosure?.source_url ?? null,
+      isCorrection: disclosure?.is_correction ?? false,
+    };
+  });
+
   const financials = data.financials ?? {};
   const risk = data.risk ?? {
     flags: [],
@@ -239,7 +239,6 @@ export default async function CompanyPage({ params }: PageProps) {
     safety: 0,
   };
 
-  const { latest, previous } = getLatestAndPrevious(history);
   const canShowProDetail = aiPermission.isPro;
 
   const detectiveComment = generateComment({
@@ -419,11 +418,7 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
           </div>
         </div>
 
-        <div data-company-section="financial-trends" className="mt-4 grid min-w-0 gap-4 lg:grid-cols-3">
-          <TrendPanel title="売上推移" data={history} keyName="revenue" />
-          <TrendPanel title="営業利益推移" data={history} keyName="operatingIncome" />
-          <TrendPanel title="営業CF推移" data={history} keyName="operatingCF" />
-        </div>
+        <CompanyFinancialTrends annualHistory={history} quarterlyHistory={quarterlyHistory} />
 
         <div data-company-section="financial-details" className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
           <Panel title="決算探偵の見立て">{detectiveComment}</Panel>
@@ -462,23 +457,17 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
         </div>
 
         <div data-company-priority-flow="true" className="mt-4 min-w-0">
-          <div data-company-section="earnings" className="rounded-3xl border border-purple-400/20 bg-purple-500/10 p-4 backdrop-blur-xl sm:p-6">
-            <p className="text-[11px] tracking-[0.24em] text-purple-300 sm:text-sm">EARNINGS CHANGE</p>
-            <h2 className="mt-2 text-2xl font-black sm:text-3xl">決算変化速報</h2>
-            {canShowProDetail ? (
-              latest && previous ? (
-                <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                  <ChangeMetric label="売上高" current={yenOku(latest.revenue ?? 0)} previous={yenOku(previous.revenue ?? 0)} change={formatPct(pctChange(latest.revenue ?? 0, previous.revenue ?? 0))} />
-                  <ChangeMetric label="営業利益" current={yenOku(latest.operatingIncome ?? 0)} previous={yenOku(previous.operatingIncome ?? 0)} change={metricChangeLabel(latest.operatingIncome ?? 0, previous.operatingIncome ?? 0)} />
-                  <ChangeMetric label="営業CF" current={yenOku(latest.operatingCF ?? 0)} previous={yenOku(previous.operatingCF ?? 0)} change={metricChangeLabel(latest.operatingCF ?? 0, previous.operatingCF ?? 0)} />
-                </div>
-              ) : (
-                <p className="mt-4 text-slate-400">比較できる履歴データが不足しています。</p>
-              )
-            ) : (
-              <ProLock title="決算変化速報はPro限定です" message="最新期と前期の変化、赤字転落・黒字化・CF悪化などをProで確認できます。" />
-            )}
-          </div>
+          <CompanyEarningsChange
+            annualHistory={history}
+            quarterlyHistory={quarterlyHistory}
+            canShowProDetail={canShowProDetail}
+            lockedContent={
+              <ProLock
+                title="決算変化速報はPro限定です"
+                message="最新四半期の前年同期比、赤字転落・黒字化・CF悪化などをProで確認できます。"
+              />
+            }
+          />
 
           <div data-company-section="ai-analysis">
             <Panel title="AI詳細財務分析">
@@ -557,41 +546,6 @@ function ScoreBar({ label, value, max }: { label: string; value: number; max: nu
       <div className="h-2 rounded-full bg-white/10">
         <div className="h-2 rounded-full bg-green-400" style={{ width: `${width}%` }} />
       </div>
-    </div>
-  );
-}
-
-function TrendPanel({ title, data, keyName }: { title: string; data: any[]; keyName: string }) {
-  return (
-    <Panel title={title}>
-      <div className="space-y-3">
-        {data.map((x) => (
-          <div key={`${title}-${x.year}`}>
-            <div className="mb-1 flex justify-between text-sm text-slate-400">
-              <span>{x.fiscalPeriod ?? `${x.year}年期`}</span>
-              <span>{yenOku(x[keyName] ?? 0)}</span>
-            </div>
-            <div className="h-2 rounded-full bg-white/10">
-              <div
-                className="h-2 rounded-full bg-green-400"
-                style={{ width: `${Math.min(100, Math.abs((x[keyName] ?? 0) / 1000000000))}%` }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-    </Panel>
-  );
-}
-
-function ChangeMetric({ label, current, previous, change }: { label: string; current: string; previous: string; change: string }) {
-  return (
-    <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-2 text-lg font-black break-words">{change}</p>
-      <p className="mt-2 text-xs leading-5 text-slate-400">
-        最新: {current}<br />前期: {previous}
-      </p>
     </div>
   );
 }
