@@ -70,38 +70,6 @@ function labelClass(tone: "good" | "watch" | "danger" | "neutral") {
   return "border-white/10 bg-white/10 text-slate-300";
 }
 
-function pctChange(current: number, previous: number) {
-  if (!previous) return null;
-  return ((current - previous) / Math.abs(previous)) * 100;
-}
-
-function formatPct(value: number | null) {
-  if (value === null || !Number.isFinite(value)) return "比較不可";
-  const sign = value >= 0 ? "+" : "";
-  return `${sign}${value.toFixed(1)}%`;
-}
-
-function metricChangeLabel(current: number, previous: number) {
-  if (previous < 0 && current > 0) return "赤字 → 黒字";
-  if (previous > 0 && current < 0) return "黒字 → 赤字";
-  return formatPct(pctChange(current, previous));
-}
-
-function getLatestAndPrevious(history: any[]) {
-  if (!Array.isArray(history) || history.length < 2) {
-    return { latest: null, previous: null };
-  }
-
-  const sorted = [...history].sort(
-    (a, b) => Number(a.year ?? 0) - Number(b.year ?? 0)
-  );
-
-  return {
-    previous: sorted[sorted.length - 2],
-    latest: sorted[sorted.length - 1],
-  };
-}
-
 export async function generateMetadata({
   params,
 }: {
@@ -271,7 +239,6 @@ export default async function CompanyPage({ params }: PageProps) {
     safety: 0,
   };
 
-  const { latest, previous } = getLatestAndPrevious(history);
   const canShowProDetail = aiPermission.isPro;
 
   const detectiveComment = generateComment({
