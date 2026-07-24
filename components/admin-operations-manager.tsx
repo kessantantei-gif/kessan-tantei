@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 type CompanyStatus = {
   ticker: string;
   companyName: string;
+  marketSegment: string;
+  analyzed: boolean;
   score: number | null;
   dangerScore: number | null;
   riskLevel: string | null;
@@ -27,15 +29,23 @@ type NewsItem = {
   needsAttention: boolean;
 };
 
+type MarketSummary = {
+  total: number;
+  analyzed: number;
+};
+
 type OperationsPayload = {
   summary: {
     totalCompanies: number;
+    analyzedCompanies: number;
+    unanalyzedCompanies: number;
     needsAttention: number;
     earningsFlashReady: number;
     earningsFlashUnavailable: number;
     newsCount: number;
     brokenNews: number;
     newsReadError: string | null;
+    markets: Record<string, MarketSummary>;
   };
   companies: CompanyStatus[];
   news: NewsItem[];
@@ -55,6 +65,8 @@ type AnalysisResult = {
   disclaimer: string;
 };
 
+type MarketFilter = "all" | "prime" | "standard" | "growth";
+
 function toneClass(tone: AnalysisResult["insights"][number]["tone"]) {
   if (tone === "positive") return "border-green-400/20 bg-green-500/10 text-green-100";
   if (tone === "caution") return "border-red-400/20 bg-red-500/10 text-red-100";
@@ -68,12 +80,27 @@ function formatDate(value?: string | null) {
   return date.toLocaleString("ja-JP");
 }
 
+function marketLabel(value: string) {
+  if (value === "prime") return "プライム";
+  if (value === "standard") return "スタンダード";
+  if (value === "growth") return "グロース";
+  return "市場不明";
+}
+
+function marketClass(value: string) {
+  if (value === "prime") return "bg-violet-500/15 text-violet-200";
+  if (value === "standard") return "bg-cyan-500/15 text-cyan-200";
+  if (value === "growth") return "bg-green-500/15 text-green-200";
+  return "bg-white/10 text-slate-300";
+}
+
 export default function AdminOperationsManager() {
   const [payload, setPayload] = useState<OperationsPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [onlyAttention, setOnlyAttention] = useState(true);
+  const [marketFilter, setMarketFilter] = useState<MarketFilter>("all");
   const [activeTab, setActiveTab] = useState<"companies" | "news">("companies");
   const [refreshingTicker, setRefreshingTicker] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
@@ -102,12 +129,13 @@ export default function AdminOperationsManager() {
     const normalized = query.trim().toLowerCase();
     return (payload?.companies ?? []).filter((company) => {
       if (onlyAttention && !company.needsAttention) return false;
+      if (marketFilter !== "all" && company.marketSegment !== marketFilter) return false;
       if (!normalized) return true;
-      return `${company.ticker} ${company.companyName} ${company.missing.join(" ")}`
+      return `${company.ticker} ${company.companyName} ${company.marketSegment} ${company.missing.join(" ")}`
         .toLowerCase()
         .includes(normalized);
     });
-  }, [payload, query, onlyAttention]);
+  }, [payload, query, onlyAttention, marketFilter]);
 
   const filteredNews = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -120,7 +148,7 @@ export default function AdminOperationsManager() {
     });
   }, [payload, query, onlyAttention]);
 
-  async function regenerate(ticker: string) {
+  async function diagnose(ticker: string) {
     setRefreshingTicker(ticker);
     setAnalysis(null);
     setError("");
@@ -132,17 +160,17 @@ export default function AdminOperationsManager() {
         body: JSON.stringify({ ticker }),
       });
       const data = (await response.json()) as AnalysisResult & { error?: string };
-      if (!response.ok) throw new Error(data.error || "AI分析の再計算に失敗しました。");
+      if (!response.ok) throw new Error(data.error || "保存データの診断に失敗しました。");
       setAnalysis(data);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "AI分析の再計算に失敗しました。");
+      setError(cause instanceof Error ? cause.message : "保存データの診断に失敗しました。");
     } finally {
       setRefreshingTicker(null);
     }
   }
 
   if (loading) {
-    return <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-slate-300">運営データを読み込み中です。</div>;
+    return <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-slate-300">全市場の運営データを読み込み中です。</div>;
   }
 
   if (!payload) {
@@ -161,11 +189,11 @@ export default function AdminOperationsManager() {
     <div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {[
-          ["解析対象", payload.summary.totalCompanies, "text-white"],
-          ["要対応", payload.summary.needsAttention, "text-red-200"],
-          ["速報生成可", payload.summary.earningsFlashReady, "text-green-200"],
-          ["速報データ不足", payload.summary.earningsFlashUnavailable, "text-yellow-200"],
-          ["最新ニュース", payload.summary.newsCount, "text-cyan-200"],
+          ["上場会社", payload.summary.totalCompanies, "text-white"],
+          ["解析済み", payload.summary.analyzedCompanies, "text-green-200"],
+          ["未解析", payload.summary.unanalyzedCompanies, "text-red-200"],
+          ["要対応", payload.summary.needsAttention, "text-yellow-200"],
+          ["速報生成可", payload.summary.earningsFlashReady, "text-cyan-200"],
           ["ニュース不備", payload.summary.brokenNews, "text-red-200"],
         ].map(([label, value, tone]) => (
           <div key={label} className="rounded-3xl border border-white/10 bg-white/5 p-5">
@@ -173,6 +201,26 @@ export default function AdminOperationsManager() {
             <p className={`mt-2 text-3xl font-black ${tone}`}>{value}</p>
           </div>
         ))}
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        {["prime", "standard", "growth"].map((market) => {
+          const stat = payload.summary.markets[market] ?? { total: 0, analyzed: 0 };
+          const coverage = stat.total > 0 ? Math.round((stat.analyzed / stat.total) * 100) : 0;
+          return (
+            <div key={market} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className={`rounded-full px-3 py-1 text-xs font-black ${marketClass(market)}`}>
+                  {marketLabel(market)}
+                </span>
+                <span className="text-sm font-black text-slate-300">{coverage}%</span>
+              </div>
+              <p className="mt-3 text-sm text-slate-400">
+                解析 {stat.analyzed} / 上場 {stat.total}
+              </p>
+            </div>
+          );
+        })}
       </div>
 
       {payload.summary.newsReadError ? (
@@ -188,7 +236,7 @@ export default function AdminOperationsManager() {
               onClick={() => setActiveTab("companies")}
               className={`rounded-full px-4 py-2 text-sm font-black ${activeTab === "companies" ? "bg-green-400 text-slate-950" : "border border-white/10 bg-black/20 text-slate-300"}`}
             >
-              AI・データ管理
+              全市場・解析管理
             </button>
             <button
               onClick={() => setActiveTab("news")}
@@ -199,6 +247,18 @@ export default function AdminOperationsManager() {
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            {activeTab === "companies" ? (
+              <select
+                value={marketFilter}
+                onChange={(event) => setMarketFilter(event.target.value as MarketFilter)}
+                className="min-h-11 rounded-full border border-white/10 bg-black/30 px-4 text-sm font-bold text-white outline-none focus:border-green-400/50"
+              >
+                <option value="all">全市場</option>
+                <option value="prime">プライム</option>
+                <option value="standard">スタンダード</option>
+                <option value="growth">グロース</option>
+              </select>
+            ) : null}
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -218,6 +278,9 @@ export default function AdminOperationsManager() {
             </button>
           </div>
         </div>
+        <p className="mt-4 text-sm text-slate-400">
+          表示中: {activeTab === "companies" ? filteredCompanies.length : filteredNews.length}件
+        </p>
       </div>
 
       {error ? (
@@ -235,8 +298,11 @@ export default function AdminOperationsManager() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-slate-300">{company.ticker}</span>
-                      <span className={`rounded-full px-3 py-1 text-xs font-black ${company.needsAttention ? "bg-red-500/15 text-red-200" : "bg-green-500/15 text-green-200"}`}>
-                        {company.needsAttention ? "要対応" : "正常"}
+                      <span className={`rounded-full px-3 py-1 text-xs font-black ${marketClass(company.marketSegment)}`}>
+                        {marketLabel(company.marketSegment)}
+                      </span>
+                      <span className={`rounded-full px-3 py-1 text-xs font-black ${company.analyzed ? "bg-green-500/15 text-green-200" : "bg-red-500/15 text-red-200"}`}>
+                        {company.analyzed ? "解析済み" : "未解析"}
                       </span>
                       <span className={`rounded-full px-3 py-1 text-xs font-black ${company.earningsFlashReady ? "bg-cyan-500/15 text-cyan-200" : "bg-yellow-500/15 text-yellow-200"}`}>
                         決算速報 {company.earningsFlashReady ? "生成可" : "データ不足"}
@@ -261,13 +327,19 @@ export default function AdminOperationsManager() {
                   </div>
 
                   <div className="flex shrink-0 flex-wrap gap-2">
-                    <button
-                      onClick={() => void regenerate(company.ticker)}
-                      disabled={refreshingTicker === company.ticker}
-                      className="rounded-full bg-yellow-400 px-5 py-3 text-sm font-black text-slate-950 hover:bg-yellow-300 disabled:opacity-50"
-                    >
-                      {refreshingTicker === company.ticker ? "再計算中" : "AI分析を再計算"}
-                    </button>
+                    {company.analyzed ? (
+                      <button
+                        onClick={() => void diagnose(company.ticker)}
+                        disabled={refreshingTicker === company.ticker}
+                        className="rounded-full bg-yellow-400 px-5 py-3 text-sm font-black text-slate-950 hover:bg-yellow-300 disabled:opacity-50"
+                      >
+                        {refreshingTicker === company.ticker ? "診断中" : "保存データを診断"}
+                      </button>
+                    ) : (
+                      <span className="rounded-full border border-red-400/20 bg-red-500/10 px-5 py-3 text-sm font-black text-red-100">
+                        EDINETバックフィル待ち
+                      </span>
+                    )}
                     <a
                       href={`/company/${company.ticker}`}
                       target="_blank"
@@ -316,9 +388,9 @@ export default function AdminOperationsManager() {
           <div className="mx-auto my-8 max-w-4xl rounded-3xl border border-yellow-300/30 bg-[#080b14] p-6 shadow-2xl sm:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-black tracking-[0.25em] text-yellow-200">RECALCULATED ANALYSIS</p>
+                <p className="text-xs font-black tracking-[0.25em] text-yellow-200">STORED DATA DIAGNOSIS</p>
                 <h2 className="mt-2 text-2xl font-black">{analysis.companyName}（{analysis.ticker}）</h2>
-                <p className="mt-2 text-sm text-slate-400">再計算: {formatDate(analysis.generatedAt)}</p>
+                <p className="mt-2 text-sm text-slate-400">生成: {formatDate(analysis.generatedAt)}</p>
               </div>
               <button onClick={() => setAnalysis(null)} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 font-black">閉じる</button>
             </div>
@@ -334,7 +406,7 @@ export default function AdminOperationsManager() {
 
             {analysis.insights.length === 0 ? (
               <p className="mt-5 rounded-2xl border border-yellow-400/20 bg-yellow-500/10 p-4 text-yellow-100">
-                分析に必要な主要指標が不足しています。
+                診断に必要な主要指標が不足しています。
               </p>
             ) : null}
 

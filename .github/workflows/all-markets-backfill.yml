@@ -1,17 +1,32 @@
 name: All Markets EDINET Backfill
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/all-markets-backfill.yml"
+  schedule:
+    # 毎日20:30 UTC（日本時間05:30）に未解析・更新対象を最大150社処理する。
+    - cron: "30 20 * * *"
   workflow_dispatch:
     inputs:
       days:
-        description: "今日から遡る日数（初回は400推奨）"
+        description: "今日から遡る日数"
         required: true
-        default: "30"
+        default: "450"
+      max_companies:
+        description: "1回で解析する最大会社数（0は無制限）"
+        required: true
+        default: "150"
       continue_on_error:
-        description: "個別日の失敗後も継続する"
+        description: "個別会社の失敗後も継続する"
         required: true
         type: boolean
         default: true
+
+permissions:
+  contents: read
 
 concurrency:
   group: all-markets-edinet-backfill
@@ -39,11 +54,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Backfill EDINET annual reports
+      - name: Refresh JPX and EDINET company master
+        run: npm run sync:jpx-markets
+
+      - name: Classify financial, REIT and foreign companies
+        run: npm run classify:all-markets
+
+      - name: Backfill EDINET annual reports in bounded batches
         shell: bash
         run: |
-          args=("--days=${{ inputs.days }}")
-          if [[ "${{ inputs.continue_on_error }}" == "true" ]]; then
+          days="${{ inputs.days || '450' }}"
+          max_companies="${{ inputs.max_companies || '150' }}"
+          args=("--days=${days}" "--max-companies=${max_companies}" "--concurrency=3")
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" || "${{ inputs.continue_on_error }}" == "true" ]]; then
             args+=("--continue-on-error")
           fi
           DOTENV_CONFIG_PATH=.env.local npx tsx scripts/backfill-all-markets-edinet.ts "${args[@]}"
@@ -51,3 +74,12 @@ jobs:
       - name: Audit all-market coverage
         if: always()
         run: npm run audit:all-markets-data
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-markets-backfill-${{ github.run_id }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 30

@@ -9,12 +9,20 @@ type RiskFlag = { title?: string; description?: string; level?: string };
 type CompanyRow = {
   ticker: string;
   company_name: string;
+  market_segment: string | null;
   score: number | null;
   danger_score: number | null;
   risk_level: string | null;
   financials: Financials | null;
   history: HistoryRow[] | null;
   risk: { flags?: RiskFlag[] } | null;
+};
+
+type CompanyMasterRow = {
+  ticker: string;
+  company_name: string;
+  market_segment: string;
+  listing_status: string;
 };
 
 function num(value: unknown) {
@@ -40,7 +48,25 @@ function latestPeriod(history: HistoryRow[]) {
   );
 }
 
-function companyStatus(company: CompanyRow) {
+function companyStatus(master: CompanyMasterRow, company?: CompanyRow) {
+  if (!company) {
+    return {
+      ticker: master.ticker,
+      companyName: master.company_name,
+      marketSegment: master.market_segment,
+      analyzed: false,
+      score: null,
+      dangerScore: null,
+      riskLevel: null,
+      historyCount: 0,
+      latestPeriod: "未解析",
+      missing: ["分析未作成"],
+      needsAttention: true,
+      earningsFlashReady: false,
+      riskFlagCount: 0,
+    };
+  }
+
   const financials = company.financials ?? {};
   const history = company.history ?? [];
   const missing: string[] = [];
@@ -58,7 +84,9 @@ function companyStatus(company: CompanyRow) {
 
   return {
     ticker: company.ticker,
-    companyName: company.company_name,
+    companyName: company.company_name || master.company_name,
+    marketSegment: master.market_segment || company.market_segment || "unknown",
+    analyzed: true,
     score: company.score,
     dangerScore: company.danger_score,
     riskLevel: company.risk_level,
@@ -159,8 +187,48 @@ function buildAnalysis(company: CompanyRow) {
     score: company.score,
     dangerScore: company.danger_score,
     insights,
-    disclaimer: "管理画面の再計算結果です。決算データの理解補助であり、個別銘柄の売買判断を示すものではありません。",
+    disclaimer: "保存済み決算データから生成した管理用診断です。データ取得やスコアの再保存は行いません。",
   };
+}
+
+async function loadAllListedCompanies() {
+  const rows: CompanyMasterRow[] = [];
+  const pageSize = 1000;
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabaseAdmin
+      .from("all_market_companies")
+      .select("ticker, company_name, market_segment, listing_status")
+      .eq("listing_status", "listed")
+      .order("ticker", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) throw new Error(`全市場会社マスタ取得失敗: ${error.message}`);
+    rows.push(...((data ?? []) as CompanyMasterRow[]));
+    if ((data ?? []).length < pageSize) break;
+  }
+
+  return rows;
+}
+
+async function loadAllAnalyses() {
+  const rows: CompanyRow[] = [];
+  const pageSize = 1000;
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabaseAdmin
+      .from("company_analyses")
+      .select("ticker, company_name, market_segment, score, danger_score, risk_level, financials, history, risk")
+      .neq("risk_level", "EXCLUDED")
+      .order("ticker", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) throw new Error(`分析データ取得失敗: ${error.message}`);
+    rows.push(...((data ?? []) as CompanyRow[]));
+    if ((data ?? []).length < pageSize) break;
+  }
+
+  return rows;
 }
 
 async function requireAdmin() {
@@ -172,43 +240,55 @@ export async function GET() {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const [{ data: companies, error: companyError }, { data: news, error: newsError }] = await Promise.all([
-    supabaseAdmin
-      .from("company_analyses")
-      .select("ticker, company_name, score, danger_score, risk_level, financials, history, risk")
-      .neq("risk_level", "EXCLUDED")
-      .order("ticker", { ascending: true })
-      .limit(1000),
-    supabaseAdmin
-      .from("growth_news")
-      .select("id, ticker, title, url, source, published_at, created_at")
-      .order("published_at", { ascending: false })
-      .limit(100),
-  ]);
+  try {
+    const [masterCompanies, analyses, newsResult] = await Promise.all([
+      loadAllListedCompanies(),
+      loadAllAnalyses(),
+      supabaseAdmin
+        .from("growth_news")
+        .select("id, ticker, title, url, source, published_at, created_at")
+        .order("published_at", { ascending: false })
+        .limit(300),
+    ]);
 
-  if (companyError) {
-    return NextResponse.json({ error: companyError.message }, { status: 500 });
+    const analysisByTicker = new Map(analyses.map((company) => [company.ticker, company]));
+    const statuses = masterCompanies.map((master) =>
+      companyStatus(master, analysisByTicker.get(master.ticker))
+    );
+    const newsItems = (newsResult.data ?? []).map((item) => ({
+      ...item,
+      needsAttention: !item.title?.trim() || !item.url?.trim(),
+    }));
+    const analyzedCompanies = statuses.filter((item) => item.analyzed).length;
+
+    return NextResponse.json({
+      summary: {
+        totalCompanies: statuses.length,
+        analyzedCompanies,
+        unanalyzedCompanies: statuses.length - analyzedCompanies,
+        needsAttention: statuses.filter((item) => item.needsAttention).length,
+        earningsFlashReady: statuses.filter((item) => item.earningsFlashReady).length,
+        earningsFlashUnavailable: statuses.filter((item) => !item.earningsFlashReady).length,
+        newsCount: newsItems.length,
+        brokenNews: newsItems.filter((item) => item.needsAttention).length,
+        newsReadError: newsResult.error?.message ?? null,
+        markets: Object.fromEntries(
+          ["prime", "standard", "growth"].map((market) => {
+            const marketRows = statuses.filter((item) => item.marketSegment === market);
+            const analyzed = marketRows.filter((item) => item.analyzed).length;
+            return [market, { total: marketRows.length, analyzed }];
+          })
+        ),
+      },
+      companies: statuses,
+      news: newsItems,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "運営データの取得に失敗しました。" },
+      { status: 500 }
+    );
   }
-
-  const statuses = ((companies ?? []) as CompanyRow[]).map(companyStatus);
-  const newsItems = (news ?? []).map((item) => ({
-    ...item,
-    needsAttention: !item.title?.trim() || !item.url?.trim(),
-  }));
-
-  return NextResponse.json({
-    summary: {
-      totalCompanies: statuses.length,
-      needsAttention: statuses.filter((item) => item.needsAttention).length,
-      earningsFlashReady: statuses.filter((item) => item.earningsFlashReady).length,
-      earningsFlashUnavailable: statuses.filter((item) => !item.earningsFlashReady).length,
-      newsCount: newsItems.length,
-      brokenNews: newsItems.filter((item) => item.needsAttention).length,
-      newsReadError: newsError?.message ?? null,
-    },
-    companies: statuses,
-    news: newsItems,
-  });
 }
 
 export async function POST(request: Request) {
@@ -225,12 +305,15 @@ export async function POST(request: Request) {
 
   const { data, error } = await supabaseAdmin
     .from("company_analyses")
-    .select("ticker, company_name, score, danger_score, risk_level, financials, history, risk")
+    .select("ticker, company_name, market_segment, score, danger_score, risk_level, financials, history, risk")
     .eq("ticker", ticker)
     .maybeSingle();
 
   if (error || !data) {
-    return NextResponse.json({ error: error?.message ?? "not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: error?.message ?? "分析未作成です。EDINETバックフィルの完了を待ってください。" },
+      { status: 404 }
+    );
   }
 
   return NextResponse.json(buildAnalysis(data as CompanyRow));
