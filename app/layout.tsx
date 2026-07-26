@@ -31,8 +31,16 @@ export const metadata: Metadata = {
   title: "決算探偵 | 日本株全市場の財務分析ランキング",
   description:
     "決算探偵は、プライム・スタンダード・グロースの日本株を対象にした財務分析ランキングです。EDINET決算データを自動解析し、成長性・収益性・キャッシュ・安全性・リスクシグナルから企業の特徴を可視化します。",
-  alternates: {
-    canonical: "/",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
   },
   verification: {
     google: "GprsF0U3m9SZj2MJ5AUo9FK-Ame_DGhpPLv5LKiIyqA",
