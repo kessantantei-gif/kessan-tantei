@@ -9,8 +9,6 @@ export const dynamic = "force-dynamic";
 
 type CompanySitemapRow = {
   ticker: string;
-  updated_at?: string | null;
-  created_at?: string | null;
 };
 
 async function loadAllListedCompanies() {
@@ -20,7 +18,7 @@ async function loadAllListedCompanies() {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabaseAdmin
       .from("all_market_companies")
-      .select("ticker, updated_at, created_at")
+      .select("ticker")
       .eq("listing_status", "listed")
       .order("ticker", { ascending: true })
       .range(from, from + pageSize - 1);
@@ -85,7 +83,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const companies = await loadAllListedCompanies();
   const companyPages: MetadataRoute.Sitemap = companies.map((company) => ({
     url: `${appUrl}/company/${company.ticker}`,
-    lastModified: company.updated_at || company.created_at || now,
+    lastModified: now,
     changeFrequency: "weekly",
     priority: 0.75,
   }));
