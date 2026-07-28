@@ -13,9 +13,7 @@ const duplicate = `  const { data, error } = await supabaseAdmin
   }
 
 `;
-const first = source.indexOf(duplicate);
-const second = source.indexOf(duplicate, first + duplicate.length);
-if (second < 0) throw new Error("削除対象の重複クエリが見つかりません");
-source = source.slice(0, second) + source.slice(second + duplicate.length);
+if (!source.includes(duplicate)) throw new Error("削除対象の重複クエリが見つかりません");
+source = source.replace(duplicate, "");
 fs.writeFileSync(path, source);
 console.log("重複クエリを削除しました");
