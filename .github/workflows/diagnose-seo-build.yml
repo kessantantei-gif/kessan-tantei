@@ -6,6 +6,7 @@ on:
       - agent/seo-all-company-indexing
     paths:
       - .github/workflows/diagnose-seo-build.yml
+      - scripts/fix-seo-company-duplicate-query.mjs
       - app/sitemap.ts
       - app/company/**
       - components/company-index-placeholder.tsx
@@ -36,7 +37,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Capture build failure
+      - name: Apply duplicate-query fix
+        run: node scripts/fix-seo-company-duplicate-query.mjs
+      - name: Capture build result
         shell: bash
         run: |
           set +e
@@ -45,12 +48,12 @@ jobs:
           tail -n 160 /tmp/build.log > build-tail.txt
           echo "BUILD_EXIT_STATUS=$status" >> build-tail.txt
           exit 0
-      - name: Commit diagnostic tail
+      - name: Commit generated fix and diagnostic tail
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add build-tail.txt
-          git commit -m "SEOビルド診断ログを保存" || exit 0
+          git add app/company/'[ticker]'/page.tsx build-tail.txt
+          git commit -m "企業ページ重複クエリを修正してビルド確認" || exit 0
           git push origin HEAD:agent/seo-all-company-indexing
-# trigger v2
+# trigger v3
