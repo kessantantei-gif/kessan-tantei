@@ -14,6 +14,7 @@ import XShareButton from "@/components/x-share-button";
 import CompanyBoard, { type BoardComment } from "@/components/company-board";
 import CompanyNewsCarousel from "@/components/company-news-carousel";
 import FeedbackButton from "@/components/feedback-button";
+import CompanyIndexPlaceholder from "@/components/company-index-placeholder";
 import { CompanyEarningsChange, CompanyFinancialTrends } from "@/components/company-quarterly-panels";
 import type { QuarterlyFinancialRow } from "@/lib/quarterly-financials";
 import type { Metadata } from "next";
@@ -77,23 +78,41 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { ticker } = await params;
 
-  const { data } = await supabaseAdmin
-    .from("company_analyses")
-    .select("ticker, company_name, score, danger_score")
-    .eq("ticker", ticker)
-    .maybeSingle();
+  const [{ data: analysis }, { data: master }] = await Promise.all([
+    supabaseAdmin
+      .from("company_analyses")
+      .select("ticker, company_name, score, danger_score")
+      .eq("ticker", ticker)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("all_market_companies")
+      .select("ticker, company_name, market_segment, industry_name, listing_status")
+      .eq("ticker", ticker)
+      .eq("listing_status", "listed")
+      .maybeSingle(),
+  ]);
 
-  const title = data
-    ? `${data.company_name} (${data.ticker}) | 決算探偵`
-    : "決算探偵";
+  const companyName = analysis?.company_name ?? master?.company_name;
+  const title = companyName
+    ? `${companyName} (${ticker})の決算・財務分析 | 決算探偵`
+    : "企業情報 | 決算探偵";
 
-  const description = data
-    ? `Score ${data.score} / Danger ${data.danger_score}｜決算データから成長性・収益性・キャッシュ・財務リスクを確認できます。`
-    : "プライム・スタンダード・グロース対応の財務分析ランキング。";
+  const description = analysis
+    ? `${companyName}（${ticker}）の財務スコア、危険度、売上・利益・キャッシュフロー推移、決算変化を確認できます。`
+    : master
+      ? `${companyName}（証券コード：${ticker}）の上場市場、業種、決算・財務分析情報。公式開示資料の取得後にスコアと推移を更新します。`
+      : "プライム・スタンダード・グロース対応の財務分析ランキング。";
 
   return {
     title,
     description,
+    alternates: {
+      canonical: `/company/${ticker}`,
+    },
+    robots: {
+      index: Boolean(companyName),
+      follow: true,
+    },
     openGraph: {
       title,
       description,
@@ -121,14 +140,13 @@ export async function generateMetadata({
 
 export default async function CompanyPage({ params }: PageProps) {
   const { ticker } = await params;
-  const { userId } = await auth();
-  const isLoggedIn = Boolean(userId);
 
-  const aiPermission = await canViewAiAnalysis();
-
-  if (aiPermission.allowed && !aiPermission.isPro) {
-    await consumeFreeAiUseIfNeeded();
-  }
+  const { data: master } = await supabaseAdmin
+    .from("all_market_companies")
+    .select("ticker, company_name, market_segment, industry_name, listing_status")
+    .eq("ticker", ticker)
+    .eq("listing_status", "listed")
+    .maybeSingle();
 
   const { data, error } = await supabaseAdmin
     .from("company_analyses")
@@ -136,8 +154,26 @@ export default async function CompanyPage({ params }: PageProps) {
     .eq("ticker", ticker)
     .maybeSingle();
 
-  if (error || !data) {
-    notFound();
+  if (error) notFound();
+  if (!data) {
+    if (!master) notFound();
+    return (
+      <CompanyIndexPlaceholder
+        ticker={master.ticker}
+        companyName={master.company_name}
+        marketSegment={master.market_segment}
+        industryName={master.industry_name}
+      />
+    );
+  }
+
+  const { userId } = await auth();
+  const isLoggedIn = Boolean(userId);
+
+  const aiPermission = await canViewAiAnalysis();
+
+  if (aiPermission.allowed && !aiPermission.isPro) {
+    await consumeFreeAiUseIfNeeded();
   }
 
   const { data: commentsData } = await supabaseAdmin
