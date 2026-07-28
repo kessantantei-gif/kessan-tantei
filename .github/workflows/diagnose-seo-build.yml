@@ -53,3 +53,4 @@ jobs:
           git add build-tail.txt
           git commit -m "SEOビルド診断ログを保存" || exit 0
           git push origin HEAD:agent/seo-all-company-indexing
+# trigger v2
