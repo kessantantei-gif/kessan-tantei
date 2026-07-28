@@ -11,21 +11,21 @@ type CompanySitemapRow = {
   ticker: string;
   updated_at?: string | null;
   created_at?: string | null;
-  risk_level?: string | null;
 };
 
-async function loadAllCompanies() {
+async function loadAllListedCompanies() {
   const rows: CompanySitemapRow[] = [];
   const pageSize = 1000;
 
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabaseAdmin
-      .from("company_analyses")
-      .select("ticker, updated_at, created_at, risk_level")
-      .neq("risk_level", "EXCLUDED")
+      .from("all_market_companies")
+      .select("ticker, updated_at, created_at")
+      .eq("listing_status", "listed")
+      .order("ticker", { ascending: true })
       .range(from, from + pageSize - 1);
 
-    if (error) throw new Error(`sitemap会社取得失敗: ${error.message}`);
+    if (error) throw new Error(`sitemap全上場会社取得失敗: ${error.message}`);
     rows.push(...((data ?? []) as CompanySitemapRow[]));
     if ((data ?? []).length < pageSize) break;
   }
@@ -82,12 +82,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
-  const companies = await loadAllCompanies();
+  const companies = await loadAllListedCompanies();
   const companyPages: MetadataRoute.Sitemap = companies.map((company) => ({
     url: `${appUrl}/company/${company.ticker}`,
     lastModified: company.updated_at || company.created_at || now,
-    changeFrequency: "daily",
-    priority: 0.9,
+    changeFrequency: "weekly",
+    priority: 0.75,
   }));
 
   return [...staticPages, ...rankingPages, ...themePages, ...companyPages];
