@@ -1,0 +1,45 @@
+
+> kessan-tantei@0.1.0 build
+> next build
+
+⚠ No build cache found. Please configure build caching for faster rebuilds. Read more: https://nextjs.org/docs/messages/no-cache
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+▲ Next.js 16.2.9 (Turbopack)
+
+  Creating an optimized production build ...
+
+> Build error occurred
+Error: Turbopack build failed with 2 errors:
+./app/company/[ticker]/page.tsx:179:11
+the name `data` is defined multiple times
+  [90m177 |[0m   }
+  [90m178 |[0m
+[31m[1m>[0m [90m179 |[0m   [36mconst[0m { data, error } = [36mawait[0m supabaseAdmin
+  [90m    |[0m           [31m[1m^^^^[0m
+  [90m180 |[0m     .[36mfrom[0m([32m"company_analyses"[0m)
+  [90m181 |[0m     .select([32m"*"[0m)
+  [90m182 |[0m     .eq([32m"ticker"[0m, ticker)
+
+Ecmascript file had an error
+
+
+./app/company/[ticker]/page.tsx:179:17
+the name `error` is defined multiple times
+  [90m177 |[0m   }
+  [90m178 |[0m
+[31m[1m>[0m [90m179 |[0m   [36mconst[0m { data, error } = [36mawait[0m supabaseAdmin
+  [90m    |[0m                 [31m[1m^^^^^[0m
+  [90m180 |[0m     .[36mfrom[0m([32m"company_analyses"[0m)
+  [90m181 |[0m     .select([32m"*"[0m)
+  [90m182 |[0m     .eq([32m"ticker"[0m, ticker)
+
+Ecmascript file had an error
+
+
+    at <unknown> (./app/company/[ticker]/page.tsx:179:11)
+    at <unknown> (./app/company/[ticker]/page.tsx:179:17)
+BUILD_EXIT_STATUS=1
