@@ -128,3 +128,4 @@ replaceOnce(
 
 fs.writeFileSync(path, source);
 console.log("全上場会社を公開ページ化するSEOパッチを適用しました");
+// Workflow trigger: SEO all-company indexing v1
