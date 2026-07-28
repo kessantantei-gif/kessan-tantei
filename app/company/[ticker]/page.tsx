@@ -176,16 +176,6 @@ export default async function CompanyPage({ params }: PageProps) {
     await consumeFreeAiUseIfNeeded();
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("company_analyses")
-    .select("*")
-    .eq("ticker", ticker)
-    .maybeSingle();
-
-  if (error || !data) {
-    notFound();
-  }
-
   const { data: commentsData } = await supabaseAdmin
     .from("company_comments")
     .select("id, ticker, nickname, body, created_at, clerk_user_id, reply_to_id, deleted_at")

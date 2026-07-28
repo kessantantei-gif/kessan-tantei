@@ -11,35 +11,94 @@ https://nextjs.org/telemetry
 ▲ Next.js 16.2.9 (Turbopack)
 
   Creating an optimized production build ...
+✓ Compiled successfully in 8.3s
+  Skipping validation of types
+  Finished TypeScript config validation in 5ms ...
+  Collecting page data using 3 workers ...
+◇ injected env (0) from .env.local // tip: ⌘ suppress logs { quiet: true }
+◇ injected env (0) from .env.local // tip: ⌘ enable debugging { debug: true }
+◇ injected env (0) from .env.local // tip: ⌘ override existing { override: true }
+◇ injected env (0) from .env.local // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+◇ injected env (0) from .env.local // tip: ⌘ override existing { override: true }
+◇ injected env (0) from .env.local // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+  Generating static pages using 3 workers (0/37) ...
+  Generating static pages using 3 workers (9/37) 
+`z-index` is currently not supported.
+Invalid value "fit-content" for "width". Expected a number, "auto", or a percentage value (e.g., "50%").
+  Generating static pages using 3 workers (18/37) 
+  Generating static pages using 3 workers (27/37) 
+✓ Generating static pages using 3 workers (37/37) in 5.3s
+  Finalizing page optimization ...
 
-> Build error occurred
-Error: Turbopack build failed with 2 errors:
-./app/company/[ticker]/page.tsx:179:11
-the name `data` is defined multiple times
-  [90m177 |[0m   }
-  [90m178 |[0m
-[31m[1m>[0m [90m179 |[0m   [36mconst[0m { data, error } = [36mawait[0m supabaseAdmin
-  [90m    |[0m           [31m[1m^^^^[0m
-  [90m180 |[0m     .[36mfrom[0m([32m"company_analyses"[0m)
-  [90m181 |[0m     .select([32m"*"[0m)
-  [90m182 |[0m     .eq([32m"ticker"[0m, ticker)
+Route (app)
+┌ ƒ /
+├ ○ /_not-found
+├ ○ /about-growth
+├ ƒ /admin
+├ ƒ /admin/acquisition
+├ ƒ /admin/all-markets
+├ ƒ /admin/billing
+├ ƒ /admin/comments
+├ ƒ /admin/company-master
+├ ƒ /admin/operations
+├ ƒ /admin/reports
+├ ƒ /admin/users
+├ ƒ /admin/users/[userId]
+├ ○ /alerts
+├ ƒ /anomalies
+├ ƒ /api/admin/company-master
+├ ƒ /api/admin/operations
+├ ƒ /api/analytics/event
+├ ƒ /api/company-search
+├ ƒ /api/company/[ticker]/ai-summary
+├ ƒ /api/company/[ticker]/data-health
+├ ƒ /api/company/[ticker]/earnings-flash
+├ ƒ /api/company/[ticker]/financial-signals
+├ ƒ /api/company/[ticker]/history
+├ ƒ /api/company/[ticker]/peer-comparison
+├ ƒ /api/company/[ticker]/pro-analysis
+├ ƒ /api/company/[ticker]/score-explanation
+├ ƒ /api/cron/daily-update
+├ ƒ /api/cron/edinet-update
+├ ƒ /api/cron/fetch-news
+├ ƒ /api/feedback
+├ ƒ /api/pro-status
+├ ƒ /api/stripe/checkout
+├ ƒ /api/stripe/webhook
+├ ƒ /company/[ticker]
+├ ƒ /compare
+├ ○ /data-quality
+├ ○ /disclaimer
+├ ○ /features
+├ ○ /growth
+├ ○ /legal
+├ ƒ /markets
+├ ○ /markets/opengraph-image
+├ ƒ /news
+├ ƒ /ops
+├ ƒ /pricing
+├ ƒ /prime
+├ ƒ /prime/ranking
+├ ○ /privacy
+├ ƒ /profile
+├ ƒ /ranking
+├ ƒ /ranking/[type]
+├ ○ /robots.txt
+├ ƒ /s-rank
+├ ƒ /sitemap.xml
+├ ƒ /standard
+├ ƒ /standard/ranking
+├ ○ /terms
+├ ƒ /themes
+├ ƒ /themes/[slug]
+├ ƒ /updates
+├ ƒ /warnings
+└ ○ /watchlist
 
-Ecmascript file had an error
 
+ƒ Proxy (Middleware)
 
-./app/company/[ticker]/page.tsx:179:17
-the name `error` is defined multiple times
-  [90m177 |[0m   }
-  [90m178 |[0m
-[31m[1m>[0m [90m179 |[0m   [36mconst[0m { data, error } = [36mawait[0m supabaseAdmin
-  [90m    |[0m                 [31m[1m^^^^^[0m
-  [90m180 |[0m     .[36mfrom[0m([32m"company_analyses"[0m)
-  [90m181 |[0m     .select([32m"*"[0m)
-  [90m182 |[0m     .eq([32m"ticker"[0m, ticker)
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
 
-Ecmascript file had an error
-
-
-    at <unknown> (./app/company/[ticker]/page.tsx:179:11)
-    at <unknown> (./app/company/[ticker]/page.tsx:179:17)
-BUILD_EXIT_STATUS=1
+BUILD_EXIT_STATUS=0
