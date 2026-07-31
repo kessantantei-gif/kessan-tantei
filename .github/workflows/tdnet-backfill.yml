@@ -19,6 +19,7 @@ on:
       - "scripts/sync-tdnet-quarterly.ts"
       - "scripts/run-tdnet-quarterly-safe.ts"
       - "scripts/audit-tdnet-ingestion.ts"
+      - "scripts/audit-tdnet-xbrl-availability.ts"
       - ".github/workflows/quarterly-disclosures.yml"
       - ".github/workflows/tdnet-backfill.yml"
   schedule:
@@ -88,6 +89,9 @@ jobs:
         env:
           TDNET_AUDIT_REPORT_PATH: tdnet-backfill-audit.json
         run: npm run audit:tdnet-ingestion -- --from=${{ steps.range.outputs.from }} --to=${{ steps.range.outputs.to }}
+
+      - name: Audit repaired range XBRL availability
+        run: npm run audit:tdnet-xbrl -- --from=${{ steps.range.outputs.from }} --to=${{ steps.range.outputs.to }}
 
       - name: Upload backfill audit report
         if: always()
