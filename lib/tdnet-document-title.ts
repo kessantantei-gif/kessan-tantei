@@ -46,7 +46,6 @@ export function isTdnetNonNumericCorrectionNotice(title: string, xbrlUrl: string
   const normalized = compact(title);
   if (!/決算短信/.test(normalized)) return false;
 
-  // 数値データ訂正は、タイトル末尾が「お知らせ」でも決算数値の正式訂正として残す。
   if (/数値データ訂正/.test(normalized)) return false;
 
   if (/過年度.*(?:決算短信|決算).*訂正.*(?:お知らせ|関するお知らせ)/.test(normalized)) {
@@ -76,7 +75,7 @@ export function classifyTdnetTitle(
   title: string,
   xbrlUrl: string | null = null
 ): TdnetTitleClassification {
-  const normalized = title.normalize("NFKC");
+  const normalized = compact(title);
   const isCorrection = /訂正|修正/.test(normalized);
 
   if (isTdnetNonEarningsDocument(normalized, xbrlUrl)) {
