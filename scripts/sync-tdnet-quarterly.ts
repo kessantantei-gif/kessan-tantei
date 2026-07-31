@@ -216,7 +216,24 @@ function parseDate(value: string | null) {
   return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
 }
 
-function parseXbrl(buffer: Buffer, quarter: 1 | 2 | 3 | 4): ParsedFinancials {
+function latestContextPeriodEnd(xml: string, disclosedAt: string) {
+  const cutoff = disclosedAt.slice(0, 10);
+  const dates = [
+    ...xml.matchAll(
+      /<(?:[A-Za-z_][\w.-]*:)?(?:endDate|instant)\b[^>]*>\s*(20\d{2}-\d{2}-\d{2})\s*<\//gi
+    ),
+  ]
+    .map((match) => match[1])
+    .filter((date) => date <= cutoff)
+    .sort();
+  return dates.at(-1) ?? null;
+}
+
+function parseXbrl(
+  buffer: Buffer,
+  quarter: 1 | 2 | 3 | 4,
+  disclosedAt: string
+): ParsedFinancials {
   const zip = new AdmZip(buffer);
   const instance = zip
     .getEntries()
@@ -224,20 +241,25 @@ function parseXbrl(buffer: Buffer, quarter: 1 | 2 | 3 | 4): ParsedFinancials {
     .find((entry) => /(?:\.xbrl|\.xml)$/i.test(entry.entryName) && !/taxonomy|label|presentation|definition|calculation/i.test(entry.entryName));
   if (!instance) throw new Error("XBRLインスタンスがZIP内にありません");
 
+  const xml = instance.getData().toString("utf8");
   const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", textNodeName: "#text" });
-  const parsed = parser.parse(instance.getData().toString("utf8"));
+  const parsed = parser.parse(xml);
   const facts: Fact[] = [];
   collectFacts(parsed, facts);
 
   const currentContexts = [/Current.*(?:YTD|Duration|Instant)/i, /CurrentYear/i, /CurrentQuarter/i];
-  const fiscalPeriodEnd = parseDate(
-    findText(facts, [
-      /CurrentFiscalYearEndDate/i,
-      /CurrentPeriodEndDate/i,
-      /FiscalYearEndDate/i,
-      /Current.*EndDate/i,
-    ])
+  const fiscalYearEnd = parseDate(
+    findText(facts, [/CurrentFiscalYearEndDate/i, /FiscalYearEndDate/i])
   );
+  const fiscalPeriodEnd =
+    parseDate(
+      findText(facts, [
+        /CurrentQuarterEndDate/i,
+        /CurrentPeriodEndDate/i,
+        /InterimPeriodEndDate/i,
+        /Quarterly.*PeriodEndDate/i,
+      ])
+    ) ?? latestContextPeriodEnd(xml, disclosedAt);
   if (!fiscalPeriodEnd) throw new Error("決算期末日をXBRLから取得できません");
 
   const accountingStandard = findText(facts, [/AccountingStandards/i, /AccountingStandard/i]);
@@ -257,7 +279,7 @@ function parseXbrl(buffer: Buffer, quarter: 1 | 2 | 3 | 4): ParsedFinancials {
   );
 
   return {
-    fiscalYear: Number(fiscalPeriodEnd.slice(0, 4)),
+    fiscalYear: Number((fiscalYearEnd ?? fiscalPeriodEnd).slice(0, 4)),
     fiscalPeriodEnd,
     quarter,
     accountingScope,
@@ -330,8 +352,17 @@ async function saveCandidate(candidate: DisclosureCandidate, company: Company) {
     .maybeSingle();
 
   let parsed: ParsedFinancials | null = null;
+  let extractionError: string | null = null;
   if (candidate.xbrlUrl && candidate.quarter) {
-    parsed = parseXbrl(await fetchBuffer(candidate.xbrlUrl), candidate.quarter);
+    try {
+      parsed = parseXbrl(
+        await fetchBuffer(candidate.xbrlUrl),
+        candidate.quarter,
+        candidate.disclosedAt
+      );
+    } catch (error) {
+      extractionError = error instanceof Error ? error.message : String(error);
+    }
   }
 
   const { data: disclosure, error: disclosureError } = await supabaseAdmin
@@ -354,7 +385,11 @@ async function saveCandidate(candidate: DisclosureCandidate, company: Company) {
         source_url: candidate.sourceUrl,
         xbrl_url: candidate.xbrlUrl,
         pdf_url: candidate.pdfUrl,
-        raw_payload: candidate,
+        raw_payload: {
+          candidate,
+          extractionError,
+          extractionVersion: "tdnet-quarterly-v2",
+        },
         is_correction: candidate.isCorrection,
         updated_at: new Date().toISOString(),
       },
@@ -393,7 +428,7 @@ async function saveCandidate(candidate: DisclosureCandidate, company: Company) {
         data_quality: [parsed.revenue, parsed.operatingIncome].some((value) => value !== null)
           ? "unreviewed"
           : "warning",
-        extraction_version: "tdnet-quarterly-v1",
+        extraction_version: "tdnet-quarterly-v2",
         raw_financials: parsed.rawFinancials,
         updated_at: new Date().toISOString(),
       },
@@ -402,9 +437,12 @@ async function saveCandidate(candidate: DisclosureCandidate, company: Company) {
     if (error) throw new Error(`四半期数値保存失敗 ${candidate.ticker}: ${error.message}`);
   }
 
+  if (extractionError) {
+    throw new Error(`XBRL抽出失敗 ${candidate.ticker}: ${extractionError}`);
+  }
+
   return existing ? "updated" : "inserted";
 }
-
 async function main() {
   const dates = targetDates();
   const startedAt = new Date().toISOString();

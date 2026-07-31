@@ -23,6 +23,8 @@ type PageProps = {
   params: Promise<{ ticker: string }>;
 };
 
+export const dynamic = "force-dynamic";
+
 type Comment = {
   id: string;
   ticker: string;
@@ -231,6 +233,14 @@ export default async function CompanyPage({ params }: PageProps) {
 
   const companyNews = await getCompanyNews(ticker, 5);
 
+  const { data: latestDisclosure } = await supabaseAdmin
+    .from("company_disclosures")
+    .select("title, disclosed_at, document_type, source_url, xbrl_url, pdf_url")
+    .eq("ticker", ticker)
+    .order("disclosed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const { data: quarterlyRows } = await supabaseAdmin
     .from("company_quarterly_financials")
     .select(
@@ -260,6 +270,22 @@ export default async function CompanyPage({ params }: PageProps) {
       isCorrection: disclosure?.is_correction ?? false,
     };
   });
+
+  const latestDisclosureHref =
+    latestDisclosure?.pdf_url ??
+    latestDisclosure?.xbrl_url ??
+    latestDisclosure?.source_url ??
+    null;
+  const latestDisclosureDate = latestDisclosure?.disclosed_at
+    ? new Intl.DateTimeFormat("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(new Date(latestDisclosure.disclosed_at))
+    : null;
 
   const financials = data.financials ?? {};
   const risk = data.risk ?? {
@@ -453,6 +479,34 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
             </div>
           </div>
         </div>
+
+        {latestDisclosure ? (
+          <section className="mt-4 rounded-3xl border border-cyan-300/20 bg-cyan-400/10 p-4 backdrop-blur-xl sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-[11px] font-black tracking-[0.24em] text-cyan-200 sm:text-sm">
+                  LATEST DISCLOSURE
+                </p>
+                <h2 className="mt-2 text-xl font-black leading-snug sm:text-2xl">
+                  {latestDisclosure.title}
+                </h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  TDnet開示日時: {latestDisclosureDate ?? "日時不明"}
+                </p>
+              </div>
+              {latestDisclosureHref ? (
+                <a
+                  href={latestDisclosureHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="shrink-0 rounded-full border border-cyan-200/30 bg-cyan-300 px-4 py-2 text-sm font-black text-slate-950 transition hover:bg-cyan-200"
+                >
+                  開示資料を確認 ↗
+                </a>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
         <CompanyFinancialTrends annualHistory={history} quarterlyHistory={quarterlyHistory} />
 
