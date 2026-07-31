@@ -41,15 +41,12 @@ function assertEqual(label: string, actual: unknown, expected: unknown) {
   }
 }
 
-async function loadQuarterlyByDisclosure(sourceDocumentId: string) {
-  const { data: disclosure, error: disclosureError } = await supabaseAdmin
-    .from("company_disclosures")
-    .select("id, company_id, ticker, fiscal_period_end, quarter, accounting_scope")
-    .eq("source", "tdnet")
-    .eq("source_document_id", sourceDocumentId)
-    .single();
-  if (disclosureError) throw disclosureError;
-
+async function loadQuarterlyByDisclosureRow(disclosure: {
+  company_id: string;
+  fiscal_period_end: string | null;
+  quarter: number | null;
+  accounting_scope: string | null;
+}) {
   const { data: row, error: rowError } = await supabaseAdmin
     .from("company_quarterly_financials")
     .select(
@@ -61,12 +58,44 @@ async function loadQuarterlyByDisclosure(sourceDocumentId: string) {
     .eq("accounting_scope", disclosure.accounting_scope ?? "unknown")
     .single();
   if (rowError) throw rowError;
+  return row;
+}
 
-  return { disclosure, row };
+async function loadQuarterlyBySourceDocumentId(sourceDocumentId: string) {
+  const { data: disclosure, error: disclosureError } = await supabaseAdmin
+    .from("company_disclosures")
+    .select("id, company_id, ticker, fiscal_period_end, quarter, accounting_scope")
+    .eq("source", "tdnet")
+    .eq("source_document_id", sourceDocumentId)
+    .single();
+  if (disclosureError) throw disclosureError;
+
+  return { disclosure, row: await loadQuarterlyByDisclosureRow(disclosure) };
+}
+
+async function loadQuarterlyByTickerDate(ticker: string, date: string) {
+  const next = new Date(`${date}T12:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  const nextDate = next.toISOString().slice(0, 10);
+
+  const { data: disclosure, error: disclosureError } = await supabaseAdmin
+    .from("company_disclosures")
+    .select("id, company_id, ticker, fiscal_period_end, quarter, accounting_scope")
+    .eq("source", "tdnet")
+    .eq("ticker", ticker)
+    .eq("quarter", 4)
+    .gte("disclosed_at", `${date}T00:00:00+09:00`)
+    .lt("disclosed_at", `${nextDate}T00:00:00+09:00`)
+    .order("disclosed_at", { ascending: false })
+    .limit(1)
+    .single();
+  if (disclosureError) throw disclosureError;
+
+  return { disclosure, row: await loadQuarterlyByDisclosureRow(disclosure) };
 }
 
 async function verifyTempos() {
-  const result = await loadQuarterlyByDisclosure("140120260727500039");
+  const result = await loadQuarterlyBySourceDocumentId("140120260727500039");
   const expected = {
     revenue: 53_408_000_000,
     operating_income: 2_890_000_000,
@@ -91,15 +120,15 @@ async function verifyTempos() {
 async function verifyKnownAnnualCashFlows() {
   const cases = [
     {
-      sourceDocumentId: "140120260728500994",
       ticker: "9267",
+      date: "2026-07-28",
       operatingCF: 16_975_000_000,
       investingCF: -20_278_000_000,
       financingCF: 4_947_000_000,
     },
     {
-      sourceDocumentId: "140120260730503307",
       ticker: "7962",
+      date: "2026-07-30",
       operatingCF: 2_114_256_000,
       investingCF: -550_214_000,
       financingCF: -1_876_529_000,
@@ -108,7 +137,7 @@ async function verifyKnownAnnualCashFlows() {
 
   const results: Array<Record<string, unknown>> = [];
   for (const expected of cases) {
-    const result = await loadQuarterlyByDisclosure(expected.sourceDocumentId);
+    const result = await loadQuarterlyByTickerDate(expected.ticker, expected.date);
     assertEqual(`${expected.ticker} ticker`, result.disclosure.ticker, expected.ticker);
     assertEqual(`${expected.ticker} operating_cf`, result.row.operating_cf, expected.operatingCF);
     assertEqual(`${expected.ticker} investing_cf`, result.row.investing_cf, expected.investingCF);
@@ -144,18 +173,9 @@ async function verify4088Corrections() {
     }
 
     assertEqual(`4088 ${expected.fiscalPeriodEnd} quarter`, disclosure.quarter, expected.quarter);
+    const row = await loadQuarterlyByDisclosureRow(disclosure);
 
-    const { data: row, error: rowError } = await supabaseAdmin
-      .from("company_quarterly_financials")
-      .select("quarter, operating_cf, investing_cf, financing_cf, extraction_version")
-      .eq("company_id", disclosure.company_id)
-      .eq("fiscal_period_end", expected.fiscalPeriodEnd)
-      .eq("quarter", expected.quarter)
-      .eq("accounting_scope", disclosure.accounting_scope ?? "unknown")
-      .single();
-    if (rowError) throw rowError;
-
-    assertEqual(`4088 ${expected.fiscalPeriodEnd} row quarter`, row.quarter, expected.quarter);
+    assertEqual(`4088 ${expected.fiscalPeriodEnd} row quarter`, disclosure.quarter, expected.quarter);
     assertEqual(
       `4088 ${expected.fiscalPeriodEnd} operating_cf`,
       row.operating_cf,
