@@ -72,7 +72,7 @@ async function main() {
     inspectTdnetRows(),
     supabaseAdmin
       .from("all_market_companies")
-      .select("ticker, company_name, market, listing_status")
+      .select("ticker, company_name, listing_status")
       .in("ticker", TARGET_TICKERS)
       .order("ticker", { ascending: true }),
     supabaseAdmin
