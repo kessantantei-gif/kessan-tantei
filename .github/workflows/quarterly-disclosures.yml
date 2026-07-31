@@ -58,6 +58,9 @@ jobs:
           TDNET_AUDIT_REPORT_PATH: tdnet-ingestion-audit.json
         run: npm run audit:tdnet-ingestion
 
+      - name: Audit TDnet XBRL availability
+        run: npm run audit:tdnet-xbrl
+
       - name: Upload TDnet audit report
         if: always()
         uses: actions/upload-artifact@v4
