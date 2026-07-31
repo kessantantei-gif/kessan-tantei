@@ -1,0 +1,142 @@
+name: TDnet Backfill and Audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      from_date:
+        description: "開始日 YYYY-MM-DD（空欄は安全な既定範囲）"
+        required: false
+        default: ""
+      to_date:
+        description: "終了日 YYYY-MM-DD（空欄は本日）"
+        required: false
+        default: ""
+  push:
+    branches:
+      - main
+    paths:
+      - "package.json"
+      - "scripts/sync-tdnet-quarterly.ts"
+      - "scripts/run-tdnet-quarterly-safe.ts"
+      - "scripts/audit-tdnet-ingestion.ts"
+      - ".github/workflows/quarterly-disclosures.yml"
+      - ".github/workflows/tdnet-backfill.yml"
+  schedule:
+    - cron: "50 12 * * 0"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: tdnet-quarterly-ingestion
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      TDNET_LIST_URL_TEMPLATE: ${{ vars.TDNET_LIST_URL_TEMPLATE }}
+      TDNET_OPERATION_START_DATE: "2026-07-25"
+      TDNET_MAX_RANGE_DAYS: "120"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve backfill range
+        id: range
+        shell: bash
+        env:
+          INPUT_FROM: ${{ inputs.from_date }}
+          INPUT_TO: ${{ inputs.to_date }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          TODAY=$(TZ=Asia/Tokyo date +%F)
+          ROLLING_FROM=$(TZ=Asia/Tokyo date -d '35 days ago' +%F)
+          OPERATION_START="${TDNET_OPERATION_START_DATE}"
+
+          if [[ -n "${INPUT_FROM}" ]]; then
+            FROM="${INPUT_FROM}"
+          elif [[ "${ROLLING_FROM}" < "${OPERATION_START}" ]]; then
+            FROM="${OPERATION_START}"
+          else
+            FROM="${ROLLING_FROM}"
+          fi
+
+          TO="${INPUT_TO:-${TODAY}}"
+          echo "from=${FROM}" >> "${GITHUB_OUTPUT}"
+          echo "to=${TO}" >> "${GITHUB_OUTPUT}"
+          echo "TDnet backfill range: ${FROM} - ${TO} (${EVENT_NAME})"
+
+      - name: Backfill and verify every TDnet list page
+        run: npm run sync:tdnet-quarterly -- --from=${{ steps.range.outputs.from }} --to=${{ steps.range.outputs.to }}
+
+      - name: Audit repaired range
+        env:
+          TDNET_AUDIT_REPORT_PATH: tdnet-backfill-audit.json
+        run: npm run audit:tdnet-ingestion -- --from=${{ steps.range.outputs.from }} --to=${{ steps.range.outputs.to }}
+
+      - name: Upload backfill audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdnet-backfill-audit-${{ github.run_id }}
+          path: tdnet-backfill-audit.json
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - name: Build verification
+        run: npm run build
+
+      - name: Open or update TDnet failure issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "TDnet自動取込エラー";
+            const { owner, repo } = context.repo;
+            const { data: issues } = await github.rest.issues.listForRepo({ owner, repo, state: "open", per_page: 100 });
+            const existing = issues.find((issue) => issue.title === title);
+            const body = [
+              `過去分バックフィルまたは監査が失敗しました。`,
+              `- Range: ${{ steps.range.outputs.from }} - ${{ steps.range.outputs.to }}`,
+              `- Run: https://github.com/${owner}/${repo}/actions/runs/${context.runId}`,
+              `- Commit: ${context.sha}`,
+            ].join("\n");
+            if (existing) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: existing.number, body });
+            } else {
+              await github.rest.issues.create({ owner, repo, title, body });
+            }
+
+      - name: Close recovered TDnet failure issue
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "TDnet自動取込エラー";
+            const { owner, repo } = context.repo;
+            const { data: issues } = await github.rest.issues.listForRepo({ owner, repo, state: "open", per_page: 100 });
+            const existing = issues.find((issue) => issue.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: existing.number,
+                body: `バックフィルと監査が正常終了したため復旧扱いにします。Run: https://github.com/${owner}/${repo}/actions/runs/${context.runId}`,
+              });
+              await github.rest.issues.update({ owner, repo, issue_number: existing.number, state: "closed" });
+            }
