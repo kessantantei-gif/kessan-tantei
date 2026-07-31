@@ -1,0 +1,34 @@
+name: Diagnose TDnet 2751 Correction
+
+on:
+  pull_request:
+    paths:
+      - "scripts/diagnose-tdnet-2751.ts"
+      - ".github/workflows/diagnose-tdnet-2751.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Inspect 2751 correction XBRL
+        run: npx tsx scripts/diagnose-tdnet-2751.ts
