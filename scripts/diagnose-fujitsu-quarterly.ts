@@ -78,7 +78,11 @@ async function main() {
   }
 
   if (!latestQuarterly || latestQuarterly.fiscal_period_end < "2026-06-30") {
-    throw new Error("富士通の2026年度第1四半期数値がcompany_quarterly_financialsにありません");
+    throw new Error("富士通の2027年3月期第1四半期数値がcompany_quarterly_financialsにありません");
+  }
+
+  if (latestQuarterly.revenue === null || latestQuarterly.operating_income === null) {
+    throw new Error("富士通の第1四半期売上収益または営業利益を取得できていません");
   }
 }
 
