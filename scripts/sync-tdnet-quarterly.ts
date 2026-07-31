@@ -353,7 +353,14 @@ function parseXbrl(
     accountingStandard,
     revenue: findFact(
       facts,
-      [/Revenue/i, /NetSales/i, /OperatingRevenue/i, /SalesRevenue/i, /TotalRevenue/i],
+      [
+        /^Sales(?:IFRS)?$/i,
+        /Revenue/i,
+        /NetSales/i,
+        /OperatingRevenue/i,
+        /SalesRevenue/i,
+        /TotalRevenue/i,
+      ],
       currentContexts
     ),
     operatingIncome: findFact(facts, [/OperatingIncome/i, /OperatingProfit/i], currentContexts),
