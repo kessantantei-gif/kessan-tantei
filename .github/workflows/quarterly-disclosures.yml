@@ -10,8 +10,12 @@ on:
   schedule:
     - cron: "20 12 * * *"
 
+permissions:
+  contents: read
+  issues: write
+
 concurrency:
-  group: quarterly-disclosures-daily
+  group: tdnet-quarterly-ingestion
   cancel-in-progress: false
 
 jobs:
@@ -24,6 +28,7 @@ jobs:
       EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
       TDNET_LIST_URL_TEMPLATE: ${{ vars.TDNET_LIST_URL_TEMPLATE }}
       TDNET_LOOKBACK_DAYS: "3"
+      TDNET_OPERATION_START_DATE: "2026-07-25"
       EDINET_SEMIANNUAL_LOOKBACK_DAYS: "3"
 
     steps:
@@ -39,7 +44,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Sync TDnet quarterly disclosures
+      - name: Sync and verify TDnet quarterly disclosures
         shell: bash
         run: |
           if [[ -n "${{ inputs.date }}" ]]; then
@@ -47,6 +52,20 @@ jobs:
           else
             npm run sync:tdnet-quarterly
           fi
+
+      - name: Audit all TDnet data since operation start
+        env:
+          TDNET_AUDIT_REPORT_PATH: tdnet-ingestion-audit.json
+        run: npm run audit:tdnet-ingestion
+
+      - name: Upload TDnet audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdnet-ingestion-audit-${{ github.run_id }}
+          path: tdnet-ingestion-audit.json
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Sync EDINET semiannual reports
         shell: bash
@@ -59,3 +78,43 @@ jobs:
 
       - name: Build verification
         run: npm run build
+
+      - name: Open or update TDnet failure issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "TDnet自動取込エラー";
+            const { owner, repo } = context.repo;
+            const { data: issues } = await github.rest.issues.listForRepo({ owner, repo, state: "open", per_page: 100 });
+            const existing = issues.find((issue) => issue.title === title);
+            const body = [
+              `自動取込または監査が失敗しました。`,
+              `- Workflow: ${context.workflow}`,
+              `- Run: https://github.com/${owner}/${repo}/actions/runs/${context.runId}`,
+              `- Commit: ${context.sha}`,
+            ].join("\n");
+            if (existing) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: existing.number, body });
+            } else {
+              await github.rest.issues.create({ owner, repo, title, body });
+            }
+
+      - name: Close recovered TDnet failure issue
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "TDnet自動取込エラー";
+            const { owner, repo } = context.repo;
+            const { data: issues } = await github.rest.issues.listForRepo({ owner, repo, state: "open", per_page: 100 });
+            const existing = issues.find((issue) => issue.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: existing.number,
+                body: `自動取込と監査が正常終了したため復旧扱いにします。Run: https://github.com/${owner}/${repo}/actions/runs/${context.runId}`,
+              });
+              await github.rest.issues.update({ owner, repo, issue_number: existing.number, state: "closed" });
+            }
