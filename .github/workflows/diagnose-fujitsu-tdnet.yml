@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 concurrency:
   group: diagnose-fujitsu-tdnet-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -20,8 +23,10 @@ jobs:
       TDNET_LOOKBACK_DAYS: "3"
 
     steps:
-      - name: Checkout
+      - name: Checkout PR branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -32,8 +37,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Apply permanent TDnet fix
+        run: node scripts/apply-fujitsu-tdnet-fix.mjs
+
+      - name: Commit permanent fix to PR branch
+        shell: bash
+        run: |
+          if git diff --quiet -- scripts/sync-tdnet-quarterly.ts 'app/company/[ticker]/page.tsx'; then
+            echo "Permanent fix already applied"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/sync-tdnet-quarterly.ts 'app/company/[ticker]/page.tsx'
+          git commit -m "TDnet四半期取込と最新開示表示を修正"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
       - name: Backfill TDnet disclosures for 2026-07-30
         run: npm run sync:tdnet-quarterly -- 2026-07-30
 
       - name: Diagnose Fujitsu 6702 rows
         run: npx tsx scripts/diagnose-fujitsu-quarterly.ts
+
+      - name: Build verification
+        run: npm run build
