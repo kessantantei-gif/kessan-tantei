@@ -13,11 +13,10 @@ function run(command: string, args: string[]) {
 
 const args = process.argv.slice(2);
 const syncExit = run("npm", ["run", "sync:tdnet-quarterly:core", "--", ...args]);
-if (syncExit !== 0) {
-  process.exit(syncExit);
-}
+if (syncExit !== 0) process.exit(syncExit);
+
+const cleanupExit = run("npm", ["run", "cleanup:tdnet-non-earnings", "--", ...args]);
+if (cleanupExit !== 0) process.exit(cleanupExit);
 
 const repairExit = run("npm", ["run", "repair:tdnet-text-block", "--", ...args]);
-if (repairExit !== 0) {
-  process.exit(repairExit);
-}
+if (repairExit !== 0) process.exit(repairExit);
