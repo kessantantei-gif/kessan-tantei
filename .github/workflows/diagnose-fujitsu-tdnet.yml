@@ -45,6 +45,7 @@ jobs:
           node scripts/apply-fujitsu-tdnet-fix.mjs
           node scripts/apply-tdnet-pagination-fix.mjs
           node scripts/apply-inline-xbrl-fix.mjs
+          node scripts/apply-quarterly-fact-selection-fix.mjs
 
       - name: Commit permanent fixes to PR branch
         shell: bash
@@ -56,7 +57,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add scripts/sync-tdnet-quarterly.ts 'app/company/[ticker]/page.tsx'
-          git commit -m "TDnet Inline XBRL取込と最新開示表示を修正"
+          git commit -m "TDnet四半期数値抽出と最新開示表示を修正"
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
       - name: Backfill TDnet disclosures for 2026-07-30
