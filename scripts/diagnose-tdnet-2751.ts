@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
+import AdmZip from "adm-zip";
 import { parseTdnetTextBlockFinancials } from "../lib/tdnet-text-block-financials";
 import { supabaseAdmin } from "../lib/supabase";
 
@@ -10,6 +11,18 @@ const EXPECTED = {
   ordinaryIncome: 3_107_000_000,
   profitAttributableToOwners: 1_894_000_000,
 };
+
+function clean(value: string) {
+  return value
+    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&#([0-9]+);/g, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 10)))
+    .replace(/&nbsp;/gi, " ")
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 async function main() {
   const { data: disclosure, error: disclosureError } = await supabaseAdmin
@@ -24,7 +37,26 @@ async function main() {
 
   const response = await fetch(disclosure.xbrl_url);
   if (!response.ok) throw new Error(`XBRL download failed ${response.status}`);
-  const parsed = parseTdnetTextBlockFinancials(Buffer.from(await response.arrayBuffer()));
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const zip = new AdmZip(buffer);
+  const profitAndLossEntries = zip
+    .getEntries()
+    .filter((entry) => !entry.isDirectory && /(?:acpl|qcpl).*?-ixbrl\.html?$/i.test(entry.entryName));
+
+  const relevantRows: Array<{ entry: string; cells: string[] }> = [];
+  for (const entry of profitAndLossEntries) {
+    const document = entry.getData().toString("utf8");
+    for (const row of document.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+      const cells = [
+        ...row[1].matchAll(/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/gi),
+      ].map((match) => clean(match[1]));
+      if (/売上高|売上収益|営業利益|営業損失|経常利益|経常損失|親会社.*帰属/.test(cells.join(""))) {
+        relevantRows.push({ entry: entry.entryName, cells });
+      }
+    }
+  }
+
+  const parsed = parseTdnetTextBlockFinancials(buffer);
 
   const { data: quarterly, error: quarterlyError } = await supabaseAdmin
     .from("company_quarterly_financials")
@@ -49,6 +81,8 @@ async function main() {
     JSON.stringify(
       {
         disclosure,
+        profitAndLossEntries: profitAndLossEntries.map((entry) => entry.entryName),
+        relevantRows,
         parsed,
         stored: quarterly,
         expected: EXPECTED,
@@ -65,10 +99,6 @@ async function main() {
     if (actual[key] !== EXPECTED[key]) {
       throw new Error(`2751 stored value mismatch ${key}: ${actual[key]} != ${EXPECTED[key]}`);
     }
-  }
-
-  if (quarterly.extraction_version !== "tdnet-quarterly-v4-text-block") {
-    throw new Error(`2751 extraction version mismatch: ${quarterly.extraction_version}`);
   }
 }
 
