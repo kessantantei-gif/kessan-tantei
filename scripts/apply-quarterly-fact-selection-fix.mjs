@@ -31,14 +31,33 @@ if (source.includes(beforeFindFact)) {
   throw new Error("findFact関数の置換対象が見つかりません");
 }
 
-source = source.replace(
-  `revenue: findFact(facts, [/Revenue/i, /NetSales/i, /OperatingRevenue/i], currentContexts),`,
-  `revenue: findFact(
+const originalRevenue = `revenue: findFact(facts, [/Revenue/i, /NetSales/i, /OperatingRevenue/i], currentContexts),`;
+const expandedRevenue = `revenue: findFact(
       facts,
       [/Revenue/i, /NetSales/i, /OperatingRevenue/i, /SalesRevenue/i, /TotalRevenue/i],
       currentContexts
-    ),`
-);
+    ),`;
+const finalRevenue = `revenue: findFact(
+      facts,
+      [
+        /^Sales(?:IFRS)?$/i,
+        /Revenue/i,
+        /NetSales/i,
+        /OperatingRevenue/i,
+        /SalesRevenue/i,
+        /TotalRevenue/i,
+      ],
+      currentContexts
+    ),`;
+
+if (source.includes(originalRevenue)) {
+  source = source.replace(originalRevenue, finalRevenue);
+} else if (source.includes(expandedRevenue)) {
+  source = source.replace(expandedRevenue, finalRevenue);
+} else if (!source.includes(finalRevenue)) {
+  throw new Error("売上収益概念の置換対象が見つかりません");
+}
+
 source = source.replace(
   `operatingCF: findFact(facts, [/NetCashProvidedByUsedInOperatingActivities/i], currentContexts),`,
   `operatingCF: findFact(
@@ -65,4 +84,4 @@ source = source.replace(
 );
 
 fs.writeFileSync(path, source);
-console.log("四半期数値は数値化できるfactを優先し、売上・CFの概念名を拡張しました");
+console.log("四半期数値は数値化できるfactを優先し、SalesIFRSを含む売上・CF概念を拡張しました");
