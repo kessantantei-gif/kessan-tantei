@@ -6,6 +6,7 @@ import { supabaseAdmin } from "../lib/supabase";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const userAgent = "kessan-tantei-tdnet-text-block-repair/1.0";
+const TEXT_BLOCK_VERSION = "tdnet-quarterly-v4-text-block";
 
 type Disclosure = {
   id: string;
@@ -25,6 +26,7 @@ type QuarterlyRow = {
   operating_income: number | null;
   ordinary_income: number | null;
   profit_attributable_to_owners: number | null;
+  extraction_version: string | null;
   raw_financials: Record<string, unknown> | null;
 };
 
@@ -119,7 +121,7 @@ async function loadQuarterlyRow(disclosure: Disclosure) {
   const { data, error } = await supabaseAdmin
     .from("company_quarterly_financials")
     .select(
-      "id, revenue, operating_income, ordinary_income, profit_attributable_to_owners, raw_financials"
+      "id, revenue, operating_income, ordinary_income, profit_attributable_to_owners, extraction_version, raw_financials"
     )
     .eq("company_id", disclosure.company_id)
     .eq("fiscal_period_end", disclosure.fiscal_period_end!)
@@ -128,6 +130,11 @@ async function loadQuarterlyRow(disclosure: Disclosure) {
     .maybeSingle();
   if (error) throw new Error(`四半期数値取得失敗 ${disclosure.ticker}: ${error.message}`);
   return data as QuarterlyRow | null;
+}
+
+function mergedValue(current: number | null, fallback: number | null, replaceFallback: boolean) {
+  if (replaceFallback) return fallback ?? current;
+  return current ?? fallback;
 }
 
 async function main() {
@@ -142,23 +149,33 @@ async function main() {
     const row = await loadQuarterlyRow(disclosure);
     if (!row) continue;
 
-    const needsFallback = [
-      row.revenue,
-      row.operating_income,
-      row.ordinary_income,
-      row.profit_attributable_to_owners,
-    ].some((value) => value === null);
+    const replaceFallback = row.extraction_version === TEXT_BLOCK_VERSION;
+    const needsFallback =
+      replaceFallback ||
+      [
+        row.revenue,
+        row.operating_income,
+        row.ordinary_income,
+        row.profit_attributable_to_owners,
+      ].some((value) => value === null);
     if (!needsFallback) continue;
 
     checked += 1;
     try {
       const parsed = parseTdnetTextBlockFinancials(await fetchBuffer(disclosure.xbrl_url!));
       const updates = {
-        revenue: row.revenue ?? parsed.revenue,
-        operating_income: row.operating_income ?? parsed.operatingIncome,
-        ordinary_income: row.ordinary_income ?? parsed.ordinaryIncome,
-        profit_attributable_to_owners:
-          row.profit_attributable_to_owners ?? parsed.profitAttributableToOwners,
+        revenue: mergedValue(row.revenue, parsed.revenue, replaceFallback),
+        operating_income: mergedValue(
+          row.operating_income,
+          parsed.operatingIncome,
+          replaceFallback
+        ),
+        ordinary_income: mergedValue(row.ordinary_income, parsed.ordinaryIncome, replaceFallback),
+        profit_attributable_to_owners: mergedValue(
+          row.profit_attributable_to_owners,
+          parsed.profitAttributableToOwners,
+          replaceFallback
+        ),
       };
       const changed =
         updates.revenue !== row.revenue ||
@@ -174,7 +191,7 @@ async function main() {
           data_quality: [updates.revenue, updates.operating_income].some((value) => value !== null)
             ? "unreviewed"
             : "warning",
-          extraction_version: "tdnet-quarterly-v4-text-block",
+          extraction_version: TEXT_BLOCK_VERSION,
           raw_financials: {
             ...(row.raw_financials ?? {}),
             textBlockFallback: parsed,
@@ -200,7 +217,20 @@ async function main() {
   }
 
   console.log("===== TDnet text-block repair =====");
-  console.log(JSON.stringify({ range: { from, to }, disclosures: disclosures.length, checked, repaired, details, failures }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        range: { from, to },
+        disclosures: disclosures.length,
+        checked,
+        repaired,
+        details,
+        failures,
+      },
+      null,
+      2
+    )
+  );
 
   if (failures.length > 0) {
     throw new Error(`TDnet表形式修復で${failures.length}件失敗しました`);
