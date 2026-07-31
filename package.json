@@ -32,6 +32,7 @@
     "audit:financial-sector-data": "DOTENV_CONFIG_PATH=.env.local tsx scripts/audit-financial-sector-data.ts",
     "audit:market-ranking-data": "DOTENV_CONFIG_PATH=.env.local tsx scripts/audit-market-ranking-data.ts",
     "audit:tdnet-ingestion": "DOTENV_CONFIG_PATH=.env.local tsx scripts/audit-tdnet-ingestion.ts",
+    "audit:tdnet-xbrl": "DOTENV_CONFIG_PATH=.env.local tsx scripts/audit-tdnet-xbrl-availability.ts",
     "diagnose:financial-sector-tags": "DOTENV_CONFIG_PATH=.env.local tsx scripts/diagnose-financial-sector-tags.ts",
     "audit:financial-integrity": "tsx scripts/audit-financial-integrity.ts",
     "audit:history-periods": "tsx scripts/audit-history-periods.ts",
