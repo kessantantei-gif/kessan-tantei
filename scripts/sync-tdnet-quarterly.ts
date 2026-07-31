@@ -234,10 +234,16 @@ function collectFacts(node: unknown, facts: Fact[], inheritedName = "") {
 
 function findFact(facts: Fact[], names: RegExp[], preferredContexts: RegExp[] = []) {
   const candidates = facts.filter((fact) => names.some((pattern) => pattern.test(fact.name)));
-  const preferred = candidates.find((fact) =>
+  const preferred = candidates.filter((fact) =>
     preferredContexts.some((pattern) => pattern.test(fact.contextRef ?? ""))
   );
-  return parseNumeric((preferred ?? candidates[0])?.value ?? "");
+  const ordered = [...preferred, ...candidates.filter((fact) => !preferred.includes(fact))];
+
+  for (const fact of ordered) {
+    const numeric = parseNumeric(fact.value);
+    if (numeric !== null) return numeric;
+  }
+  return null;
 }
 
 function findText(facts: Fact[], names: RegExp[]) {
@@ -345,7 +351,11 @@ function parseXbrl(
     quarter,
     accountingScope,
     accountingStandard,
-    revenue: findFact(facts, [/Revenue/i, /NetSales/i, /OperatingRevenue/i], currentContexts),
+    revenue: findFact(
+      facts,
+      [/Revenue/i, /NetSales/i, /OperatingRevenue/i, /SalesRevenue/i, /TotalRevenue/i],
+      currentContexts
+    ),
     operatingIncome: findFact(facts, [/OperatingIncome/i, /OperatingProfit/i], currentContexts),
     ordinaryIncome: findFact(facts, [/OrdinaryIncome/i], currentContexts),
     profitAttributableToOwners: findFact(
@@ -353,9 +363,21 @@ function parseXbrl(
       [/ProfitAttributableToOwnersOfParent/i, /NetIncomeAttributableToOwners/i, /ProfitLossAttributableToOwners/i],
       currentContexts
     ),
-    operatingCF: findFact(facts, [/NetCashProvidedByUsedInOperatingActivities/i], currentContexts),
-    investingCF: findFact(facts, [/NetCashProvidedByUsedInInvestingActivities/i], currentContexts),
-    financingCF: findFact(facts, [/NetCashProvidedByUsedInFinancingActivities/i], currentContexts),
+    operatingCF: findFact(
+      facts,
+      [/NetCashProvidedByUsedInOperatingActivities/i, /CashFlows?FromUsedInOperatingActivities/i],
+      currentContexts
+    ),
+    investingCF: findFact(
+      facts,
+      [/NetCashProvidedByUsedInInvestingActivities/i, /CashFlows?FromUsedInInvestingActivities/i],
+      currentContexts
+    ),
+    financingCF: findFact(
+      facts,
+      [/NetCashProvidedByUsedInFinancingActivities/i, /CashFlows?FromUsedInFinancingActivities/i],
+      currentContexts
+    ),
     totalAssets: findFact(facts, [/Assets$/i, /TotalAssets/i], currentContexts),
     netAssets: findFact(facts, [/NetAssets/i], currentContexts),
     equity: findFact(facts, [/Equity$/i, /ShareholdersEquity/i], currentContexts),
