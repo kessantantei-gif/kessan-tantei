@@ -161,6 +161,39 @@ function localName(name: string) {
   return name.includes(":") ? name.split(":").at(-1)! : name;
 }
 
+function nodeText(node: unknown): string {
+  if (node === null || node === undefined) return "";
+  if (typeof node !== "object") return String(node);
+  if (Array.isArray(node)) return node.map(nodeText).join("");
+
+  const record = node as Record<string, unknown>;
+  return Object.entries(record)
+    .filter(([key]) => !key.startsWith("@_") && !/^(?:ix:)?exclude$/i.test(key))
+    .map(([, value]) => nodeText(value))
+    .join("");
+}
+
+function parseNumeric(value: string) {
+  const normalized = value
+    .normalize("NFKC")
+    .replace(/[，,\s]/g, "")
+    .replace(/^\((.*)\)$/, "-$1")
+    .trim();
+  if (!normalized || normalized === "-" || normalized === "—") return null;
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : null;
+}
+
+function normalizedFactValue(record: Record<string, unknown>, rawValue: string) {
+  const numeric = parseNumeric(rawValue);
+  if (numeric === null) return rawValue.trim();
+
+  const scaleValue = Number(record["@_scale"] ?? 0);
+  const scale = Number.isFinite(scaleValue) ? scaleValue : 0;
+  const signed = record["@_sign"] === "-" ? -Math.abs(numeric) : numeric;
+  return String(signed * 10 ** scale);
+}
+
 function collectFacts(node: unknown, facts: Fact[], inheritedName = "") {
   if (node === null || node === undefined) return;
   if (typeof node !== "object") {
@@ -176,13 +209,22 @@ function collectFacts(node: unknown, facts: Fact[], inheritedName = "") {
   }
 
   const record = node as Record<string, unknown>;
-  if ("#text" in record && inheritedName) {
-    facts.push({
-      name: localName(inheritedName),
-      value: String(record["#text"] ?? "").trim(),
-      contextRef: typeof record["@_contextRef"] === "string" ? record["@_contextRef"] : null,
-    });
+  const inlineConcept = typeof record["@_name"] === "string" ? record["@_name"] : null;
+  const factName = inlineConcept ?? inheritedName;
+  const hasFactValue = inlineConcept !== null || "#text" in record;
+
+  if (factName && hasFactValue) {
+    const rawValue = nodeText(record).trim();
+    if (rawValue) {
+      facts.push({
+        name: localName(factName),
+        value: normalizedFactValue(record, rawValue),
+        contextRef: typeof record["@_contextRef"] === "string" ? record["@_contextRef"] : null,
+      });
+    }
   }
+
+  if (inlineConcept) return;
 
   for (const [key, value] of Object.entries(record)) {
     if (key.startsWith("@_") || key === "#text") continue;
@@ -190,19 +232,18 @@ function collectFacts(node: unknown, facts: Fact[], inheritedName = "") {
   }
 }
 
-function parseNumeric(value: string) {
-  const normalized = value.replace(/,/g, "").trim();
-  if (!normalized || normalized === "-" || normalized === "—") return null;
-  const number = Number(normalized);
-  return Number.isFinite(number) ? number : null;
-}
-
 function findFact(facts: Fact[], names: RegExp[], preferredContexts: RegExp[] = []) {
   const candidates = facts.filter((fact) => names.some((pattern) => pattern.test(fact.name)));
-  const preferred = candidates.find((fact) =>
+  const preferred = candidates.filter((fact) =>
     preferredContexts.some((pattern) => pattern.test(fact.contextRef ?? ""))
   );
-  return parseNumeric((preferred ?? candidates[0])?.value ?? "");
+  const ordered = [...preferred, ...candidates.filter((fact) => !preferred.includes(fact))];
+
+  for (const fact of ordered) {
+    const numeric = parseNumeric(fact.value);
+    if (numeric !== null) return numeric;
+  }
+  return null;
 }
 
 function findText(facts: Fact[], names: RegExp[]) {
@@ -216,28 +257,76 @@ function parseDate(value: string | null) {
   return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
 }
 
-function parseXbrl(buffer: Buffer, quarter: 1 | 2 | 3 | 4): ParsedFinancials {
-  const zip = new AdmZip(buffer);
-  const instance = zip
-    .getEntries()
-    .filter((entry) => !entry.isDirectory)
-    .find((entry) => /(?:\.xbrl|\.xml)$/i.test(entry.entryName) && !/taxonomy|label|presentation|definition|calculation/i.test(entry.entryName));
-  if (!instance) throw new Error("XBRLインスタンスがZIP内にありません");
+function latestContextPeriodEnd(xml: string, disclosedAt: string) {
+  const cutoff = disclosedAt.slice(0, 10);
+  const dates = [
+    ...xml.matchAll(
+      /<(?:[A-Za-z_][\w.-]*:)?(?:endDate|instant)\b[^>]*>\s*(20\d{2}-\d{2}-\d{2})\s*<\//gi
+    ),
+  ]
+    .map((match) => match[1])
+    .filter((date) => date <= cutoff)
+    .sort();
+  return dates.at(-1) ?? null;
+}
 
-  const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", textNodeName: "#text" });
-  const parsed = parser.parse(instance.getData().toString("utf8"));
+function parseXbrl(
+  buffer: Buffer,
+  quarter: 1 | 2 | 3 | 4,
+  disclosedAt: string
+): ParsedFinancials {
+  const zip = new AdmZip(buffer);
+  const entries = zip.getEntries().filter((entry) => !entry.isDirectory);
+  const inlineEntries = entries
+    .filter((entry) => /-ixbrl\.html?$/i.test(entry.entryName))
+    .sort((a, b) => {
+      const priority = (name: string) => {
+        if (/\/Summary\//i.test(name)) return 0;
+        if (/0101010-qcfs/i.test(name)) return 1;
+        if (/0102010-qcpl/i.test(name)) return 2;
+        if (/0104010-qccf/i.test(name)) return 3;
+        return 10;
+      };
+      return priority(a.entryName) - priority(b.entryName);
+    });
+  const fallbackInstance = entries.find(
+    (entry) =>
+      /\.xbrl$/i.test(entry.entryName) ||
+      (/\.xml$/i.test(entry.entryName) &&
+        !/(?:-def|-cal|-pre|-lab|manifest|catalog|taxonomy|label|presentation|definition|calculation)\.xml$/i.test(
+          entry.entryName
+        ))
+  );
+  const instanceEntries = inlineEntries.length > 0 ? inlineEntries : fallbackInstance ? [fallbackInstance] : [];
+  if (instanceEntries.length === 0) throw new Error("XBRLインスタンスがZIP内にありません");
+
+  const documents = instanceEntries.map((entry) => entry.getData().toString("utf8"));
+  const xml = documents.join("\n");
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: "@_",
+    textNodeName: "#text",
+    parseTagValue: false,
+    trimValues: true,
+  });
   const facts: Fact[] = [];
-  collectFacts(parsed, facts);
+  for (const document of documents) {
+    collectFacts(parser.parse(document), facts);
+  }
 
   const currentContexts = [/Current.*(?:YTD|Duration|Instant)/i, /CurrentYear/i, /CurrentQuarter/i];
-  const fiscalPeriodEnd = parseDate(
-    findText(facts, [
-      /CurrentFiscalYearEndDate/i,
-      /CurrentPeriodEndDate/i,
-      /FiscalYearEndDate/i,
-      /Current.*EndDate/i,
-    ])
+  const fiscalYearEnd = parseDate(
+    findText(facts, [/CurrentFiscalYearEndDate/i, /FiscalYearEndDate/i])
   );
+  const fiscalPeriodEnd =
+    parseDate(
+      findText(facts, [
+        /CurrentQuarterEndDate/i,
+        /CurrentPeriodEndDate/i,
+        /InterimPeriodEndDate/i,
+        /Quarterly.*PeriodEndDate/i,
+      ])
+    ) ?? latestContextPeriodEnd(xml, disclosedAt);
   if (!fiscalPeriodEnd) throw new Error("決算期末日をXBRLから取得できません");
 
   const accountingStandard = findText(facts, [/AccountingStandards/i, /AccountingStandard/i]);
@@ -257,12 +346,23 @@ function parseXbrl(buffer: Buffer, quarter: 1 | 2 | 3 | 4): ParsedFinancials {
   );
 
   return {
-    fiscalYear: Number(fiscalPeriodEnd.slice(0, 4)),
+    fiscalYear: Number((fiscalYearEnd ?? fiscalPeriodEnd).slice(0, 4)),
     fiscalPeriodEnd,
     quarter,
     accountingScope,
     accountingStandard,
-    revenue: findFact(facts, [/Revenue/i, /NetSales/i, /OperatingRevenue/i], currentContexts),
+    revenue: findFact(
+      facts,
+      [
+        /^Sales(?:IFRS)?$/i,
+        /Revenue/i,
+        /NetSales/i,
+        /OperatingRevenue/i,
+        /SalesRevenue/i,
+        /TotalRevenue/i,
+      ],
+      currentContexts
+    ),
     operatingIncome: findFact(facts, [/OperatingIncome/i, /OperatingProfit/i], currentContexts),
     ordinaryIncome: findFact(facts, [/OrdinaryIncome/i], currentContexts),
     profitAttributableToOwners: findFact(
@@ -270,9 +370,21 @@ function parseXbrl(buffer: Buffer, quarter: 1 | 2 | 3 | 4): ParsedFinancials {
       [/ProfitAttributableToOwnersOfParent/i, /NetIncomeAttributableToOwners/i, /ProfitLossAttributableToOwners/i],
       currentContexts
     ),
-    operatingCF: findFact(facts, [/NetCashProvidedByUsedInOperatingActivities/i], currentContexts),
-    investingCF: findFact(facts, [/NetCashProvidedByUsedInInvestingActivities/i], currentContexts),
-    financingCF: findFact(facts, [/NetCashProvidedByUsedInFinancingActivities/i], currentContexts),
+    operatingCF: findFact(
+      facts,
+      [/NetCashProvidedByUsedInOperatingActivities/i, /CashFlows?FromUsedInOperatingActivities/i],
+      currentContexts
+    ),
+    investingCF: findFact(
+      facts,
+      [/NetCashProvidedByUsedInInvestingActivities/i, /CashFlows?FromUsedInInvestingActivities/i],
+      currentContexts
+    ),
+    financingCF: findFact(
+      facts,
+      [/NetCashProvidedByUsedInFinancingActivities/i, /CashFlows?FromUsedInFinancingActivities/i],
+      currentContexts
+    ),
     totalAssets: findFact(facts, [/Assets$/i, /TotalAssets/i], currentContexts),
     netAssets: findFact(facts, [/NetAssets/i], currentContexts),
     equity: findFact(facts, [/Equity$/i, /ShareholdersEquity/i], currentContexts),
@@ -294,6 +406,16 @@ async function fetchText(url: string) {
   const response = await fetch(url, { headers: { "user-agent": userAgent } });
   if (!response.ok) throw new Error(`${url} の取得に失敗: ${response.status}`);
   return response.text();
+}
+
+function tdnetListUrl(date: string, page: number) {
+  const yyyymmdd = date.replace(/-/g, "");
+  const pageText = String(page).padStart(3, "0");
+  return listTemplate
+    .replace("{date}", date)
+    .replace("{yyyymmdd}", yyyymmdd)
+    .replace("{page}", pageText)
+    .replace(/I_list_\d{3}_/, `I_list_${pageText}_`);
 }
 
 function targetDates() {
@@ -330,8 +452,17 @@ async function saveCandidate(candidate: DisclosureCandidate, company: Company) {
     .maybeSingle();
 
   let parsed: ParsedFinancials | null = null;
+  let extractionError: string | null = null;
   if (candidate.xbrlUrl && candidate.quarter) {
-    parsed = parseXbrl(await fetchBuffer(candidate.xbrlUrl), candidate.quarter);
+    try {
+      parsed = parseXbrl(
+        await fetchBuffer(candidate.xbrlUrl),
+        candidate.quarter,
+        candidate.disclosedAt
+      );
+    } catch (error) {
+      extractionError = error instanceof Error ? error.message : String(error);
+    }
   }
 
   const { data: disclosure, error: disclosureError } = await supabaseAdmin
@@ -354,7 +485,11 @@ async function saveCandidate(candidate: DisclosureCandidate, company: Company) {
         source_url: candidate.sourceUrl,
         xbrl_url: candidate.xbrlUrl,
         pdf_url: candidate.pdfUrl,
-        raw_payload: candidate,
+        raw_payload: {
+          candidate,
+          extractionError,
+          extractionVersion: "tdnet-quarterly-v3",
+        },
         is_correction: candidate.isCorrection,
         updated_at: new Date().toISOString(),
       },
@@ -393,7 +528,7 @@ async function saveCandidate(candidate: DisclosureCandidate, company: Company) {
         data_quality: [parsed.revenue, parsed.operatingIncome].some((value) => value !== null)
           ? "unreviewed"
           : "warning",
-        extraction_version: "tdnet-quarterly-v1",
+        extraction_version: "tdnet-quarterly-v3",
         raw_financials: parsed.rawFinancials,
         updated_at: new Date().toISOString(),
       },
@@ -402,9 +537,12 @@ async function saveCandidate(candidate: DisclosureCandidate, company: Company) {
     if (error) throw new Error(`四半期数値保存失敗 ${candidate.ticker}: ${error.message}`);
   }
 
+  if (extractionError) {
+    throw new Error(`XBRL抽出失敗 ${candidate.ticker}: ${extractionError}`);
+  }
+
   return existing ? "updated" : "inserted";
 }
-
 async function main() {
   const dates = targetDates();
   const startedAt = new Date().toISOString();
@@ -427,12 +565,17 @@ async function main() {
     const listFailures: string[] = [];
 
     for (const date of dates) {
-      const yyyymmdd = date.replace(/-/g, "");
-      const url = listTemplate.replace("{date}", date).replace("{yyyymmdd}", yyyymmdd);
-      try {
-        candidates.push(...parseCandidates(await fetchText(url), url, date));
-      } catch (error) {
-        listFailures.push(`${date}: ${error instanceof Error ? error.message : String(error)}`);
+      for (let page = 1; page <= 50; page += 1) {
+        const url = tdnetListUrl(date, page);
+        try {
+          candidates.push(...parseCandidates(await fetchText(url), url, date));
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (page === 1 || !message.includes(": 404")) {
+            listFailures.push(`${date} page ${page}: ${message}`);
+          }
+          break;
+        }
       }
     }
 
