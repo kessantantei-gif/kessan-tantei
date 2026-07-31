@@ -3,6 +3,10 @@ name: Diagnose TDnet 2751 Correction
 on:
   pull_request:
     paths:
+      - "package.json"
+      - "lib/tdnet-text-block-financials.ts"
+      - "scripts/repair-tdnet-text-block-financials.ts"
+      - "scripts/run-tdnet-quarterly-raw-with-repair.ts"
       - "scripts/diagnose-tdnet-2751.ts"
       - ".github/workflows/diagnose-tdnet-2751.yml"
 
@@ -12,7 +16,7 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -30,5 +34,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Inspect 2751 correction XBRL
+      - name: Reimport 2026-07-28 with text-block repair
+        run: npm run sync:tdnet-quarterly:raw -- 2026-07-28
+
+      - name: Assert 2751 corrected values
         run: npx tsx scripts/diagnose-tdnet-2751.ts
