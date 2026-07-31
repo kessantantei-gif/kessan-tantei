@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run audit:tdnet-20260730 && next build",
+    "build": "npm run inspect:tdnet-missing-two && next build",
     "start": "next start",
     "lint": "eslint",
     "backfill:history": "tsx scripts/backfill-zero-financials.ts",
@@ -31,6 +31,7 @@
     "audit:financial-sector-data": "DOTENV_CONFIG_PATH=.env.local tsx scripts/audit-financial-sector-data.ts",
     "audit:market-ranking-data": "DOTENV_CONFIG_PATH=.env.local tsx scripts/audit-market-ranking-data.ts",
     "audit:tdnet-20260730": "DOTENV_CONFIG_PATH=.env.local tsx scripts/audit-tdnet-20260730.ts",
+    "inspect:tdnet-missing-two": "DOTENV_CONFIG_PATH=.env.local tsx scripts/inspect-tdnet-missing-two.ts",
     "diagnose:financial-sector-tags": "DOTENV_CONFIG_PATH=.env.local tsx scripts/diagnose-financial-sector-tags.ts",
     "audit:financial-integrity": "tsx scripts/audit-financial-integrity.ts",
     "audit:history-periods": "tsx scripts/audit-history-periods.ts",
