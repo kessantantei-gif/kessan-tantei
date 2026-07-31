@@ -113,7 +113,8 @@ async function loadDisclosures(from: string, to: string) {
       !isTdnetNonEarningsDocument(row.title, row.xbrl_url) &&
       row.fiscal_period_end !== null &&
       row.quarter !== null &&
-      row.xbrl_url !== null
+      row.xbrl_url !== null &&
+      (row.quarter === 2 || row.quarter === 4 || row.document_type === "correction")
   );
 }
 
