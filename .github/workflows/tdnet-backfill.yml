@@ -16,13 +16,17 @@ on:
       - main
     paths:
       - "package.json"
+      - "lib/tdnet-document-title.ts"
       - "lib/tdnet-text-block-financials.ts"
       - "scripts/sync-tdnet-quarterly.ts"
-      - "scripts/run-tdnet-quarterly-safe.ts"
+      - "scripts/run-tdnet-quarterly-safe-v2.ts"
       - "scripts/run-tdnet-quarterly-raw-with-repair.ts"
+      - "scripts/cleanup-tdnet-non-earnings.ts"
+      - "scripts/repair-tdnet-document-classification.ts"
       - "scripts/repair-tdnet-text-block-financials.ts"
       - "scripts/audit-tdnet-ingestion.ts"
-      - "scripts/audit-tdnet-xbrl-availability.ts"
+      - "scripts/audit-tdnet-xbrl-availability-v2.ts"
+      - "scripts/audit-tdnet-cash-flow.ts"
       - ".github/workflows/quarterly-disclosures.yml"
       - ".github/workflows/tdnet-backfill.yml"
   schedule:
@@ -39,7 +43,7 @@ concurrency:
 jobs:
   backfill:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -96,12 +100,19 @@ jobs:
       - name: Audit repaired range XBRL availability
         run: npm run audit:tdnet-xbrl -- --from=${{ steps.range.outputs.from }} --to=${{ steps.range.outputs.to }}
 
-      - name: Upload backfill audit report
+      - name: Audit repaired range cash-flow tables
+        env:
+          TDNET_CASH_FLOW_AUDIT_REPORT_PATH: tdnet-backfill-cash-flow-audit.json
+        run: npm run audit:tdnet-cash-flow -- --from=${{ steps.range.outputs.from }} --to=${{ steps.range.outputs.to }}
+
+      - name: Upload backfill audit reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: tdnet-backfill-audit-${{ github.run_id }}
-          path: tdnet-backfill-audit.json
+          path: |
+            tdnet-backfill-audit.json
+            tdnet-backfill-cash-flow-audit.json
           if-no-files-found: ignore
           retention-days: 90
 
