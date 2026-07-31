@@ -1,21 +1,29 @@
-name: Diagnose TDnet Cash Flow
+name: Verify TDnet Cash Flow Repair
 
 on:
   pull_request:
     paths:
-      - "scripts/diagnose-tdnet-cash-flow.ts"
+      - "package.json"
+      - "lib/tdnet-document-title.ts"
+      - "lib/tdnet-text-block-financials.ts"
+      - "scripts/repair-tdnet-document-classification.ts"
+      - "scripts/repair-tdnet-text-block-financials.ts"
+      - "scripts/audit-tdnet-cash-flow.ts"
+      - "scripts/verify-tdnet-cash-flow.ts"
+      - "scripts/run-tdnet-quarterly-raw-with-repair.ts"
       - ".github/workflows/diagnose-tdnet-cash-flow.yml"
 
 permissions:
   contents: read
 
 jobs:
-  diagnose:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      TDNET_OPERATION_START_DATE: "2026-07-25"
 
     steps:
       - name: Checkout
@@ -30,5 +38,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Inspect Q2 and annual cash-flow tables
-        run: npx tsx scripts/diagnose-tdnet-cash-flow.ts
+      - name: Repair TDnet document quarters
+        run: npm run repair:tdnet-document-classification -- --from=2026-07-25 --to=2026-07-31
+
+      - name: Repair TDnet P&L and cash-flow tables
+        run: npm run repair:tdnet-text-block -- --from=2026-07-25 --to=2026-07-31
+
+      - name: Audit all eligible TDnet cash-flow tables
+        env:
+          TDNET_CASH_FLOW_AUDIT_REPORT_PATH: tdnet-cash-flow-audit.json
+        run: npm run audit:tdnet-cash-flow -- --from=2026-07-25 --to=2026-07-31
+
+      - name: Assert known P&L, cash-flow, and correction-quarter values
+        run: npx tsx scripts/verify-tdnet-cash-flow.ts
+
+      - name: Upload cash-flow audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdnet-cash-flow-audit
+          path: tdnet-cash-flow-audit.json
+          if-no-files-found: ignore
+          retention-days: 90
