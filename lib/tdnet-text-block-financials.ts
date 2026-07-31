@@ -71,7 +71,6 @@ function numericCell(value: string) {
     .replace(/[▲△]/g, "-")
     .replace(/[−－–—]/g, "-")
     .replace(/^\((.*)\)$/, "-$1")
-    .replace(/^(?:注)?\d+[.)]?$/, "")
     .trim();
 
   if (!normalized || /^(?:-|―|－|—|N\/A)$/i.test(normalized)) return null;
@@ -127,11 +126,19 @@ function parseDocument(document: string) {
   return result;
 }
 
+function entryPriority(name: string) {
+  if (/(?:acpl|qcpl)/i.test(name)) return 0;
+  if (/\/Summary\//i.test(name)) return 1;
+  if (/(?:statementofincome|income)/i.test(name)) return 2;
+  return 10;
+}
+
 export function parseTdnetTextBlockFinancials(buffer: Buffer): TdnetTextBlockFinancials {
   const zip = new AdmZip(buffer);
   const documents = zip
     .getEntries()
     .filter((entry) => !entry.isDirectory && /-ixbrl\.html?$/i.test(entry.entryName))
+    .sort((a, b) => entryPriority(a.entryName) - entryPriority(b.entryName))
     .map((entry) => entry.getData().toString("utf8"));
 
   const result: TdnetTextBlockFinancials = {
