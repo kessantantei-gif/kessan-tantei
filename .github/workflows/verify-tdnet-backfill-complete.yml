@@ -1,0 +1,48 @@
+name: Verify TDnet Backfill Complete
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/verify-tdnet-backfill-complete.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      TDNET_OPERATION_START_DATE: "2026-07-25"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit TDnet disclosures and quarterly rows
+        env:
+          TDNET_AUDIT_REPORT_PATH: tdnet-final-audit.json
+        run: npm run audit:tdnet-ingestion -- --from=2026-07-25 --to=2026-07-31
+
+      - name: Audit actual earnings XBRL availability
+        run: npm run audit:tdnet-xbrl -- --from=2026-07-25 --to=2026-07-31
+
+      - name: Upload final audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdnet-final-audit
+          path: tdnet-final-audit.json
+          if-no-files-found: error
+          retention-days: 90
