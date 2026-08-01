@@ -23,6 +23,7 @@ const files = {
   companyLayout: "app/company/[ticker]/layout.tsx",
   siteNav: "components/site-nav.tsx",
   allMarketSearch: "components/all-market-company-search.tsx",
+  xShare: "components/x-share-button.tsx",
   jsonLd: "components/seo-json-ld.tsx",
   og: "public/og-image-all-markets.png",
 };
@@ -194,14 +195,6 @@ function auditSitemap(items: Item[]) {
     );
   }
 
-  requireText(
-    items,
-    files.sitemap,
-    /const\s+now\s*=\s*new\s+Date\(\)/,
-    "sitemap",
-    "sitemap must not assign the current time to every URL",
-    "INFO"
-  );
   if (exists(files.sitemap)) {
     const sitemap = read(files.sitemap);
     if (/const\s+now\s*=\s*new\s+Date\(\)/.test(sitemap)) {
@@ -221,6 +214,11 @@ function auditLinks(items: Item[]) {
     { file: files.companyLayout, value: "/latest-earnings" },
     { file: files.markets, value: "AllMarketCompanySearch" },
     { file: files.allMarketSearch, value: "/company/" },
+    { file: files.xShare, value: 'searchParams.set("utm_source", "x")' },
+    { file: files.xShare, value: 'searchParams.set("utm_medium", "social")' },
+    { file: files.xShare, value: 'searchParams.set("utm_campaign", "company_share")' },
+    { file: files.xShare, value: 'searchParams.set("utm_content", ticker)' },
+    { file: files.xShare, value: "#決算探偵" },
   ];
 
   for (const check of requiredLinks) {
