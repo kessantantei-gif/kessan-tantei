@@ -1,0 +1,63 @@
+name: SEO Discovery Verification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "app/layout.tsx"
+      - "app/page.tsx"
+      - "app/sitemap.ts"
+      - "app/latest-earnings/**"
+      - "app/company/[ticker]/**"
+      - "components/site-nav.tsx"
+      - "components/seo-json-ld.tsx"
+      - "scripts/audit-seo.ts"
+      - "scripts/verify-latest-earnings-data.ts"
+      - ".github/workflows/seo-discovery.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "app/layout.tsx"
+      - "app/page.tsx"
+      - "app/sitemap.ts"
+      - "app/latest-earnings/**"
+      - "app/company/[ticker]/**"
+      - "components/site-nav.tsx"
+      - "components/seo-json-ld.tsx"
+      - "scripts/audit-seo.ts"
+      - "scripts/verify-latest-earnings-data.ts"
+      - ".github/workflows/seo-discovery.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit SEO structure and internal links
+        run: npm run audit:seo
+
+      - name: Verify latest earnings production data
+        run: npx tsx scripts/verify-latest-earnings-data.ts
+
+      - name: Production build
+        run: npm run build
