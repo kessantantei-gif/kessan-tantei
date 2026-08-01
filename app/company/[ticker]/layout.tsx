@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import CompanyPageScrollReset from "@/components/company-page-scroll-reset";
 import CompanyMarketBadges from "@/components/company-market-badges";
@@ -27,83 +26,8 @@ const marketLabels: Record<string, string> = {
   other: "その他市場",
 };
 
-function yenOku(value: number | null | undefined) {
-  if (!value) return "";
-  return `${(value / 100000000).toFixed(1)}億円`;
-}
-
 function jsonLd(value: unknown) {
   return JSON.stringify(value).replace(/</g, "\\u003c");
-}
-
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { ticker } = await params;
-
-  const [{ data }, { data: marketData }] = await Promise.all([
-    supabaseAdmin
-      .from("company_analyses")
-      .select(
-        "ticker, company_name, score, danger_score, risk_level, financials, market_segment"
-      )
-      .eq("ticker", ticker)
-      .maybeSingle(),
-    supabaseAdmin
-      .from("all_market_companies")
-      .select("market_segment, industry_name")
-      .eq("ticker", ticker)
-      .maybeSingle(),
-  ]);
-
-  if (!data) {
-    return {
-      title: `${ticker}の財務分析・決算評価 | 決算探偵`,
-      description: `${ticker}の決算・財務指標・リスクシグナルを決算探偵で確認できます。`,
-      keywords: [ticker, `${ticker} 決算`, `${ticker} 財務分析`],
-    };
-  }
-
-  const revenue = yenOku(data.financials?.revenue);
-  const operatingIncome = yenOku(data.financials?.operatingIncome);
-  const operatingCF = yenOku(data.financials?.operatingCF);
-  const marketSegment =
-    marketData?.market_segment || data.market_segment || "growth";
-  const marketLabel = marketLabels[marketSegment] || marketLabels.other;
-  const title = `${data.company_name}（${data.ticker}）の財務分析・決算評価 | 決算探偵`;
-  const description = `${marketLabel}・${
-    marketData?.industry_name || "業種未分類"
-  }の${data.company_name}（${data.ticker}）。売上高${
-    revenue ? ` ${revenue}` : ""
-  }、営業利益${operatingIncome ? ` ${operatingIncome}` : ""}、営業CF${
-    operatingCF ? ` ${operatingCF}` : ""
-  }、総合スコア${data.score}、Danger Score${
-    data.danger_score
-  }を確認できます。`;
-  const url = `${appUrl}/company/${data.ticker}`;
-
-  return {
-    title,
-    description,
-    keywords: [
-      data.company_name,
-      data.ticker,
-      `${data.company_name} 決算`,
-      `${data.company_name} 財務分析`,
-      `${data.ticker} 決算`,
-      `${data.ticker} 財務`,
-      marketLabel,
-      marketData?.industry_name,
-    ].filter((value): value is string => Boolean(value)),
-    alternates: { canonical: url },
-    openGraph: {
-      title,
-      description,
-      url,
-      siteName: "決算探偵",
-      type: "website",
-      locale: "ja_JP",
-    },
-    twitter: { card: "summary_large_image", title, description },
-  };
 }
 
 export default async function CompanyLayout({ children, params }: Props) {
