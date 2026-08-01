@@ -1,18 +1,24 @@
 import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
+import { isTdnetNonEarningsDocument } from "../lib/tdnet-document-title";
 import { parseTdnetTextBlockFinancials } from "../lib/tdnet-text-block-financials";
 import { supabaseAdmin } from "../lib/supabase";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const userAgent = "kessan-tantei-tdnet-text-block-repair/1.0";
-const TEXT_BLOCK_VERSION = "tdnet-quarterly-v4-text-block";
+const userAgent = "kessan-tantei-tdnet-text-block-repair/2.0";
+const TEXT_BLOCK_VERSION = "tdnet-quarterly-v5-text-block-cf";
+const REPLACEABLE_VERSIONS = new Set([
+  "tdnet-quarterly-v4-text-block",
+  TEXT_BLOCK_VERSION,
+]);
 
 type Disclosure = {
   id: string;
   company_id: string;
   ticker: string;
   title: string;
+  document_type: string;
   disclosed_at: string;
   fiscal_period_end: string | null;
   quarter: number | null;
@@ -26,6 +32,9 @@ type QuarterlyRow = {
   operating_income: number | null;
   ordinary_income: number | null;
   profit_attributable_to_owners: number | null;
+  operating_cf: number | null;
+  investing_cf: number | null;
+  financing_cf: number | null;
   extraction_version: string | null;
   raw_financials: Record<string, unknown> | null;
 };
@@ -55,17 +64,6 @@ function targetRange() {
   return { from, to };
 }
 
-function isNonEarningsNotice(title: string) {
-  const normalized = title.normalize("NFKC").replace(/\s+/g, "");
-  return (
-    /決算短信.*(?:開示|公表|発表).*(?:45日|超える|超過|延期|遅延|延長|予定|時期|日程|変更|見込み|未定)/.test(
-      normalized
-    ) ||
-    /(?:45日|超える|超過|延期|遅延|延長).*(?:決算短信|決算発表)/.test(normalized) ||
-    /決算発表.*(?:延期|遅延|変更|予定|時期|日程|見込み|未定)/.test(normalized)
-  );
-}
-
 async function fetchBuffer(url: string) {
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -88,7 +86,7 @@ async function loadDisclosures(from: string, to: string) {
     const { data, error } = await supabaseAdmin
       .from("company_disclosures")
       .select(
-        "id, company_id, ticker, title, disclosed_at, fiscal_period_end, quarter, accounting_scope, xbrl_url"
+        "id, company_id, ticker, title, document_type, disclosed_at, fiscal_period_end, quarter, accounting_scope, xbrl_url"
       )
       .eq("source", "tdnet")
       .in("document_type", [
@@ -113,7 +111,7 @@ async function loadDisclosures(from: string, to: string) {
       row.fiscal_period_end !== null &&
       row.quarter !== null &&
       row.xbrl_url !== null &&
-      !isNonEarningsNotice(row.title)
+      !isTdnetNonEarningsDocument(row.title, row.xbrl_url)
   );
 }
 
@@ -121,7 +119,7 @@ async function loadQuarterlyRow(disclosure: Disclosure) {
   const { data, error } = await supabaseAdmin
     .from("company_quarterly_financials")
     .select(
-      "id, revenue, operating_income, ordinary_income, profit_attributable_to_owners, extraction_version, raw_financials"
+      "id, revenue, operating_income, ordinary_income, profit_attributable_to_owners, operating_cf, investing_cf, financing_cf, extraction_version, raw_financials"
     )
     .eq("company_id", disclosure.company_id)
     .eq("fiscal_period_end", disclosure.fiscal_period_end!)
@@ -142,6 +140,7 @@ async function main() {
   const disclosures = await loadDisclosures(from, to);
   let checked = 0;
   let repaired = 0;
+  let cashFlowTables = 0;
   const failures: string[] = [];
   const details: Array<Record<string, unknown>> = [];
 
@@ -149,20 +148,27 @@ async function main() {
     const row = await loadQuarterlyRow(disclosure);
     if (!row) continue;
 
-    const replaceFallback = row.extraction_version === TEXT_BLOCK_VERSION;
-    const needsFallback =
-      replaceFallback ||
-      [
-        row.revenue,
-        row.operating_income,
-        row.ordinary_income,
-        row.profit_attributable_to_owners,
-      ].some((value) => value === null);
-    if (!needsFallback) continue;
+    const replaceFallback = REPLACEABLE_VERSIONS.has(row.extraction_version ?? "");
+    const missingProfitMetric = [
+      row.revenue,
+      row.operating_income,
+      row.ordinary_income,
+      row.profit_attributable_to_owners,
+    ].some((value) => value === null);
+    const cashFlowEligible =
+      disclosure.quarter === 2 ||
+      disclosure.quarter === 4 ||
+      disclosure.document_type === "correction";
+    const missingCashFlowMetric =
+      cashFlowEligible &&
+      [row.operating_cf, row.investing_cf, row.financing_cf].some((value) => value === null);
+    if (!replaceFallback && !missingProfitMetric && !missingCashFlowMetric) continue;
 
     checked += 1;
     try {
       const parsed = parseTdnetTextBlockFinancials(await fetchBuffer(disclosure.xbrl_url!));
+      if (parsed.cashFlowTableFound) cashFlowTables += 1;
+
       const updates = {
         revenue: mergedValue(row.revenue, parsed.revenue, replaceFallback),
         operating_income: mergedValue(
@@ -176,12 +182,18 @@ async function main() {
           parsed.profitAttributableToOwners,
           replaceFallback
         ),
+        operating_cf: mergedValue(row.operating_cf, parsed.operatingCF, replaceFallback),
+        investing_cf: mergedValue(row.investing_cf, parsed.investingCF, replaceFallback),
+        financing_cf: mergedValue(row.financing_cf, parsed.financingCF, replaceFallback),
       };
       const changed =
         updates.revenue !== row.revenue ||
         updates.operating_income !== row.operating_income ||
         updates.ordinary_income !== row.ordinary_income ||
-        updates.profit_attributable_to_owners !== row.profit_attributable_to_owners;
+        updates.profit_attributable_to_owners !== row.profit_attributable_to_owners ||
+        updates.operating_cf !== row.operating_cf ||
+        updates.investing_cf !== row.investing_cf ||
+        updates.financing_cf !== row.financing_cf;
       if (!changed) continue;
 
       const { error } = await supabaseAdmin
@@ -204,9 +216,10 @@ async function main() {
       repaired += 1;
       details.push({
         ticker: disclosure.ticker,
-        sourceDocumentId: disclosure.id,
+        disclosureId: disclosure.id,
         fiscalPeriodEnd: disclosure.fiscal_period_end,
         quarter: disclosure.quarter,
+        cashFlowTableFound: parsed.cashFlowTableFound,
         ...updates,
       });
     } catch (error) {
@@ -223,6 +236,7 @@ async function main() {
         range: { from, to },
         disclosures: disclosures.length,
         checked,
+        cashFlowTables,
         repaired,
         details,
         failures,

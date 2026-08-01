@@ -5,16 +5,23 @@ export type TdnetTextBlockFinancials = {
   operatingIncome: number | null;
   ordinaryIncome: number | null;
   profitAttributableToOwners: number | null;
+  operatingCF: number | null;
+  investingCF: number | null;
+  financingCF: number | null;
   source: "html-table" | null;
+  cashFlowTableFound: boolean;
 };
 
-type MetricName =
+type ProfitMetricName =
   | "revenue"
   | "operatingIncome"
   | "ordinaryIncome"
   | "profitAttributableToOwners";
 
-const METRIC_LABELS: Array<{ metric: MetricName; patterns: RegExp[] }> = [
+type CashFlowMetricName = "operatingCF" | "investingCF" | "financingCF";
+type MetricName = ProfitMetricName | CashFlowMetricName;
+
+const PROFIT_METRIC_LABELS: Array<{ metric: ProfitMetricName; patterns: RegExp[] }> = [
   {
     metric: "profitAttributableToOwners",
     patterns: [
@@ -35,6 +42,33 @@ const METRIC_LABELS: Array<{ metric: MetricName; patterns: RegExp[] }> = [
   {
     metric: "revenue",
     patterns: [/売上高/, /売上収益/, /営業収益/, /経常収益/],
+  },
+];
+
+const CASH_FLOW_METRIC_LABELS: Array<{ metric: CashFlowMetricName; patterns: RegExp[] }> = [
+  {
+    metric: "operatingCF",
+    patterns: [
+      /営業活動によるキャッシュ・フロー/,
+      /営業活動から得たキャッシュ・フロー/,
+      /営業活動による現金及び現金同等物の増減額/,
+    ],
+  },
+  {
+    metric: "investingCF",
+    patterns: [
+      /投資活動によるキャッシュ・フロー/,
+      /投資活動に使用したキャッシュ・フロー/,
+      /投資活動による現金及び現金同等物の増減額/,
+    ],
+  },
+  {
+    metric: "financingCF",
+    patterns: [
+      /財務活動によるキャッシュ・フロー/,
+      /財務活動に使用したキャッシュ・フロー/,
+      /財務活動による現金及び現金同等物の増減額/,
+    ],
   },
 ];
 
@@ -87,9 +121,12 @@ function unitMultiplier(document: string) {
   return 1;
 }
 
-function findMetric(cells: string[]) {
+function findMetric(
+  cells: string[],
+  labels: Array<{ metric: MetricName; patterns: RegExp[] }>
+) {
   const label = cells.join(" ").replace(/\s+/g, "");
-  return METRIC_LABELS.find(({ patterns }) => patterns.some((pattern) => pattern.test(label))) ?? null;
+  return labels.find(({ patterns }) => patterns.some((pattern) => pattern.test(label))) ?? null;
 }
 
 function lastNumericCell(cells: string[]) {
@@ -97,13 +134,23 @@ function lastNumericCell(cells: string[]) {
   return values.at(-1) ?? null;
 }
 
-function parseDocument(document: string) {
-  const result: Omit<TdnetTextBlockFinancials, "source"> = {
+function emptyMetrics(): Omit<TdnetTextBlockFinancials, "source" | "cashFlowTableFound"> {
+  return {
     revenue: null,
     operatingIncome: null,
     ordinaryIncome: null,
     profitAttributableToOwners: null,
+    operatingCF: null,
+    investingCF: null,
+    financingCF: null,
   };
+}
+
+function parseDocument(
+  document: string,
+  labels: Array<{ metric: MetricName; patterns: RegExp[] }>
+) {
+  const result = emptyMetrics();
   const multiplier = unitMultiplier(document);
 
   for (const rowMatch of document.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
@@ -112,7 +159,7 @@ function parseDocument(document: string) {
     ].map((match) => cleanCell(match[1]));
     if (cells.length < 2) continue;
 
-    const metric = findMetric(cells);
+    const metric = findMetric(cells, labels);
     if (!metric || result[metric.metric] !== null) continue;
 
     const value = lastNumericCell(cells);
@@ -126,37 +173,45 @@ function parseDocument(document: string) {
   return result;
 }
 
+function isProfitLossEntry(name: string) {
+  return /(?:acpl|qcpl|statementofincome|profitandloss)/i.test(name);
+}
+
+function isCashFlowEntry(name: string) {
+  return /(?:accf|qccf|cash.?flow|statementofcashflows?)/i.test(name);
+}
+
 function entryPriority(name: string) {
-  if (/(?:acpl|qcpl)/i.test(name)) return 0;
+  if (isProfitLossEntry(name)) return 0;
   if (/\/Summary\//i.test(name)) return 1;
-  if (/(?:statementofincome|income)/i.test(name)) return 2;
+  if (isCashFlowEntry(name)) return 2;
   return 10;
 }
 
 export function parseTdnetTextBlockFinancials(buffer: Buffer): TdnetTextBlockFinancials {
   const zip = new AdmZip(buffer);
-  const documents = zip
+  const entries = zip
     .getEntries()
     .filter((entry) => !entry.isDirectory && /-ixbrl\.html?$/i.test(entry.entryName))
-    .sort((a, b) => entryPriority(a.entryName) - entryPriority(b.entryName))
-    .map((entry) => entry.getData().toString("utf8"));
+    .sort((a, b) => entryPriority(a.entryName) - entryPriority(b.entryName));
 
   const result: TdnetTextBlockFinancials = {
-    revenue: null,
-    operatingIncome: null,
-    ordinaryIncome: null,
-    profitAttributableToOwners: null,
+    ...emptyMetrics(),
     source: null,
+    cashFlowTableFound: entries.some((entry) => isCashFlowEntry(entry.entryName)),
   };
 
-  for (const document of documents) {
-    const parsed = parseDocument(document);
-    for (const metric of [
-      "revenue",
-      "operatingIncome",
-      "ordinaryIncome",
-      "profitAttributableToOwners",
-    ] as const) {
+  for (const entry of entries) {
+    const document = entry.getData().toString("utf8");
+    const labels = isCashFlowEntry(entry.entryName)
+      ? CASH_FLOW_METRIC_LABELS
+      : PROFIT_METRIC_LABELS;
+    const parsed = parseDocument(document, labels);
+    const metrics: MetricName[] = isCashFlowEntry(entry.entryName)
+      ? ["operatingCF", "investingCF", "financingCF"]
+      : ["revenue", "operatingIncome", "ordinaryIncome", "profitAttributableToOwners"];
+
+    for (const metric of metrics) {
       if (result[metric] === null && parsed[metric] !== null) {
         result[metric] = parsed[metric];
         result.source = "html-table";

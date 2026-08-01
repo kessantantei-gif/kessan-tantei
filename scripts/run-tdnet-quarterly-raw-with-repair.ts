@@ -18,5 +18,13 @@ if (syncExit !== 0) process.exit(syncExit);
 const cleanupExit = run("npm", ["run", "cleanup:tdnet-non-earnings", "--", ...args]);
 if (cleanupExit !== 0) process.exit(cleanupExit);
 
+const classificationExit = run("npm", [
+  "run",
+  "repair:tdnet-document-classification",
+  "--",
+  ...args,
+]);
+if (classificationExit !== 0) process.exit(classificationExit);
+
 const repairExit = run("npm", ["run", "repair:tdnet-text-block", "--", ...args]);
 if (repairExit !== 0) process.exit(repairExit);
