@@ -3,6 +3,9 @@ dotenv.config({ path: ".env.local" });
 
 import { supabaseAdmin } from "../lib/supabase";
 
+const DIRECTORY_PAGE_SIZE = 100;
+const requiredMarkets = ["growth", "prime", "standard"] as const;
+
 type ListedCompanyRow = {
   ticker: string;
   market_segment: string | null;
@@ -77,6 +80,14 @@ async function main() {
   const preparationCount = listedCompanies.filter(
     (row) => !indexableTickers.has(row.ticker)
   ).length;
+  const listedByMarket = countByMarket(listedCompanies);
+  const indexableByMarket = countByMarket(indexableCompanies);
+  const directoryPagesByMarket = Object.fromEntries(
+    requiredMarkets.map((market) => [
+      market,
+      Math.ceil((indexableByMarket[market] ?? 0) / DIRECTORY_PAGE_SIZE),
+    ])
+  );
 
   if (listedCompanies.length === 0) {
     throw new Error("上場企業マスタが0件です");
@@ -94,6 +105,15 @@ async function main() {
     throw new Error("company_analysesに証券コードの重複があります");
   }
 
+  for (const market of requiredMarkets) {
+    if ((indexableByMarket[market] ?? 0) === 0) {
+      throw new Error(`${market}市場の検索登録対象企業が0件です`);
+    }
+    if ((directoryPagesByMarket[market] ?? 0) === 0) {
+      throw new Error(`${market}市場の企業一覧ページ数が0です`);
+    }
+  }
+
   const report = {
     checkedAt: new Date().toISOString(),
     listedCompanies: listedCompanies.length,
@@ -101,8 +121,14 @@ async function main() {
     indexableListedCompanies: indexableCompanies.length,
     preparationCompaniesExcludedFromSitemap: preparationCount,
     analyzedButNotListed: analyzedButNotListed.length,
-    listedByMarket: countByMarket(listedCompanies),
-    indexableByMarket: countByMarket(indexableCompanies),
+    listedByMarket,
+    indexableByMarket,
+    directoryPageSize: DIRECTORY_PAGE_SIZE,
+    directoryPagesByMarket,
+    totalDirectoryPages: Object.values(directoryPagesByMarket).reduce(
+      (sum, value) => sum + value,
+      0
+    ),
     analyzedButNotListedSamples: analyzedButNotListed.slice(0, 10).map((row) => row.ticker),
   };
 
