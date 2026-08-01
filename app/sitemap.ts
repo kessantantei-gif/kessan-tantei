@@ -14,6 +14,10 @@ type CompanySitemapRow = {
   updated_at: string | null;
 };
 
+type AnalyzedCompanyRow = {
+  ticker: string;
+};
+
 type StaticSitemapPath = {
   path: string;
   changeFrequency: NonNullable<MetadataRoute.Sitemap[number]["changeFrequency"]>;
@@ -41,6 +45,28 @@ async function loadAllListedCompanies() {
   return rows;
 }
 
+async function loadAllAnalyzedTickers() {
+  const tickers = new Set<string>();
+  const pageSize = 1000;
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabaseAdmin
+      .from("company_analyses")
+      .select("ticker")
+      .neq("risk_level", "EXCLUDED")
+      .order("ticker", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) throw new Error(`sitemap分析済み会社取得失敗: ${error.message}`);
+    for (const row of (data ?? []) as AnalyzedCompanyRow[]) {
+      if (row.ticker) tickers.add(row.ticker);
+    }
+    if ((data ?? []).length < pageSize) break;
+  }
+
+  return tickers;
+}
+
 function validDate(value: string | null | undefined) {
   if (!value) return null;
   const parsed = new Date(value);
@@ -64,14 +90,17 @@ function newestDate(values: Array<Date | null>) {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const companies = await loadAllListedCompanies();
+  const [listedCompanies, analyzedTickers] = await Promise.all([
+    loadAllListedCompanies(),
+    loadAllAnalyzedTickers(),
+  ]);
+  const companies = listedCompanies.filter((company) => analyzedTickers.has(company.ticker));
   const latestFinancialUpdate = newestDate(companies.map(companyLastModified));
 
   const staticPaths: StaticSitemapPath[] = [
     { path: "", changeFrequency: "daily", priority: 1, dataDriven: true },
     { path: "/markets", changeFrequency: "daily", priority: 0.95, dataDriven: true },
     { path: "/latest-earnings", changeFrequency: "hourly", priority: 0.95, dataDriven: true },
-    { path: "/growth", changeFrequency: "daily", priority: 0.9, dataDriven: true },
     { path: "/standard", changeFrequency: "daily", priority: 0.9, dataDriven: true },
     { path: "/standard/ranking", changeFrequency: "daily", priority: 0.85, dataDriven: true },
     { path: "/prime", changeFrequency: "daily", priority: 0.9, dataDriven: true },
