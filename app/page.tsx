@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import MarketDirectoryCallout from "@/components/market-directory-callout";
 import GrowthHomePage from "./growth-home";
 
 const siteUrl = "https://kessan-tantei.jp";
@@ -36,4 +37,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default GrowthHomePage;
+export default function GrowthMarketHomePage() {
+  return (
+    <>
+      <GrowthHomePage />
+      <MarketDirectoryCallout marketSlug="growth" />
+    </>
+  );
+}
