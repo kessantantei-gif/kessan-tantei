@@ -50,7 +50,6 @@ export default function OpenGraphImage() {
         <div
           style={{
             position: "relative",
-            zIndex: 1,
             width: "100%",
             display: "flex",
             padding: "58px 72px",
@@ -71,7 +70,7 @@ export default function OpenGraphImage() {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  width: "fit-content",
+                  width: 270,
                   border: "1px solid #4ade80",
                   borderRadius: 999,
                   padding: "10px 24px",
