@@ -1,7 +1,11 @@
 import type { MetadataRoute } from "next";
-import { supabaseAdmin } from "@/lib/supabase";
+import {
+  MARKET_COMPANY_PAGE_SIZE,
+} from "@/lib/market-company-directory";
+import { marketList, type MarketSlug } from "@/lib/markets";
 import { rankingDefinitions } from "@/lib/rankings/definitions";
 import { seoThemeIds } from "@/lib/seo-hubs";
+import { supabaseAdmin } from "@/lib/supabase";
 
 const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://kessan-tantei.jp").replace(/\/$/, "");
 
@@ -9,6 +13,7 @@ export const dynamic = "force-dynamic";
 
 type CompanySitemapRow = {
   ticker: string;
+  market_segment: string | null;
   last_financial_update: string | null;
   last_market_master_update: string | null;
   updated_at: string | null;
@@ -32,8 +37,11 @@ async function loadAllListedCompanies() {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabaseAdmin
       .from("all_market_companies")
-      .select("ticker, last_financial_update, last_market_master_update, updated_at")
+      .select(
+        "ticker, market_segment, last_financial_update, last_market_master_update, updated_at"
+      )
       .eq("listing_status", "listed")
+      .in("market_segment", ["growth", "standard", "prime"])
       .order("ticker", { ascending: true })
       .range(from, from + pageSize - 1);
 
@@ -87,6 +95,16 @@ function newestDate(values: Array<Date | null>) {
     .map((value) => value.getTime());
   if (timestamps.length === 0) return null;
   return new Date(Math.max(...timestamps));
+}
+
+function isMarketSlug(value: string | null): value is MarketSlug {
+  return value === "growth" || value === "standard" || value === "prime";
+}
+
+function marketDirectoryPath(market: MarketSlug, pageNumber: number) {
+  return pageNumber <= 1
+    ? `/companies/${market}`
+    : `/companies/${market}/${pageNumber}`;
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -144,6 +162,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...(latestFinancialUpdate ? { lastModified: latestFinancialUpdate } : {}),
   }));
 
+  const directoryPages: MetadataRoute.Sitemap = marketList.flatMap((market) => {
+    const marketCompanies = companies.filter(
+      (company) =>
+        isMarketSlug(company.market_segment) && company.market_segment === market.slug
+    );
+    const totalPages = Math.ceil(
+      marketCompanies.length / MARKET_COMPANY_PAGE_SIZE
+    );
+    const lastModified = newestDate(marketCompanies.map(companyLastModified));
+
+    return Array.from({ length: totalPages }, (_, index) => ({
+      url: `${appUrl}${marketDirectoryPath(market.slug, index + 1)}`,
+      changeFrequency: "daily" as const,
+      priority: index === 0 ? 0.88 : 0.8,
+      ...(lastModified ? { lastModified } : {}),
+    }));
+  });
+
   const companyPages: MetadataRoute.Sitemap = companies.map((company) => {
     const lastModified = companyLastModified(company);
     return {
@@ -154,5 +190,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     };
   });
 
-  return [...staticPages, ...rankingPages, ...themePages, ...companyPages];
+  return [
+    ...staticPages,
+    ...rankingPages,
+    ...themePages,
+    ...directoryPages,
+    ...companyPages,
+  ];
 }

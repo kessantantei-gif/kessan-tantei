@@ -5,7 +5,14 @@ import path from "node:path";
 config({ path: ".env.local" });
 
 type Severity = "ERROR" | "WARNING" | "INFO";
-type Area = "metadata" | "structured-data" | "files" | "performance" | "copy" | "links" | "sitemap";
+type Area =
+  | "metadata"
+  | "structured-data"
+  | "files"
+  | "performance"
+  | "copy"
+  | "links"
+  | "sitemap";
 
 type Item = {
   severity: Severity;
@@ -19,7 +26,12 @@ const files = {
   growthHome: "app/growth-home.tsx",
   growthOg: "app/opengraph-image.tsx",
   markets: "app/markets/page.tsx",
+  prime: "app/prime/page.tsx",
+  standard: "app/standard/page.tsx",
   latestEarnings: "app/latest-earnings/page.tsx",
+  marketDirectory: "app/companies/[market]/[[...page]]/page.tsx",
+  marketDirectoryData: "lib/market-company-directory.ts",
+  marketDirectoryCallout: "components/market-directory-callout.tsx",
   robots: "app/robots.ts",
   sitemap: "app/sitemap.ts",
   companyPage: "app/company/[ticker]/page.tsx",
@@ -109,7 +121,12 @@ function auditMetadata(items: Item[]) {
       `root Growth page metadata is missing ${String(keyword)}`
     );
   }
-  for (const keyword of ["ImageResponse", "GROWTH MARKET", "グロース市場を、決算から見抜く"]) {
+
+  for (const keyword of [
+    "ImageResponse",
+    "GROWTH MARKET",
+    "グロース市場を、決算から見抜く",
+  ]) {
     requireText(
       items,
       files.growthOg,
@@ -133,6 +150,7 @@ function auditMetadata(items: Item[]) {
     "metadata",
     "/latest-earnings canonical is missing or incorrect"
   );
+
   for (const keyword of ["title", "description", "openGraph", "twitter"]) {
     requireText(
       items,
@@ -157,6 +175,24 @@ function auditMetadata(items: Item[]) {
       keyword,
       "metadata",
       `company page metadata is missing ${keyword}`
+    );
+  }
+
+  for (const keyword of [
+    "export async function generateMetadata",
+    "alternates: { canonical }",
+    "robots: { index: true, follow: true }",
+    "openGraph:",
+    "twitter:",
+    "pageNumberFromParts",
+    "redirect(pagePath(market.slug, 1))",
+  ]) {
+    requireText(
+      items,
+      files.marketDirectory,
+      keyword,
+      "metadata",
+      `market company directory metadata is missing ${keyword}`
     );
   }
 
@@ -206,6 +242,13 @@ function auditStructuredData(items: Item[]) {
       "structured-data",
       `/latest-earnings is missing ${keyword}`
     );
+    requireText(
+      items,
+      files.marketDirectory,
+      keyword,
+      "structured-data",
+      `market company directory is missing ${keyword}`
+    );
   }
 
   for (const keyword of [
@@ -233,6 +276,10 @@ function auditSitemap(items: Item[]) {
     "loadAllAnalyzedTickers",
     'neq("risk_level", "EXCLUDED")',
     "analyzedTickers.has(company.ticker)",
+    "MARKET_COMPANY_PAGE_SIZE",
+    "marketDirectoryPath",
+    "directoryPages",
+    "market_segment",
   ]) {
     requireText(
       items,
@@ -254,8 +301,15 @@ function auditSitemap(items: Item[]) {
     if (/path:\s*["']\/growth["']/.test(sitemap)) {
       add(items, "ERROR", "sitemap", "redirect URL /growth must not be included in sitemap");
     }
-    if (!/listedCompanies\.filter\(\(company\)\s*=>\s*analyzedTickers\.has\(company\.ticker\)\)/.test(sitemap)) {
+    if (
+      !/listedCompanies\.filter\(\(company\)\s*=>\s*analyzedTickers\.has\(company\.ticker\)\)/.test(
+        sitemap
+      )
+    ) {
       add(items, "ERROR", "sitemap", "company sitemap must be filtered to analyzed companies");
+    }
+    if (!sitemap.includes("...directoryPages")) {
+      add(items, "ERROR", "sitemap", "market directory pages are not returned by sitemap");
     }
   }
 }
@@ -263,6 +317,13 @@ function auditSitemap(items: Item[]) {
 function auditLinks(items: Item[]) {
   const requiredLinks = [
     { file: files.growthHome, value: "/ranking" },
+    { file: files.home, value: '<MarketDirectoryCallout marketSlug="growth" />' },
+    { file: files.prime, value: '<MarketDirectoryCallout marketSlug="prime" />' },
+    { file: files.standard, value: '<MarketDirectoryCallout marketSlug="standard" />' },
+    { file: files.marketDirectoryCallout, value: "/companies/" },
+    { file: files.markets, value: "/companies/" },
+    { file: files.marketDirectory, value: "/company/" },
+    { file: files.marketDirectory, value: "/companies/" },
     { file: files.siteNav, value: "/latest-earnings" },
     { file: files.latestEarnings, value: "/company/" },
     { file: files.companyLayout, value: "/latest-earnings" },
@@ -283,6 +344,21 @@ function auditLinks(items: Item[]) {
       check.value,
       "links",
       `${check.file} does not contain ${check.value}`
+    );
+  }
+
+  for (const keyword of [
+    "MARKET_COMPANY_PAGE_SIZE = 100",
+    "unstable_cache",
+    'eq("listing_status", "listed")',
+    'neq("risk_level", "EXCLUDED")',
+  ]) {
+    requireText(
+      items,
+      files.marketDirectoryData,
+      keyword,
+      "links",
+      `market directory data loader is missing ${keyword}`
     );
   }
 }
@@ -308,6 +384,13 @@ function auditCopy(items: Item[]) {
     "プライム・スタンダード・グロース",
     "copy",
     "/markets must remain the all-market entry"
+  );
+  requireText(
+    items,
+    files.marketDirectory,
+    "決算探偵で財務分析が完了している",
+    "copy",
+    "market company directory must explain that only analyzed companies are listed"
   );
 
   const forbiddenChecks = [
@@ -339,6 +422,13 @@ function auditPerformance(items: Item[]) {
     "performance",
     "Vercel Analytics is not mounted",
     "INFO"
+  );
+  requireText(
+    items,
+    files.marketDirectoryData,
+    "revalidate: 3600",
+    "performance",
+    "market company directory data must be cached"
   );
 }
 
@@ -372,7 +462,12 @@ function main() {
   const info = items.filter((item) => item.severity === "INFO");
 
   console.log("=== SEO audit ===");
-  console.log({ score: score(items), errors: errors.length, warnings: warnings.length, info: info.length });
+  console.log({
+    score: score(items),
+    errors: errors.length,
+    warnings: warnings.length,
+    info: info.length,
+  });
   printGroup("ERRORS", errors);
   printGroup("WARNINGS", warnings);
   printGroup("INFO", info);

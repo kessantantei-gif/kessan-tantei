@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import AllMarketCompanySearch from "@/components/all-market-company-search";
 import MarketPortalCard from "@/components/market-portal-card";
 import { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";
@@ -95,6 +96,38 @@ export default async function MarketsPage() {
           <div className="mt-10 grid gap-5 lg:grid-cols-3">
             {marketList.map((market) => (
               <MarketPortalCard key={market.slug} market={market} />
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-10 rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-8">
+          <p className="text-xs font-black tracking-[0.25em] text-green-300">
+            COMPANY DIRECTORIES
+          </p>
+          <h2 className="mt-2 text-2xl font-black sm:text-3xl">
+            市場別の全企業一覧
+          </h2>
+          <p className="mt-3 max-w-4xl text-sm leading-7 text-slate-400">
+            検索ボックスを使わず、分析済み企業を証券コード順に確認できます。各社の財務スコア、売上成長率、営業利益率、Danger Scoreへ直接移動できます。
+          </p>
+          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+            {marketList.map((market) => (
+              <Link
+                key={`directory-${market.slug}`}
+                href={`/companies/${market.slug}`}
+                className="group rounded-2xl border border-white/10 bg-black/20 p-5 transition hover:-translate-y-0.5 hover:border-green-300/35 hover:bg-white/10"
+              >
+                <p className="text-xs font-black tracking-[0.18em] text-slate-500">
+                  {market.englishName.toUpperCase()} DIRECTORY
+                </p>
+                <h3 className="mt-2 text-xl font-black">{market.name}</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-400">
+                  分析済み企業を100社ずつのHTML一覧で確認します。
+                </p>
+                <p className="mt-4 text-sm font-black text-green-300">
+                  全企業一覧を見る →
+                </p>
+              </Link>
             ))}
           </div>
         </section>

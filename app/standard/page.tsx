@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import MarketBuildingPage from "@/components/market-building-page";
+import MarketDirectoryCallout from "@/components/market-directory-callout";
 
 export const metadata: Metadata = {
   title: "スタンダード市場の決算分析 | 決算探偵",
@@ -9,5 +10,10 @@ export const metadata: Metadata = {
 };
 
 export default function StandardMarketPage() {
-  return <MarketBuildingPage marketSlug="standard" />;
+  return (
+    <>
+      <MarketBuildingPage marketSlug="standard" />
+      <MarketDirectoryCallout marketSlug="standard" />
+    </>
+  );
 }
