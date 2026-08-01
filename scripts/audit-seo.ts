@@ -16,6 +16,7 @@ type Item = {
 const files = {
   layout: "app/layout.tsx",
   home: "app/page.tsx",
+  growthHome: "app/growth-home.tsx",
   markets: "app/markets/page.tsx",
   latestEarnings: "app/latest-earnings/page.tsx",
   robots: "app/robots.ts",
@@ -97,7 +98,13 @@ function auditMetadata(items: Item[]) {
     "metadata",
     "home canonical must point to /"
   );
-  requireText(items, files.home, "日本株", "copy", "home page must describe Japanese stocks");
+  requireText(
+    items,
+    files.home,
+    "グロース市場",
+    "copy",
+    "root home metadata must describe the Growth Market"
+  );
   requireText(
     items,
     files.markets,
@@ -208,7 +215,7 @@ function auditSitemap(items: Item[]) {
 
 function auditLinks(items: Item[]) {
   const requiredLinks = [
-    { file: files.home, value: "/latest-earnings" },
+    { file: files.growthHome, value: "/ranking" },
     { file: files.siteNav, value: "/latest-earnings" },
     { file: files.latestEarnings, value: "/company/" },
     { file: files.companyLayout, value: "/latest-earnings" },
@@ -233,15 +240,37 @@ function auditLinks(items: Item[]) {
 }
 
 function auditCopy(items: Item[]) {
-  const checks = [
+  requireText(
+    items,
+    files.growthHome,
+    "GROWTH MARKET FINANCIAL DASHBOARD",
+    "copy",
+    "root page must remain the Growth Market dashboard"
+  );
+  requireText(
+    items,
+    files.growthHome,
+    "グロース市場を、",
+    "copy",
+    "root page Growth Market heading is missing"
+  );
+  requireText(
+    items,
+    files.markets,
+    "プライム・スタンダード・グロース",
+    "copy",
+    "/markets must remain the all-market entry"
+  );
+
+  const forbiddenChecks = [
     { file: files.layout, forbidden: "グロース市場特化" },
-    { file: files.home, forbidden: "GROWTH MARKET FINANCIAL DASHBOARD" },
-    { file: files.home, forbidden: "グロース市場を、" },
+    { file: files.growthHome, forbidden: "JAPAN STOCK EARNINGS & FINANCIAL DASHBOARD" },
+    { file: files.growthHome, forbidden: "日本株を、" },
   ];
 
-  for (const check of checks) {
+  for (const check of forbiddenChecks) {
     if (exists(check.file) && read(check.file).includes(check.forbidden)) {
-      add(items, "ERROR", "copy", `obsolete copy remains: ${check.file} / ${check.forbidden}`);
+      add(items, "ERROR", "copy", `incorrect copy remains: ${check.file} / ${check.forbidden}`);
     }
   }
 }
