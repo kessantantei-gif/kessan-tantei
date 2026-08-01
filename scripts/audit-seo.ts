@@ -17,11 +17,14 @@ const files = {
   layout: "app/layout.tsx",
   home: "app/page.tsx",
   growthHome: "app/growth-home.tsx",
+  growthOg: "app/opengraph-image.tsx",
   markets: "app/markets/page.tsx",
   latestEarnings: "app/latest-earnings/page.tsx",
   robots: "app/robots.ts",
   sitemap: "app/sitemap.ts",
+  companyPage: "app/company/[ticker]/page.tsx",
   companyLayout: "app/company/[ticker]/layout.tsx",
+  companyPlaceholder: "components/company-index-placeholder.tsx",
   siteNav: "components/site-nav.tsx",
   allMarketSearch: "components/all-market-company-search.tsx",
   xShare: "components/x-share-button.tsx",
@@ -91,20 +94,31 @@ function auditMetadata(items: Item[]) {
     );
   }
 
-  requireText(
-    items,
-    files.home,
+  for (const keyword of [
     /canonical:\s*["']\/["']/,
-    "metadata",
-    "home canonical must point to /"
-  );
-  requireText(
-    items,
-    files.home,
     "グロース市場",
-    "copy",
-    "root home metadata must describe the Growth Market"
-  );
+    "openGraph",
+    "twitter",
+    "/opengraph-image",
+  ]) {
+    requireText(
+      items,
+      files.home,
+      keyword,
+      "metadata",
+      `root Growth page metadata is missing ${String(keyword)}`
+    );
+  }
+  for (const keyword of ["ImageResponse", "GROWTH MARKET", "グロース市場を、決算から見抜く"]) {
+    requireText(
+      items,
+      files.growthOg,
+      keyword,
+      "metadata",
+      `Growth Open Graph image is missing ${keyword}`
+    );
+  }
+
   requireText(
     items,
     files.markets,
@@ -128,21 +142,45 @@ function auditMetadata(items: Item[]) {
       `/latest-earnings metadata is missing ${keyword}`
     );
   }
-  requireText(
-    items,
-    files.companyLayout,
-    "alternates: { canonical: url }",
-    "metadata",
-    "company canonical metadata is not detected"
-  );
-  requireText(
-    items,
-    files.companyLayout,
-    "keywords:",
-    "metadata",
-    "company-specific keywords are not detected",
-    "WARNING"
-  );
+
+  for (const keyword of [
+    "export async function generateMetadata",
+    "alternates:",
+    "canonical:",
+    "robots:",
+    "openGraph:",
+    "twitter:",
+  ]) {
+    requireText(
+      items,
+      files.companyPage,
+      keyword,
+      "metadata",
+      `company page metadata is missing ${keyword}`
+    );
+  }
+
+  for (const keyword of [
+    '<meta name="robots" content="noindex,follow" />',
+    '<meta name="googlebot" content="noindex,follow" />',
+  ]) {
+    requireText(
+      items,
+      files.companyPlaceholder,
+      keyword,
+      "metadata",
+      `company placeholder must include ${keyword}`
+    );
+  }
+
+  if (exists(files.companyLayout) && read(files.companyLayout).includes("generateMetadata")) {
+    add(
+      items,
+      "ERROR",
+      "metadata",
+      "company metadata is duplicated between page.tsx and layout.tsx"
+    );
+  }
 }
 
 function auditStructuredData(items: Item[]) {
@@ -192,6 +230,9 @@ function auditSitemap(items: Item[]) {
     "last_market_master_update",
     "companyLastModified",
     'path: "/latest-earnings"',
+    "loadAllAnalyzedTickers",
+    'neq("risk_level", "EXCLUDED")',
+    "analyzedTickers.has(company.ticker)",
   ]) {
     requireText(
       items,
@@ -210,6 +251,12 @@ function auditSitemap(items: Item[]) {
     if (/companyPages[\s\S]*lastModified:\s*now/.test(sitemap)) {
       add(items, "ERROR", "sitemap", "company pages still use a synthetic current timestamp");
     }
+    if (/path:\s*["']\/growth["']/.test(sitemap)) {
+      add(items, "ERROR", "sitemap", "redirect URL /growth must not be included in sitemap");
+    }
+    if (!/listedCompanies\.filter\(\(company\)\s*=>\s*analyzedTickers\.has\(company\.ticker\)\)/.test(sitemap)) {
+      add(items, "ERROR", "sitemap", "company sitemap must be filtered to analyzed companies");
+    }
   }
 }
 
@@ -221,6 +268,7 @@ function auditLinks(items: Item[]) {
     { file: files.companyLayout, value: "/latest-earnings" },
     { file: files.markets, value: "AllMarketCompanySearch" },
     { file: files.allMarketSearch, value: "/company/" },
+    { file: files.companyPlaceholder, value: 'if (value === "growth") return "/"' },
     { file: files.xShare, value: 'searchParams.set("utm_source", "x")' },
     { file: files.xShare, value: 'searchParams.set("utm_medium", "social")' },
     { file: files.xShare, value: 'searchParams.set("utm_campaign", "company_share")' },
