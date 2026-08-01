@@ -5,21 +5,25 @@ import path from "node:path";
 config({ path: ".env.local" });
 
 type Severity = "ERROR" | "WARNING" | "INFO";
+type Area = "metadata" | "structured-data" | "files" | "performance" | "copy" | "links" | "sitemap";
 
 type Item = {
   severity: Severity;
-  area: "metadata" | "structured-data" | "files" | "performance" | "copy" | "links";
+  area: Area;
   message: string;
 };
 
 const files = {
   layout: "app/layout.tsx",
+  home: "app/page.tsx",
   markets: "app/markets/page.tsx",
+  latestEarnings: "app/latest-earnings/page.tsx",
   robots: "app/robots.ts",
   sitemap: "app/sitemap.ts",
   ranking: "app/ranking/page.tsx",
   companyPage: "app/company/[ticker]/page.tsx",
   companyLayout: "app/company/[ticker]/layout.tsx",
+  siteNav: "components/site-nav.tsx",
   marketRanking: "components/market-ranking-page.tsx",
   jsonLd: "components/seo-json-ld.tsx",
   og: "public/og-image-all-markets.png",
@@ -36,8 +40,26 @@ function read(filePath: string) {
   return fs.readFileSync(path.join(process.cwd(), filePath), "utf8");
 }
 
-function add(items: Item[], severity: Severity, area: Item["area"], message: string) {
+function add(items: Item[], severity: Severity, area: Area, message: string) {
   items.push({ severity, area, message });
+}
+
+function requireText(
+  items: Item[],
+  filePath: string,
+  keyword: string | RegExp,
+  area: Area,
+  message: string,
+  severity: Severity = "ERROR"
+) {
+  if (!exists(filePath)) {
+    add(items, "ERROR", "files", `${filePath} is missing`);
+    return;
+  }
+  const content = read(filePath);
+  const found =
+    typeof keyword === "string" ? content.includes(keyword) : keyword.test(content);
+  if (!found) add(items, severity, area, message);
 }
 
 function listSourceFiles(root: string): string[] {
@@ -54,33 +76,36 @@ function listSourceFiles(root: string): string[] {
 }
 
 function auditMetadata(items: Item[]) {
-  if (!exists(files.layout)) {
-    add(items, "ERROR", "metadata", "app/layout.tsx is missing");
-    return;
+  for (const filePath of [files.layout, files.home, files.markets, files.latestEarnings, files.companyLayout]) {
+    if (!exists(filePath)) add(items, "ERROR", "files", `${filePath} is missing`);
   }
+  if (!exists(files.layout) || !exists(files.home)) return;
 
   const layout = read(files.layout);
-  const checks = [
+  const layoutChecks = [
     ["metadataBase", "metadataBase is missing"],
-    ["title", "title metadata is missing"],
-    ["description", "description metadata is missing"],
-    ["alternates", "canonical alternates metadata is missing"],
+    ["title", "site title metadata is missing"],
+    ["description", "site description metadata is missing"],
     ["openGraph", "Open Graph metadata is missing"],
     ["twitter", "Twitter Card metadata is missing"],
     ["verification", "Search Console verification is missing"],
   ] as const;
 
-  for (const [keyword, message] of checks) {
+  for (const [keyword, message] of layoutChecks) {
     if (!layout.includes(keyword)) {
       add(items, keyword === "verification" ? "INFO" : "ERROR", "metadata", message);
     }
   }
 
-  if (!/canonical:\s*["']\/["']/.test(layout)) {
-    add(items, "ERROR", "metadata", "root canonical must point to /");
+  const home = read(files.home);
+  if (!/canonical:\s*["']\/["']/.test(home)) {
+    add(items, "ERROR", "metadata", "home canonical must point to /");
   }
-  if (/canonical:\s*["']\/markets["']/.test(layout)) {
-    add(items, "ERROR", "metadata", "root layout must not force /markets as canonical");
+  if (!home.includes("日本株")) {
+    add(items, "ERROR", "copy", "home page does not clearly describe all Japanese stocks");
+  }
+  if (!home.includes("/latest-earnings")) {
+    add(items, "ERROR", "links", "home page does not link to /latest-earnings");
   }
 
   if (exists(files.markets)) {
@@ -90,10 +115,25 @@ function auditMetadata(items: Item[]) {
     }
   }
 
+  if (exists(files.latestEarnings)) {
+    const latest = read(files.latestEarnings);
+    if (!/canonical:\s*["']\/latest-earnings["']/.test(latest)) {
+      add(items, "ERROR", "metadata", "/latest-earnings canonical is missing or incorrect");
+    }
+    for (const keyword of ["title", "description", "openGraph", "twitter"] as const) {
+      if (!latest.includes(keyword)) {
+        add(items, "ERROR", "metadata", `/latest-earnings ${keyword} metadata is missing`);
+      }
+    }
+  }
+
   if (exists(files.companyLayout)) {
     const companyLayout = read(files.companyLayout);
     if (!companyLayout.includes("alternates: { canonical: url }")) {
-      add(items, "WARNING", "metadata", "company page canonical metadata is not detected");
+      add(items, "ERROR", "metadata", "company page canonical metadata is not detected");
+    }
+    if (!companyLayout.includes("keywords:")) {
+      add(items, "WARNING", "metadata", "company-specific keywords are not detected");
     }
   }
 }
@@ -105,21 +145,70 @@ function auditStructuredData(items: Item[]) {
 
   if (exists(files.layout)) {
     const layout = read(files.layout);
-    if (!layout.includes("SeoJsonLd")) add(items, "WARNING", "structured-data", "site-wide JSON-LD is not mounted in layout");
-    if (!layout.includes("websiteJsonLd")) add(items, "WARNING", "structured-data", "website JSON-LD is not mounted");
-    if (!layout.includes("organizationJsonLd")) add(items, "WARNING", "structured-data", "organization JSON-LD is not mounted");
+    if (!layout.includes("SeoJsonLd")) {
+      add(items, "WARNING", "structured-data", "site-wide JSON-LD is not mounted in layout");
+    }
+    if (!layout.includes("websiteJsonLd")) {
+      add(items, "WARNING", "structured-data", "website JSON-LD is not mounted");
+    }
+    if (!layout.includes("organizationJsonLd")) {
+      add(items, "WARNING", "structured-data", "organization JSON-LD is not mounted");
+    }
   }
 
-  if (exists(files.ranking)) {
-    const ranking = read(files.ranking);
-    if (!ranking.includes("application/ld+json")) add(items, "WARNING", "structured-data", "ranking page JSON-LD is missing");
+  if (exists(files.latestEarnings)) {
+    const latest = read(files.latestEarnings);
+    for (const keyword of ["application/ld+json", '"@type": "ItemList"', '"@type": "BreadcrumbList"']) {
+      if (!latest.includes(keyword)) {
+        add(items, "ERROR", "structured-data", `/latest-earnings is missing ${keyword}`);
+      }
+    }
+  }
+
+  if (exists(files.companyLayout)) {
+    const companyLayout = read(files.companyLayout);
+    for (const keyword of ["application/ld+json", '"@type": "WebPage"', '"@type": "BreadcrumbList"', "tickerSymbol"]) {
+      if (!companyLayout.includes(keyword)) {
+        add(items, "ERROR", "structured-data", `company page is missing ${keyword}`);
+      }
+    }
+  }
+
+  if (exists(files.ranking) && !read(files.ranking).includes("application/ld+json")) {
+    add(items, "WARNING", "structured-data", "ranking page JSON-LD is missing");
   }
 }
 
 function auditFiles(items: Item[]) {
   for (const [name, filePath] of Object.entries(files)) {
     if (name === "companyPage") continue;
-    if (!exists(filePath)) add(items, name === "og" ? "WARNING" : "ERROR", "files", `${filePath} is missing`);
+    if (!exists(filePath)) {
+      add(items, name === "og" ? "WARNING" : "ERROR", "files", `${filePath} is missing`);
+    }
+  }
+}
+
+function auditSitemap(items: Item[]) {
+  if (!exists(files.sitemap)) return;
+  const sitemap = read(files.sitemap);
+
+  for (const keyword of [
+    "last_financial_update",
+    "last_market_master_update",
+    "companyLastModified",
+    'path: "/latest-earnings"',
+  ]) {
+    if (!sitemap.includes(keyword)) {
+      add(items, "ERROR", "sitemap", `sitemap does not contain ${keyword}`);
+    }
+  }
+
+  if (/const\s+now\s*=\s*new\s+Date\(\)/.test(sitemap)) {
+    add(items, "ERROR", "sitemap", "sitemap must not assign the current time to every URL");
+  }
+
+  if (/companyPages[\s\S]*lastModified:\s*now/.test(sitemap)) {
+    add(items, "ERROR", "sitemap", "company pages still use a synthetic current timestamp");
   }
 }
 
@@ -144,6 +233,9 @@ function auditCopyAndLinks(items: Item[]) {
     { file: "components/x-share-button.tsx", value: "#決算探偵" },
     { file: "app/markets/page.tsx", value: "/company/" },
     { file: "components/market-portal-card.tsx", value: "rankingHref" },
+    { file: files.siteNav, value: "/latest-earnings" },
+    { file: files.latestEarnings, value: "/company/" },
+    { file: files.companyLayout, value: "/latest-earnings" },
   ];
 
   for (const check of requiredLinks) {
@@ -158,10 +250,13 @@ function auditCopyAndLinks(items: Item[]) {
 }
 
 function auditPerformance(items: Item[]) {
-  if (exists(files.layout)) {
-    const layout = read(files.layout);
-    if (!layout.includes("SpeedInsights")) add(items, "INFO", "performance", "Vercel Speed Insights is not mounted");
-    if (!layout.includes("Analytics")) add(items, "INFO", "performance", "Vercel Analytics is not mounted");
+  if (!exists(files.layout)) return;
+  const layout = read(files.layout);
+  if (!layout.includes("SpeedInsights")) {
+    add(items, "INFO", "performance", "Vercel Speed Insights is not mounted");
+  }
+  if (!layout.includes("Analytics")) {
+    add(items, "INFO", "performance", "Vercel Analytics is not mounted");
   }
 }
 
@@ -185,6 +280,7 @@ function main() {
   auditMetadata(items);
   auditStructuredData(items);
   auditFiles(items);
+  auditSitemap(items);
   auditCopyAndLinks(items);
   auditPerformance(items);
 
