@@ -28,9 +28,11 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://kessan-tantei.jp"),
-  title: "決算探偵 | 日本株全市場の財務分析ランキング",
+  applicationName: "決算探偵",
+  title: "日本株の決算分析・財務ランキング | 決算探偵",
   description:
-    "決算探偵は、プライム・スタンダード・グロースの日本株を対象にした財務分析ランキングです。EDINET決算データを自動解析し、成長性・収益性・キャッシュ・安全性・リスクシグナルから企業の特徴を可視化します。",
+    "決算探偵は、プライム・スタンダード・グロースの日本株を対象に、最新決算、売上・利益・キャッシュフロー、財務スコア、リスクシグナルを比較できる財務分析サイトです。",
+  category: "finance",
   robots: {
     index: true,
     follow: true,
@@ -46,9 +48,9 @@ export const metadata: Metadata = {
     google: "GprsF0U3m9SZj2MJ5AUo9FK-Ame_DGhpPLv5LKiIyqA",
   },
   openGraph: {
-    title: "決算探偵 | 日本株全市場の財務分析ランキング",
+    title: "日本株の決算分析・財務ランキング | 決算探偵",
     description:
-      "プライム・スタンダード・グロースの上場企業を、決算データから成長性・収益性・キャッシュ・財務リスクで比較できます。",
+      "最新決算と財務データから、プライム・スタンダード・グロースの上場企業を比較・分析できます。",
     url: "https://kessan-tantei.jp/",
     siteName: "決算探偵",
     locale: "ja_JP",
@@ -58,15 +60,15 @@ export const metadata: Metadata = {
         url: "https://kessan-tantei.jp/og-image-all-markets.png",
         width: 1200,
         height: 630,
-        alt: "決算探偵 OGP",
+        alt: "決算探偵 日本株の決算分析・財務ランキング",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "決算探偵 | 日本株全市場の財務分析ランキング",
+    title: "日本株の決算分析・財務ランキング | 決算探偵",
     description:
-      "プライム・スタンダード・グロースの上場企業を、決算データから比較・分析できます。",
+      "最新決算と財務データから、日本株の成長性・収益性・キャッシュ・財務リスクを比較できます。",
     images: ["https://kessan-tantei.jp/og-image-all-markets.png"],
   },
 };
