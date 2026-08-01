@@ -6,12 +6,15 @@ on:
     paths:
       - "app/layout.tsx"
       - "app/page.tsx"
+      - "app/opengraph-image.tsx"
       - "app/sitemap.ts"
       - "app/latest-earnings/**"
       - "app/company/[ticker]/**"
+      - "components/company-index-placeholder.tsx"
       - "components/site-nav.tsx"
       - "components/seo-json-ld.tsx"
       - "scripts/audit-seo.ts"
+      - "scripts/verify-indexable-company-data.ts"
       - "scripts/verify-latest-earnings-data.ts"
       - ".github/workflows/seo-discovery.yml"
   push:
@@ -20,12 +23,15 @@ on:
     paths:
       - "app/layout.tsx"
       - "app/page.tsx"
+      - "app/opengraph-image.tsx"
       - "app/sitemap.ts"
       - "app/latest-earnings/**"
       - "app/company/[ticker]/**"
+      - "components/company-index-placeholder.tsx"
       - "components/site-nav.tsx"
       - "components/seo-json-ld.tsx"
       - "scripts/audit-seo.ts"
+      - "scripts/verify-indexable-company-data.ts"
       - "scripts/verify-latest-earnings-data.ts"
       - ".github/workflows/seo-discovery.yml"
 
@@ -55,6 +61,9 @@ jobs:
 
       - name: Audit SEO structure and internal links
         run: npm run audit:seo
+
+      - name: Verify indexable company production data
+        run: npx tsx scripts/verify-indexable-company-data.ts
 
       - name: Verify latest earnings production data
         run: npx tsx scripts/verify-latest-earnings-data.ts
