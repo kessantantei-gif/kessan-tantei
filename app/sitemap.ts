@@ -9,6 +9,16 @@ export const dynamic = "force-dynamic";
 
 type CompanySitemapRow = {
   ticker: string;
+  last_financial_update: string | null;
+  last_market_master_update: string | null;
+  updated_at: string | null;
+};
+
+type StaticSitemapPath = {
+  path: string;
+  changeFrequency: NonNullable<MetadataRoute.Sitemap[number]["changeFrequency"]>;
+  priority: number;
+  dataDriven?: boolean;
 };
 
 async function loadAllListedCompanies() {
@@ -18,7 +28,7 @@ async function loadAllListedCompanies() {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabaseAdmin
       .from("all_market_companies")
-      .select("ticker")
+      .select("ticker, last_financial_update, last_market_master_update, updated_at")
       .eq("listing_status", "listed")
       .order("ticker", { ascending: true })
       .range(from, from + pageSize - 1);
@@ -31,62 +41,89 @@ async function loadAllListedCompanies() {
   return rows;
 }
 
+function validDate(value: string | null | undefined) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function companyLastModified(company: CompanySitemapRow) {
+  return (
+    validDate(company.last_financial_update) ??
+    validDate(company.updated_at) ??
+    validDate(company.last_market_master_update)
+  );
+}
+
+function newestDate(values: Array<Date | null>) {
+  const timestamps = values
+    .filter((value): value is Date => value !== null)
+    .map((value) => value.getTime());
+  if (timestamps.length === 0) return null;
+  return new Date(Math.max(...timestamps));
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const now = new Date();
-  const staticPaths = [
-    ["", "daily", 1],
-    ["/markets", "daily", 0.95],
-    ["/growth", "daily", 0.9],
-    ["/standard", "daily", 0.9],
-    ["/standard/ranking", "daily", 0.85],
-    ["/prime", "daily", 0.9],
-    ["/prime/ranking", "daily", 0.85],
-    ["/updates", "daily", 0.9],
-    ["/news", "daily", 0.8],
-    ["/ranking", "daily", 0.9],
-    ["/themes", "daily", 0.85],
-    ["/features", "daily", 0.85],
-    ["/data-quality", "daily", 0.7],
-    ["/about-growth", "monthly", 0.5],
-    ["/pricing", "monthly", 0.7],
-    ["/legal", "yearly", 0.2],
-    ["/privacy", "yearly", 0.2],
-    ["/terms", "yearly", 0.2],
-    ["/disclaimer", "yearly", 0.2],
-  ] as const;
+  const companies = await loadAllListedCompanies();
+  const latestFinancialUpdate = newestDate(companies.map(companyLastModified));
+
+  const staticPaths: StaticSitemapPath[] = [
+    { path: "", changeFrequency: "daily", priority: 1, dataDriven: true },
+    { path: "/markets", changeFrequency: "daily", priority: 0.95, dataDriven: true },
+    { path: "/latest-earnings", changeFrequency: "hourly", priority: 0.95, dataDriven: true },
+    { path: "/growth", changeFrequency: "daily", priority: 0.9, dataDriven: true },
+    { path: "/standard", changeFrequency: "daily", priority: 0.9, dataDriven: true },
+    { path: "/standard/ranking", changeFrequency: "daily", priority: 0.85, dataDriven: true },
+    { path: "/prime", changeFrequency: "daily", priority: 0.9, dataDriven: true },
+    { path: "/prime/ranking", changeFrequency: "daily", priority: 0.85, dataDriven: true },
+    { path: "/updates", changeFrequency: "daily", priority: 0.9, dataDriven: true },
+    { path: "/news", changeFrequency: "daily", priority: 0.8, dataDriven: true },
+    { path: "/ranking", changeFrequency: "daily", priority: 0.9, dataDriven: true },
+    { path: "/themes", changeFrequency: "daily", priority: 0.85, dataDriven: true },
+    { path: "/features", changeFrequency: "daily", priority: 0.85 },
+    { path: "/data-quality", changeFrequency: "daily", priority: 0.7, dataDriven: true },
+    { path: "/about-growth", changeFrequency: "monthly", priority: 0.5 },
+    { path: "/pricing", changeFrequency: "monthly", priority: 0.7 },
+    { path: "/legal", changeFrequency: "yearly", priority: 0.2 },
+    { path: "/privacy", changeFrequency: "yearly", priority: 0.2 },
+    { path: "/terms", changeFrequency: "yearly", priority: 0.2 },
+    { path: "/disclaimer", changeFrequency: "yearly", priority: 0.2 },
+  ];
 
   const staticPages: MetadataRoute.Sitemap = staticPaths.map(
-    ([path, changeFrequency, priority]) => ({
+    ({ path, changeFrequency, priority, dataDriven }) => ({
       url: `${appUrl}${path}`,
-      lastModified: now,
       changeFrequency,
       priority,
+      ...(dataDriven && latestFinancialUpdate
+        ? { lastModified: latestFinancialUpdate }
+        : {}),
     })
   );
 
-  const rankingPages: MetadataRoute.Sitemap = rankingDefinitions.map(
-    (ranking) => ({
-      url: `${appUrl}/ranking/${ranking.slug}`,
-      lastModified: now,
-      changeFrequency: "daily",
-      priority: 0.8,
-    })
-  );
+  const rankingPages: MetadataRoute.Sitemap = rankingDefinitions.map((ranking) => ({
+    url: `${appUrl}/ranking/${ranking.slug}`,
+    changeFrequency: "daily",
+    priority: 0.8,
+    ...(latestFinancialUpdate ? { lastModified: latestFinancialUpdate } : {}),
+  }));
 
   const themePages: MetadataRoute.Sitemap = seoThemeIds.map((theme) => ({
     url: `${appUrl}/themes/${theme}`,
-    lastModified: now,
     changeFrequency: "daily",
     priority: 0.8,
+    ...(latestFinancialUpdate ? { lastModified: latestFinancialUpdate } : {}),
   }));
 
-  const companies = await loadAllListedCompanies();
-  const companyPages: MetadataRoute.Sitemap = companies.map((company) => ({
-    url: `${appUrl}/company/${company.ticker}`,
-    lastModified: now,
-    changeFrequency: "weekly",
-    priority: 0.75,
-  }));
+  const companyPages: MetadataRoute.Sitemap = companies.map((company) => {
+    const lastModified = companyLastModified(company);
+    return {
+      url: `${appUrl}/company/${company.ticker}`,
+      changeFrequency: "weekly",
+      priority: 0.75,
+      ...(lastModified ? { lastModified } : {}),
+    };
+  });
 
   return [...staticPages, ...rankingPages, ...themePages, ...companyPages];
 }
