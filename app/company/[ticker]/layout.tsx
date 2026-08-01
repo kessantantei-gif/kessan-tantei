@@ -12,6 +12,13 @@ type Props = {
 };
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://kessan-tantei.jp";
+const earningsTypes = [
+  "q1_earnings",
+  "q2_earnings",
+  "q3_earnings",
+  "annual_earnings",
+  "correction",
+];
 
 const marketLabels: Record<string, string> = {
   growth: "グロース市場",
@@ -23,6 +30,10 @@ const marketLabels: Record<string, string> = {
 function yenOku(value: number | null | undefined) {
   if (!value) return "";
   return `${(value / 100000000).toFixed(1)}億円`;
+}
+
+function jsonLd(value: unknown) {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -47,6 +58,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return {
       title: `${ticker}の財務分析・決算評価 | 決算探偵`,
       description: `${ticker}の決算・財務指標・リスクシグナルを決算探偵で確認できます。`,
+      keywords: [ticker, `${ticker} 決算`, `${ticker} 財務分析`],
     };
   }
 
@@ -71,6 +83,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
+    keywords: [
+      data.company_name,
+      data.ticker,
+      `${data.company_name} 決算`,
+      `${data.company_name} 財務分析`,
+      `${data.ticker} 決算`,
+      `${data.ticker} 財務`,
+      marketLabel,
+      marketData?.industry_name,
+    ].filter((value): value is string => Boolean(value)),
     alternates: { canonical: url },
     openGraph: {
       title,
@@ -86,16 +108,26 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function CompanyLayout({ children, params }: Props) {
   const { ticker } = await params;
-  const [masterMap, marketResult] = await Promise.all([
+  const [masterMap, marketResult, disclosureResult] = await Promise.all([
     loadRuntimeCompanyMasterMap(),
     supabaseAdmin
       .from("all_market_companies")
-      .select("market_segment, industry_name")
+      .select("market_segment, industry_name, last_financial_update, updated_at")
       .eq("ticker", ticker)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("company_disclosures")
+      .select("title, disclosed_at")
+      .eq("ticker", ticker)
+      .eq("source", "tdnet")
+      .in("document_type", earningsTypes)
+      .order("disclosed_at", { ascending: false })
+      .limit(1)
       .maybeSingle(),
   ]);
   const master = masterMap.get(ticker);
   const market = marketResult.data;
+  const latestDisclosure = disclosureResult.data;
   const marketSegment = market?.market_segment || "growth";
   const marketLabel = marketLabels[marketSegment] || marketLabels.other;
   const rankingHref =
@@ -111,6 +143,11 @@ export default async function CompanyLayout({ children, params }: Props) {
   const relatedLinks = [
     { href: themeHref, kicker: "THEME", label: themeLabel },
     { href: rankingHref, kicker: "MARKET", label: "市場別ランキング" },
+    {
+      href: "/latest-earnings",
+      kicker: "EARNINGS",
+      label: "最新決算一覧",
+    },
     {
       href: "/ranking/revenue-growth",
       kicker: "GROWTH",
@@ -133,8 +170,73 @@ export default async function CompanyLayout({ children, params }: Props) {
     },
   ];
 
+  const companyUrl = `${appUrl}/company/${ticker}`;
+  const companyName = master?.companyName ?? ticker;
+  const dateModified =
+    latestDisclosure?.disclosed_at ??
+    market?.last_financial_update ??
+    market?.updated_at ??
+    undefined;
+  const companyDescription = latestDisclosure?.title
+    ? `${companyName}（${ticker}）の最新決算「${latestDisclosure.title}」と財務分析。`
+    : `${companyName}（${ticker}）の決算・財務分析。`;
+
+  const webPageJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: `${companyName}（${ticker}）の決算・財務分析`,
+    url: companyUrl,
+    description: companyDescription,
+    inLanguage: "ja-JP",
+    ...(dateModified ? { dateModified } : {}),
+    isPartOf: {
+      "@type": "WebSite",
+      name: "決算探偵",
+      url: appUrl,
+    },
+    about: {
+      "@type": "Corporation",
+      name: companyName,
+      tickerSymbol: ticker,
+      description: [marketLabel, market?.industry_name].filter(Boolean).join("・"),
+    },
+  };
+
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "決算探偵",
+        item: `${appUrl}/`,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: marketLabel,
+        item: `${appUrl}/markets`,
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: `${companyName}（${ticker}）`,
+        item: companyUrl,
+      },
+    ],
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLd(webPageJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLd(breadcrumbJsonLd) }}
+      />
       <CompanyPageScrollReset ticker={ticker} />
       {children}
       <CompanyPageVisualEnhancer />
@@ -155,7 +257,7 @@ export default async function CompanyLayout({ children, params }: Props) {
             関連する分析を見る
           </h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400 sm:leading-7">
-            同じテーマの企業や、市場・財務指標・リスクのランキングを確認できます。
+            同じテーマの企業や、市場・最新決算・財務指標・リスクのランキングを確認できます。
           </p>
 
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
