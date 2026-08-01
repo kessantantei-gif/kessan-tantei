@@ -16,6 +16,7 @@ type NavItem = {
 function navItems(): NavItem[] {
   return [
     { href: "/markets", label: "市場を選ぶ", shortLabel: "市場" },
+    { href: "/latest-earnings", label: "最新決算", shortLabel: "決算" },
     { href: "/updates", label: "今日の更新", shortLabel: "更新" },
     { href: "/watchlist", label: "ウォッチ", shortLabel: "保存" },
     { href: "/alerts", label: "アラート", shortLabel: "通知" },

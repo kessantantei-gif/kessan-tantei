@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { supabaseAdmin } from "@/lib/supabase";
 import RankingCard, { type RankingCompany } from "@/components/RankingCard";
@@ -7,6 +8,15 @@ import {
   isProUser,
 } from "@/lib/pro-engine";
 import { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";
+
+export const metadata: Metadata = {
+  title: "日本株の決算分析・財務ランキング | 決算探偵",
+  description:
+    "プライム・スタンダード・グロースの最新決算、売上・利益・営業キャッシュフロー、財務スコア、リスクシグナルを比較できる日本株の財務分析サイトです。",
+  alternates: {
+    canonical: "/",
+  },
+};
 
 type NewsItem = {
   id: string | number;
@@ -232,33 +242,37 @@ export default async function HomePage() {
       <section className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
         <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-10">
           <p className="text-xs tracking-[0.3em] text-green-300 sm:text-sm">
-            GROWTH MARKET FINANCIAL DASHBOARD
+            JAPAN STOCK EARNINGS &amp; FINANCIAL DASHBOARD
           </p>
 
           <h1 className="mt-4 text-4xl font-black leading-tight sm:text-7xl">
-            グロース市場を、
+            日本株を、
             <br />
             決算から見抜く。
           </h1>
 
           <p className="mt-5 max-w-4xl text-sm leading-7 text-slate-300 sm:mt-6 sm:text-lg sm:leading-9">
-            このページでは、グロース市場の企業を決算データから分析します。
-            売上成長、営業利益、営業CF、資金繰り、リスクシグナルを横断的に整理し、
-            「伸びている会社」と「注意すべき会社」を見える化します。
+            決算探偵は、プライム・スタンダード・グロースの日本株を、最新決算、売上・利益・営業CF、財務スコア、リスクシグナルから比較するサイトです。このトップページではグロース市場の注目企業を先行表示しています。
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
-              href="/ranking"
+              href="/latest-earnings"
               className="inline-flex items-center rounded-2xl bg-green-400 px-5 py-3 font-black text-slate-950 transition hover:bg-green-300"
             >
-              決算ランキングを見る →
+              最新決算を見る →
             </Link>
             <Link
-              href="/about-growth"
+              href="/markets"
+              className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-5 py-3 font-bold text-slate-200 transition hover:border-white/20 hover:text-white"
+            >
+              市場から企業を探す
+            </Link>
+            <Link
+              href="/ranking"
               className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-5 py-3 font-bold text-slate-300 transition hover:border-white/20 hover:text-white"
             >
-              ランキングの考え方
+              グロースランキング
             </Link>
           </div>
 
@@ -268,16 +282,16 @@ export default async function HomePage() {
 
           <div className="mt-7 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-green-400/20 bg-green-500/10 p-5">
-              <p className="text-sm text-green-300">解析済み銘柄</p>
+              <p className="text-sm text-green-300">グロース解析銘柄</p>
               <p className="mt-2 text-4xl font-black">{companies.length}</p>
             </div>
             <div className="rounded-2xl border border-yellow-400/20 bg-yellow-500/10 p-5">
-              <p className="text-sm text-yellow-300">Pro特典</p>
-              <p className="mt-2 text-2xl font-black">ランキング全件</p>
+              <p className="text-sm text-yellow-300">全市場対応</p>
+              <p className="mt-2 text-2xl font-black">市場別に検索</p>
             </div>
             <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-5">
               <p className="text-sm text-cyan-300">自動更新</p>
-              <p className="mt-2 text-2xl font-black">EDINET連携</p>
+              <p className="mt-2 text-2xl font-black">TDnet・EDINET</p>
             </div>
           </div>
         </div>
@@ -286,7 +300,7 @@ export default async function HomePage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-black tracking-[0.28em] text-yellow-300">TODAY&apos;S FOCUS</p>
-              <h2 className="mt-2 text-2xl font-black sm:text-3xl">今日見るべき企業</h2>
+              <h2 className="mt-2 text-2xl font-black sm:text-3xl">今日見るべきグロース企業</h2>
               <p className="mt-2 text-sm leading-7 text-slate-400">
                 最新の取得済み決算データから、成長・キャッシュ・リスクの3方向で自動抽出しています。
               </p>
@@ -336,10 +350,10 @@ export default async function HomePage() {
           <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
             <div>
               <p className="text-xs font-bold tracking-[0.25em] text-green-300">
-                RANKING PORTAL
+                GROWTH RANKING PORTAL
               </p>
               <h2 className="mt-3 text-2xl font-black sm:text-3xl">
-                決算ランキングから企業を比べる
+                グロース市場の決算ランキング
               </h2>
               <p className="mt-3 max-w-3xl leading-7 text-slate-300">
                 財務スコア、成長性、収益性、営業CF、安全性、リスクシグナルなど、気になる観点からグロース企業を比較できます。
