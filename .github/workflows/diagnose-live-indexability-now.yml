@@ -1,6 +1,9 @@
 name: Diagnose Live Indexability Now
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/diagnose-live-indexability-now.yml"
   push:
     branches:
       - agent/diagnose-live-indexability-now
