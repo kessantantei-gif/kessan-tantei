@@ -6,14 +6,28 @@ const WWW_HOST = "www.kessan-tantei.jp";
 const CANONICAL_HOST = "kessan-tantei.jp";
 const REDIRECT_HOSTS = new Set([VERCEL_PRODUCTION_HOST, WWW_HOST]);
 
-export default clerkMiddleware((_auth, request) => {
-  const forwardedHost = request.headers.get("x-forwarded-host");
-  const requestHost = (forwardedHost ?? request.headers.get("host") ?? request.nextUrl.host)
+function normalizeHost(value: string | null | undefined) {
+  if (!value) return "";
+  return value
     .split(",")[0]
     .trim()
     .toLowerCase()
     .replace(/:\d+$/, "");
+}
 
+export default clerkMiddleware((_auth, request) => {
+  // The actual Host header represents the URL requested by the client.
+  // Do not prefer x-forwarded-host here: an upstream proxy can set it to a
+  // Vercel/internal alias even when the browser/Googlebot requested the
+  // canonical domain, which would create a canonical -> canonical 308 loop.
+  const hostHeader = normalizeHost(request.headers.get("host"));
+  const nextUrlHost = normalizeHost(request.nextUrl.hostname);
+  const forwardedHost = normalizeHost(request.headers.get("x-forwarded-host"));
+  const requestHost = hostHeader || nextUrlHost || forwardedHost;
+
+  // Never redirect an already canonical request, regardless of forwarded
+  // proxy headers.
+  if (requestHost === CANONICAL_HOST) return;
   if (!REDIRECT_HOSTS.has(requestHost)) return;
 
   const canonicalUrl = request.nextUrl.clone();
