@@ -1,0 +1,53 @@
+name: Stress 5870 Googlebot
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/stress-5870-googlebot.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  stress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Fetch 5870 repeatedly as search crawlers
+        shell: bash
+        run: |
+          node <<'NODE'
+          const uas = {
+            Googlebot: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+            Inspection: 'Mozilla/5.0 (compatible; Google-InspectionTool/1.0; +http://www.google.com/bot.html)',
+          };
+          for (const [label, ua] of Object.entries(uas)) {
+            console.log(`===== ${label} =====`);
+            for (let i = 1; i <= 10; i++) {
+              const url = `https://kessan-tantei.jp/company/5870?stress=${Date.now()}-${i}`;
+              const res = await fetch(url, {
+                redirect: 'follow',
+                headers: {
+                  'user-agent': ua,
+                  accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                  'accept-language': 'ja,en-US;q=0.8,en;q=0.6',
+                },
+                signal: AbortSignal.timeout(20000),
+              });
+              const body = await res.text();
+              console.log(JSON.stringify({
+                i,
+                status: res.status,
+                finalUrl: res.url,
+                xRobotsTag: res.headers.get('x-robots-tag'),
+                bodyLength: body.length,
+                dataCompanyPage: body.includes('data-company-page="true"'),
+                companyProfile: body.includes('COMPANY PROFILE'),
+                ticker: body.includes('5870'),
+                name1: body.includes('ナルネット'),
+                errorBoundary: body.includes('next-error-h1') || body.includes('Application error') || body.includes('Internal Server Error'),
+                rscError: body.includes('$RX') || body.includes('NEXT_REDIRECT'),
+              }));
+            }
+          }
+          NODE
