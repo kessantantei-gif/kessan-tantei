@@ -12,6 +12,7 @@ on:
       - "next.config.ts"
       - "vercel.json"
       - "scripts/audit-seo.ts"
+      - "scripts/audit-clerk-production.ts"
       - "scripts/verify-indexable-company-data.ts"
       - "scripts/verify-production-indexability.ts"
       - "package.json"
@@ -28,7 +29,7 @@ permissions:
 jobs:
   verify-production-indexability:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     env:
       NEXT_PUBLIC_APP_URL: https://kessan-tantei.jp
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
@@ -44,7 +45,7 @@ jobs:
           payload=$(jq -nc \
             --arg state "pending" \
             --arg context "Production Indexability" \
-            --arg description "Live Googlebot indexability audit running" \
+            --arg description "Live Googlebot and Clerk production audit running" \
             --arg target_url "$target_url" \
             '{state:$state, context:$context, description:$description, target_url:$target_url}')
 
@@ -74,15 +75,15 @@ jobs:
         shell: bash
         run: |
           set +e
-          for attempt in $(seq 1 8); do
-            echo "Production indexability attempt ${attempt}/8"
+          for attempt in $(seq 1 20); do
+            echo "Production indexability attempt ${attempt}/20"
             npm run audit:production-indexability
             result=$?
             if [ "$result" -eq 0 ]; then
               echo "Production indexability verification passed."
               exit 0
             fi
-            if [ "$attempt" -lt 8 ]; then
+            if [ "$attempt" -lt 20 ]; then
               echo "Production may still be deploying; retrying in 20 seconds."
               sleep 20
             fi
@@ -101,10 +102,10 @@ jobs:
 
           if [ "$VERIFY_OUTCOME" = "success" ]; then
             state="success"
-            description="Live Googlebot indexability audit passed"
+            description="Live Googlebot and Clerk production audit passed"
           else
             state="failure"
-            description="Live Googlebot indexability audit failed"
+            description="Live Googlebot or Clerk production audit failed"
           fi
 
           payload=$(jq -nc \
