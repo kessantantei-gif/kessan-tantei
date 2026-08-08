@@ -19,10 +19,6 @@ type CompanySitemapRow = {
   updated_at: string | null;
 };
 
-type AnalyzedCompanyRow = {
-  ticker: string;
-};
-
 type StaticSitemapPath = {
   path: string;
   changeFrequency: NonNullable<MetadataRoute.Sitemap[number]["changeFrequency"]>;
@@ -51,28 +47,6 @@ async function loadAllListedCompanies() {
   }
 
   return rows;
-}
-
-async function loadAllAnalyzedTickers() {
-  const tickers = new Set<string>();
-  const pageSize = 1000;
-
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await supabaseAdmin
-      .from("company_analyses")
-      .select("ticker")
-      .neq("risk_level", "EXCLUDED")
-      .order("ticker", { ascending: true })
-      .range(from, from + pageSize - 1);
-
-    if (error) throw new Error(`sitemap分析済み会社取得失敗: ${error.message}`);
-    for (const row of (data ?? []) as AnalyzedCompanyRow[]) {
-      if (row.ticker) tickers.add(row.ticker);
-    }
-    if ((data ?? []).length < pageSize) break;
-  }
-
-  return tickers;
 }
 
 function validDate(value: string | null | undefined) {
@@ -108,11 +82,7 @@ function marketDirectoryPath(market: MarketSlug, pageNumber: number) {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [listedCompanies, analyzedTickers] = await Promise.all([
-    loadAllListedCompanies(),
-    loadAllAnalyzedTickers(),
-  ]);
-  const companies = listedCompanies.filter((company) => analyzedTickers.has(company.ticker));
+  const companies = await loadAllListedCompanies();
   const latestFinancialUpdate = newestDate(companies.map(companyLastModified));
 
   const staticPaths: StaticSitemapPath[] = [

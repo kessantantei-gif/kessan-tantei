@@ -81,6 +81,24 @@ function requireText(
   if (!found) add(items, severity, area, message);
 }
 
+function forbidText(
+  items: Item[],
+  filePath: string,
+  keyword: string | RegExp,
+  area: Area,
+  message: string
+) {
+  if (!exists(filePath)) {
+    add(items, "ERROR", "files", `${filePath} is missing`);
+    return;
+  }
+
+  const content = read(filePath);
+  const found =
+    typeof keyword === "string" ? content.includes(keyword) : keyword.test(content);
+  if (found) add(items, "ERROR", area, message);
+}
+
 function auditFiles(items: Item[]) {
   for (const [name, filePath] of Object.entries(files)) {
     requireFile(items, filePath, name === "og");
@@ -196,18 +214,28 @@ function auditMetadata(items: Item[]) {
     );
   }
 
-  for (const keyword of [
+  forbidText(
+    items,
+    files.companyPlaceholder,
     '<meta name="robots" content="noindex,follow" />',
+    "metadata",
+    "indexable company profile must not include robots noindex"
+  );
+  forbidText(
+    items,
+    files.companyPlaceholder,
     '<meta name="googlebot" content="noindex,follow" />',
-  ]) {
-    requireText(
-      items,
-      files.companyPlaceholder,
-      keyword,
-      "metadata",
-      `company placeholder must include ${keyword}`
-    );
-  }
+    "metadata",
+    "indexable company profile must not include googlebot noindex"
+  );
+
+  requireText(
+    items,
+    files.companyPlaceholder,
+    "直近の開示資料",
+    "copy",
+    "indexable company profile must contain useful company-specific disclosure content"
+  );
 
   if (exists(files.companyLayout) && read(files.companyLayout).includes("generateMetadata")) {
     add(
@@ -273,13 +301,14 @@ function auditSitemap(items: Item[]) {
     "last_market_master_update",
     "companyLastModified",
     'path: "/latest-earnings"',
-    "loadAllAnalyzedTickers",
-    'neq("risk_level", "EXCLUDED")',
-    "analyzedTickers.has(company.ticker)",
+    "loadAllListedCompanies",
+    'eq("listing_status", "listed")',
     "MARKET_COMPANY_PAGE_SIZE",
     "marketDirectoryPath",
     "directoryPages",
     "market_segment",
+    "const companyPages",
+    "companies.map",
   ]) {
     requireText(
       items,
@@ -301,12 +330,11 @@ function auditSitemap(items: Item[]) {
     if (/path:\s*["']\/growth["']/.test(sitemap)) {
       add(items, "ERROR", "sitemap", "redirect URL /growth must not be included in sitemap");
     }
-    if (
-      !/listedCompanies\.filter\(\(company\)\s*=>\s*analyzedTickers\.has\(company\.ticker\)\)/.test(
-        sitemap
-      )
-    ) {
-      add(items, "ERROR", "sitemap", "company sitemap must be filtered to analyzed companies");
+    if (sitemap.includes("loadAllAnalyzedTickers")) {
+      add(items, "ERROR", "sitemap", "company sitemap must not exclude listed companies that are still awaiting analysis");
+    }
+    if (sitemap.includes("analyzedTickers.has(company.ticker)")) {
+      add(items, "ERROR", "sitemap", "company sitemap must include all listed company profile URLs");
     }
     if (!sitemap.includes("...directoryPages")) {
       add(items, "ERROR", "sitemap", "market directory pages are not returned by sitemap");
