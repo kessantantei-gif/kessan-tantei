@@ -30,8 +30,9 @@ export type MarketDirectoryCompany = {
   ticker: string;
   companyName: string;
   industryName: string;
-  score: number;
-  dangerScore: number;
+  analyzed: boolean;
+  score: number | null;
+  dangerScore: number | null;
   revenueGrowth: number | null;
   operatingMargin: number | null;
   lastUpdated: string | null;
@@ -73,26 +74,24 @@ async function loadMarketCompanyDirectoryUncached(
     ),
   ]);
 
-  const masterByTicker = new Map(masters.map((master) => [master.ticker, master]));
+  const analysisByTicker = new Map(analyses.map((analysis) => [analysis.ticker, analysis]));
 
-  return analyses
-    .map((analysis) => {
-      const master = masterByTicker.get(analysis.ticker);
-      if (!master) return null;
-
+  return masters
+    .map((master) => {
+      const analysis = analysisByTicker.get(master.ticker);
       return {
-        ticker: analysis.ticker,
-        companyName: analysis.company_name || master.company_name,
+        ticker: master.ticker,
+        companyName: master.company_name || analysis?.company_name || master.ticker,
         industryName: master.industry_name || "業種未分類",
-        score: finiteNumber(analysis.score) ?? 0,
-        dangerScore: finiteNumber(analysis.danger_score) ?? 0,
-        revenueGrowth: finiteNumber(analysis.financials?.revenueGrowth),
-        operatingMargin: finiteNumber(analysis.financials?.operatingMargin),
+        analyzed: Boolean(analysis),
+        score: finiteNumber(analysis?.score),
+        dangerScore: finiteNumber(analysis?.danger_score),
+        revenueGrowth: finiteNumber(analysis?.financials?.revenueGrowth),
+        operatingMargin: finiteNumber(analysis?.financials?.operatingMargin),
         lastUpdated:
-          master.last_financial_update ?? analysis.updated_at ?? master.updated_at ?? null,
+          master.last_financial_update ?? analysis?.updated_at ?? master.updated_at ?? null,
       } satisfies MarketDirectoryCompany;
     })
-    .filter((company): company is MarketDirectoryCompany => company !== null)
     .sort((a, b) =>
       a.ticker.localeCompare(b.ticker, "ja", {
         numeric: true,
@@ -103,7 +102,7 @@ async function loadMarketCompanyDirectoryUncached(
 
 export const loadMarketCompanyDirectory = unstable_cache(
   loadMarketCompanyDirectoryUncached,
-  ["market-company-directory-v1"],
+  ["market-company-directory-v2"],
   {
     revalidate: 3600,
     tags: ["market-company-directory"],
