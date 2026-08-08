@@ -5,7 +5,7 @@ import { supabaseAdmin } from "../lib/supabase";
 
 const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://kessan-tantei.jp").replace(/\/$/, "");
 const GOOGLEBOT_UA = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
-const NORMAL_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/140 Safari/537.36";
+const GOOGLE_INSPECTION_UA = "Mozilla/5.0 (compatible; Google-InspectionTool/1.0; +http://www.google.com/bot.html)";
 const REQUIRED_MARKETS = ["growth", "prime", "standard"] as const;
 const REGRESSION_TICKERS = ["5870", "3178", "8202", "7581", "2894", "6702"];
 const PAGE_SIZE = 1000;
@@ -227,12 +227,15 @@ async function verifyStaticPages() {
 
 async function verifyCompany(company: CompanyRow) {
   const expectedUrl = `${SITE_URL}/company/${company.ticker}`;
-  const [googlebot, normal] = await Promise.all([
+  const [googlebot, inspection] = await Promise.all([
     fetchText(expectedUrl, GOOGLEBOT_UA),
-    fetchText(expectedUrl, NORMAL_UA),
+    fetchText(expectedUrl, GOOGLE_INSPECTION_UA),
   ]);
 
-  for (const [label, result] of [["Googlebot", googlebot], ["通常UA", normal]] as const) {
+  for (const [label, result] of [
+    ["Googlebot", googlebot],
+    ["Google-InspectionTool", inspection],
+  ] as const) {
     assert(result.status === 200, `${company.ticker} ${label} が ${result.status} を返しました`);
     assert(
       result.url === expectedUrl,

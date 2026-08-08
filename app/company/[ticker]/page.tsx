@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/clerk-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { generateComment } from "@/lib/comment-engine";
 import { generateLabels } from "@/lib/label-engine";

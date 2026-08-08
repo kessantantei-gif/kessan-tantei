@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/clerk-server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { stripe } from "@/lib/stripe";

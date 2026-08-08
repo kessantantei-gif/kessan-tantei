@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@/lib/clerk-server";
 import { supabaseAdmin } from "@/lib/supabase";
 
 const NG_WORDS = ["死ね", "殺す", "fuck", "バカ", "アホ"];
