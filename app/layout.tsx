@@ -108,11 +108,10 @@ export default async function RootLayout({
     </html>
   );
 
-  // Clerk Development instances deliberately prevent search-engine indexing.
-  // For public sitemap URLs, proxy.ts marks verified search crawlers and we
-  // render the same public content without mounting Clerk at all. Human users
-  // continue to receive the normal ClerkProvider and authentication features.
-  if (isSearchCrawler) return document;
-
+  // Search crawlers bypass clerkMiddleware in proxy.ts so they never enter the
+  // development-instance handshake. Keep ClerkProvider mounted so nested public
+  // UI components such as SignInButton can render safely during SSR. Server-side
+  // auth/currentUser calls remain signed-out for crawlers via lib/clerk-server.ts,
+  // so crawler requests cannot unlock authenticated or Pro-only content.
   return <ClerkProvider>{document}</ClerkProvider>;
 }
