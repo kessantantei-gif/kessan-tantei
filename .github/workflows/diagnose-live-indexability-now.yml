@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Inspect live responses with Node fetch
+      - name: Stress test 5870 crawler rendering
         shell: bash
         run: |
           node <<'NODE'
@@ -26,21 +26,13 @@ jobs:
             Googlebot: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
             Inspection: 'Mozilla/5.0 (compatible; Google-InspectionTool/1.0; +http://www.google.com/bot.html)',
           };
-          const paths = [
-            '/', '/robots.txt', '/sitemap.xml', '/markets', '/latest-earnings',
-            '/standard', '/standard/ranking', '/prime', '/prime/ranking', '/updates',
-            '/news', '/ranking', '/themes', '/features', '/data-quality', '/about-growth',
-            '/pricing', '/legal', '/privacy', '/terms', '/disclaimer',
-            '/companies/growth', '/companies/prime', '/companies/standard',
-            '/company/6702', '/company/5870'
-          ];
           for (const [label, ua] of Object.entries(uas)) {
             console.log(`===== ${label} =====`);
-            for (const path of paths) {
-              const url = `https://kessan-tantei.jp${path}`;
+            for (let i = 1; i <= 10; i += 1) {
+              const url = `https://kessan-tantei.jp/company/5870?audit_run=${Date.now()}_${i}`;
               try {
                 const res = await fetch(url, {
-                  redirect: 'manual',
+                  redirect: 'follow',
                   headers: {
                     'user-agent': ua,
                     accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -49,22 +41,20 @@ jobs:
                   signal: AbortSignal.timeout(20000),
                 });
                 const body = await res.text();
-                const canonical = body.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i)?.[1]
-                  ?? body.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["']canonical["']/i)?.[1]
-                  ?? null;
-                const noindex = /<meta[^>]+(?:name=["'](?:robots|googlebot)["'][^>]+content=["'][^"']*noindex|content=["'][^"']*noindex[^"']*["'][^>]+name=["'](?:robots|googlebot)["'])/i.test(body);
                 console.log(JSON.stringify({
-                  path,
+                  i,
                   status: res.status,
-                  location: res.headers.get('location'),
+                  finalUrl: res.url,
                   xRobotsTag: res.headers.get('x-robots-tag'),
-                  contentType: res.headers.get('content-type'),
-                  canonical,
-                  htmlNoindex: noindex,
                   bodyLength: body.length,
+                  dataCompanyPage: body.includes('data-company-page="true"'),
+                  companyProfile: body.includes('COMPANY PROFILE'),
+                  ticker: body.includes('5870'),
+                  companyName: body.includes('ナルネットコミュニケーションズ'),
+                  nextError: body.includes('next-error-h1') || body.includes('Application error'),
                 }));
               } catch (e) {
-                console.log(JSON.stringify({path, error: String(e)}));
+                console.log(JSON.stringify({i, error: String(e)}));
               }
             }
           }
