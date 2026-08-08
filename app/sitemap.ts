@@ -7,7 +7,7 @@ import { rankingDefinitions } from "@/lib/rankings/definitions";
 import { seoThemeIds } from "@/lib/seo-hubs";
 import { supabaseAdmin } from "@/lib/supabase";
 
-const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://kessan-tantei.jp").replace(/\/$/, "");
+const appUrl = "https://kessan-tantei.jp";
 
 export const dynamic = "force-dynamic";
 
