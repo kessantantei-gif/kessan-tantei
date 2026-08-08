@@ -1,0 +1,38 @@
+name: Diagnose Host Redirects
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/diagnose-host-redirects.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Inspect first-hop redirects
+        shell: bash
+        run: |
+          set -u
+          for ua in \
+            "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" \
+            "Mozilla/5.0 Chrome/140 Safari/537.36"; do
+            echo "===== UA: $ua ====="
+            for url in \
+              "https://kessan-tantei.jp/" \
+              "https://kessan-tantei.jp/robots.txt" \
+              "https://www.kessan-tantei.jp/" \
+              "https://www.kessan-tantei.jp/robots.txt" \
+              "https://kessan-tantei.vercel.app/"; do
+              echo "--- $url"
+              curl --silent --show-error --max-redirs 0 \
+                -A "$ua" \
+                -D - \
+                -o /dev/null \
+                "$url" || true
+            done
+          done
