@@ -16,8 +16,7 @@ const siteUrl = "https://kessan-tantei.jp";
 const shareUrl = `${siteUrl}/markets`;
 const shareImage = `${siteUrl}/markets/opengraph-image`;
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 3600;
 
 export const metadata: Metadata = {
   title: "市場を選ぶ | 決算探偵",
