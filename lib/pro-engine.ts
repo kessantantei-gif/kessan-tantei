@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { after } from "next/server";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@/lib/clerk-server";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const FREE_VISIBLE_S_RANK_LIMIT = 3;

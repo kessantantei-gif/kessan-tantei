@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/clerk-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { isAdminPreviewUser } from "@/lib/pro-engine";
 
