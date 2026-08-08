@@ -7,7 +7,7 @@ const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://kessan-tantei.jp")
 const GOOGLEBOT_UA = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
 const NORMAL_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/140 Safari/537.36";
 const REQUIRED_MARKETS = ["growth", "prime", "standard"] as const;
-const REGRESSION_TICKERS = ["5870", "3178", "8202", "7581", "6702"];
+const REGRESSION_TICKERS = ["5870", "3178", "8202", "7581", "2894", "6702"];
 const PAGE_SIZE = 1000;
 
 type CompanyRow = {
@@ -41,6 +41,7 @@ async function fetchText(
 ): Promise<FetchResult> {
   const response = await fetch(url, {
     redirect,
+    signal: AbortSignal.timeout(20_000),
     headers: {
       "user-agent": userAgent,
       accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -122,6 +123,7 @@ async function loadSamples() {
   ]);
 
   const analyzed = new Set(analyses.map((row) => row.ticker));
+  const preparationCompanies = listed.filter((row) => !analyzed.has(row.ticker));
   const byTicker = new Map(listed.map((row) => [row.ticker, row]));
   const samples = new Map<string, CompanyRow>();
 
@@ -130,14 +132,19 @@ async function loadSamples() {
     if (row) samples.set(row.ticker, row);
   }
 
+  // The old implementation emitted noindex specifically for these pages.
+  // Verify every currently listed pre-analysis company on every production run.
+  for (const row of preparationCompanies) {
+    samples.set(row.ticker, row);
+  }
+
   for (const market of REQUIRED_MARKETS) {
     const marketRows = listed.filter((row) => row.market_segment === market);
-    const analyzedRow = marketRows.find((row) => analyzed.has(row.ticker));
-    const preparationRow = marketRows.find((row) => !analyzed.has(row.ticker));
-    const firstRow = marketRows[0];
-    const middleRow = marketRows[Math.floor(marketRows.length / 2)];
-    const lastRow = marketRows.at(-1);
-    for (const row of [analyzedRow, preparationRow, firstRow, middleRow, lastRow]) {
+    const analyzedRows = marketRows.filter((row) => analyzed.has(row.ticker));
+    const firstRow = analyzedRows[0];
+    const middleRow = analyzedRows[Math.floor(analyzedRows.length / 2)];
+    const lastRow = analyzedRows.at(-1);
+    for (const row of [firstRow, middleRow, lastRow]) {
       if (row) samples.set(row.ticker, row);
     }
   }
@@ -145,6 +152,7 @@ async function loadSamples() {
   return {
     listed,
     analyzed,
+    preparationCompanies,
     samples: [...samples.values()],
   };
 }
@@ -286,13 +294,13 @@ async function verifyHostCanonicalization() {
 }
 
 async function main() {
-  const { listed, analyzed, samples } = await loadSamples();
+  const { listed, analyzed, preparationCompanies, samples } = await loadSamples();
   assert(listed.length > 3000, `上場会社数が想定より少なすぎます: ${listed.length}`);
   assert(
     new Set(listed.map((row) => row.ticker)).size === listed.length,
     "上場企業マスタに重複tickerがあります"
   );
-  assert(samples.length >= 8, `監査サンプルが少なすぎます: ${samples.length}`);
+  assert(samples.length >= preparationCompanies.length, "準備中企業が監査サンプルから欠落しています");
 
   await verifyRobots();
   await verifySitemap(listed.length, samples);
@@ -311,7 +319,8 @@ async function main() {
         siteUrl: SITE_URL,
         listedCompanies: listed.length,
         analyzedCompanies: analyzed.size,
-        preparationCompanies: listed.filter((row) => !analyzed.has(row.ticker)).length,
+        preparationCompanies: preparationCompanies.length,
+        verifiedPreparationCompanies: preparationCompanies.length,
         sampleCount: samples.length,
         samples: samples.map((row) => ({
           ticker: row.ticker,
