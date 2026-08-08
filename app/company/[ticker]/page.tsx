@@ -97,13 +97,13 @@ export async function generateMetadata({
   const companyName = analysis?.company_name ?? master?.company_name;
   const title = companyName
     ? `${companyName} (${ticker})の決算・財務分析 | 決算探偵`
-    : "企業情報 | 決算探偵";
+    : `${ticker}の決算・財務分析 | 決算探偵`;
 
   const description = analysis
     ? `${companyName}（${ticker}）の財務スコア、危険度、売上・利益・キャッシュフロー推移、決算変化を確認できます。`
     : master
-      ? `${companyName}（証券コード：${ticker}）の上場市場、業種、決算・財務分析情報。公式開示資料の取得後にスコアと推移を更新します。`
-      : "プライム・スタンダード・グロース対応の財務分析ランキング。";
+      ? `${companyName}（証券コード：${ticker}）の上場市場、業種、決算・財務分析情報。公式開示資料と取得済みデータを順次更新します。`
+      : `証券コード${ticker}の決算・財務分析ページです。`;
 
   return {
     title,
@@ -112,7 +112,7 @@ export async function generateMetadata({
       canonical: `/company/${ticker}`,
     },
     robots: {
-      index: Boolean(companyName),
+      index: true,
       follow: true,
     },
     openGraph: {
@@ -143,30 +143,38 @@ export async function generateMetadata({
 export default async function CompanyPage({ params }: PageProps) {
   const { ticker } = await params;
 
-  const { data: master } = await supabaseAdmin
+  const { data: master, error: masterError } = await supabaseAdmin
     .from("all_market_companies")
     .select("ticker, company_name, market_segment, industry_name, listing_status")
     .eq("ticker", ticker)
     .eq("listing_status", "listed")
     .maybeSingle();
 
-  const { data, error } = await supabaseAdmin
+  const { data, error: analysisError } = await supabaseAdmin
     .from("company_analyses")
     .select("*")
     .eq("ticker", ticker)
     .maybeSingle();
 
-  if (error) notFound();
   if (!data) {
-    if (!master) notFound();
-    return (
-      <CompanyIndexPlaceholder
-        ticker={master.ticker}
-        companyName={master.company_name}
-        marketSegment={master.market_segment}
-        industryName={master.industry_name}
-      />
-    );
+    if (master) {
+      return (
+        <CompanyIndexPlaceholder
+          ticker={master.ticker}
+          companyName={master.company_name}
+          marketSegment={master.market_segment}
+          industryName={master.industry_name}
+        />
+      );
+    }
+
+    if (masterError || analysisError) {
+      throw new Error(
+        `企業ページデータ取得失敗 (${ticker}): ${analysisError?.message ?? masterError?.message ?? "unknown error"}`
+      );
+    }
+
+    notFound();
   }
 
   const { userId } = await auth();
