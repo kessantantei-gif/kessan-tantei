@@ -12,9 +12,9 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 4
     steps:
-      - name: Inspect first-hop redirects
+      - name: Inspect first-hop redirects with curl
         shell: bash
         run: |
           set -u
@@ -36,3 +36,48 @@ jobs:
                 "$url" || true
             done
           done
+
+      - name: Inspect redirect chain with Node fetch
+        shell: bash
+        run: |
+          node <<'NODE'
+          const ua = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
+          const headers = {
+            "user-agent": ua,
+            accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "accept-language": "ja,en-US;q=0.8,en;q=0.6",
+          };
+
+          async function trace(start) {
+            console.log(`===== Node redirect trace: ${start} =====`);
+            let url = start;
+            for (let i = 0; i < 12; i += 1) {
+              try {
+                const response = await fetch(url, {
+                  redirect: "manual",
+                  headers,
+                  signal: AbortSignal.timeout(15000),
+                });
+                const location = response.headers.get("location");
+                console.log(JSON.stringify({
+                  hop: i,
+                  requested: url,
+                  status: response.status,
+                  responseUrl: response.url,
+                  location,
+                  xRobotsTag: response.headers.get("x-robots-tag"),
+                  server: response.headers.get("server"),
+                  matchedPath: response.headers.get("x-matched-path"),
+                }));
+                if (response.status < 300 || response.status >= 400 || !location) break;
+                url = new URL(location, url).toString();
+              } catch (error) {
+                console.error("NODE_FETCH_ERROR", url, error);
+                break;
+              }
+            }
+          }
+
+          await trace("https://kessan-tantei.jp/robots.txt");
+          await trace("https://kessan-tantei.jp/");
+          NODE
