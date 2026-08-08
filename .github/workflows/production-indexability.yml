@@ -28,13 +28,34 @@ permissions:
 jobs:
   verify-production-indexability:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 10
     env:
       NEXT_PUBLIC_APP_URL: https://kessan-tantei.jp
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
     steps:
+      - name: Publish pending Production Indexability status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          payload=$(jq -nc \
+            --arg state "pending" \
+            --arg context "Production Indexability" \
+            --arg description "Live Googlebot indexability audit running" \
+            --arg target_url "$target_url" \
+            '{state:$state, context:$context, description:$description, target_url:$target_url}')
+
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d "$payload"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -53,15 +74,15 @@ jobs:
         shell: bash
         run: |
           set +e
-          for attempt in $(seq 1 18); do
-            echo "Production indexability attempt ${attempt}/18"
+          for attempt in $(seq 1 8); do
+            echo "Production indexability attempt ${attempt}/8"
             npm run audit:production-indexability
             result=$?
             if [ "$result" -eq 0 ]; then
               echo "Production indexability verification passed."
               exit 0
             fi
-            if [ "$attempt" -lt 18 ]; then
+            if [ "$attempt" -lt 8 ]; then
               echo "Production may still be deploying; retrying in 20 seconds."
               sleep 20
             fi
@@ -69,13 +90,15 @@ jobs:
           echo "Production indexability verification failed after all retries."
           exit 1
 
-      - name: Publish Production Indexability status
+      - name: Publish final Production Indexability status
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERIFY_OUTCOME: ${{ steps.verify.outcome }}
         shell: bash
         run: |
+          target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
           if [ "$VERIFY_OUTCOME" = "success" ]; then
             state="success"
             description="Live Googlebot indexability audit passed"
@@ -88,7 +111,8 @@ jobs:
             --arg state "$state" \
             --arg context "Production Indexability" \
             --arg description "$description" \
-            '{state:$state, context:$context, description:$description}')
+            --arg target_url "$target_url" \
+            '{state:$state, context:$context, description:$description, target_url:$target_url}')
 
           curl --fail-with-body --silent --show-error \
             -X POST \
