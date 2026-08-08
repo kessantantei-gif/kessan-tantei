@@ -1,0 +1,62 @@
+name: Diagnose Live Indexability Now
+
+on:
+  push:
+    branches:
+      - agent/diagnose-live-indexability-now
+    paths:
+      - ".github/workflows/diagnose-live-indexability-now.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inspect live responses with Node fetch
+        shell: bash
+        run: |
+          node <<'NODE'
+          const uas = {
+            Googlebot: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+            Inspection: 'Mozilla/5.0 (compatible; Google-InspectionTool/1.0; +http://www.google.com/bot.html)',
+          };
+          const paths = ['/', '/robots.txt', '/sitemap.xml', '/markets', '/latest-earnings', '/pricing', '/company/6702', '/company/5870'];
+          for (const [label, ua] of Object.entries(uas)) {
+            console.log(`===== ${label} =====`);
+            for (const path of paths) {
+              const url = `https://kessan-tantei.jp${path}`;
+              try {
+                const res = await fetch(url, {
+                  redirect: 'manual',
+                  headers: {
+                    'user-agent': ua,
+                    accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'accept-language': 'ja,en-US;q=0.8,en;q=0.6',
+                  },
+                  signal: AbortSignal.timeout(20000),
+                });
+                const body = await res.text();
+                const canonical = body.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i)?.[1]
+                  ?? body.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["']canonical["']/i)?.[1]
+                  ?? null;
+                const noindex = /<meta[^>]+(?:name=["'](?:robots|googlebot)["'][^>]+content=["'][^"']*noindex|content=["'][^"']*noindex[^"']*["'][^>]+name=["'](?:robots|googlebot)["'])/i.test(body);
+                console.log(JSON.stringify({
+                  path,
+                  status: res.status,
+                  location: res.headers.get('location'),
+                  xRobotsTag: res.headers.get('x-robots-tag'),
+                  contentType: res.headers.get('content-type'),
+                  canonical,
+                  htmlNoindex: noindex,
+                  bodyLength: body.length,
+                  bodyStart: body.slice(0, 500).replace(/\s+/g, ' '),
+                }));
+              } catch (e) {
+                console.log(JSON.stringify({path, error: String(e)}));
+              }
+            }
+          }
+          NODE
