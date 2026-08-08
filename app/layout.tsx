@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
-import { headers } from "next/headers";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/react";
@@ -20,8 +19,6 @@ import SeoJsonLd, {
   organizationJsonLd,
   websiteJsonLd,
 } from "@/components/seo-json-ld";
-
-const SEARCH_CRAWLER_HEADER = "x-kessan-search-crawler";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -76,42 +73,33 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const requestHeaders = await headers();
-  const isSearchCrawler =
-    requestHeaders.get(SEARCH_CRAWLER_HEADER) === "1";
-
-  const document = (
-    <html lang="ja">
-      <body>
-        <SeoJsonLd data={[websiteJsonLd(), organizationJsonLd()]} />
-        <Suspense fallback={null}>
-          <AcquisitionTracker />
-        </Suspense>
-        <RecentCompanyTracker />
-        <SiteNav />
-        <NavigationFeedback />
-        {children}
-        <CompanyPageOrderController />
-        <CompanyStockChart />
-        <CompareTray />
-        <FeedbackButton />
-        {!isSearchCrawler ? <AuthButton /> : null}
-        <Toaster richColors position="top-right" />
-        <Analytics />
-        <SpeedInsights />
-      </body>
-    </html>
+  return (
+    <ClerkProvider>
+      <html lang="ja">
+        <body>
+          <SeoJsonLd data={[websiteJsonLd(), organizationJsonLd()]} />
+          <Suspense fallback={null}>
+            <AcquisitionTracker />
+          </Suspense>
+          <RecentCompanyTracker />
+          <SiteNav />
+          <NavigationFeedback />
+          {children}
+          <CompanyPageOrderController />
+          <CompanyStockChart />
+          <CompareTray />
+          <FeedbackButton />
+          <AuthButton />
+          <Toaster richColors position="top-right" />
+          <Analytics />
+          <SpeedInsights />
+        </body>
+      </html>
+    </ClerkProvider>
   );
-
-  // Search crawlers bypass clerkMiddleware in proxy.ts so they never enter the
-  // development-instance handshake. Keep ClerkProvider mounted so nested public
-  // UI components such as SignInButton can render safely during SSR. Server-side
-  // auth/currentUser calls remain signed-out for crawlers via lib/clerk-server.ts,
-  // so crawler requests cannot unlock authenticated or Pro-only content.
-  return <ClerkProvider>{document}</ClerkProvider>;
 }
