@@ -3,10 +3,6 @@
     {
       "path": "/api/cron/edinet-update",
       "schedule": "0 21 * * *"
-    },
-    {
-      "path": "/api/cron/fetch-news",
-      "schedule": "0 22 * * *"
     }
   ]
 }
