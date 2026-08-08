@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://kessan-tantei.jp").replace(/\/$/, "");
+const CANONICAL_SITE_URL = "https://kessan-tantei.jp";
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -11,7 +11,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/admin", "/profile", "/api", "/ops"],
       },
     ],
-    sitemap: `${appUrl}/sitemap.xml`,
-    host: appUrl,
+    sitemap: `${CANONICAL_SITE_URL}/sitemap.xml`,
+    host: CANONICAL_SITE_URL,
   };
 }
