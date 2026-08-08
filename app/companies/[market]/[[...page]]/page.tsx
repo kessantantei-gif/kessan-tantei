@@ -147,7 +147,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   );
   const pageLabel = pageNumber === 1 ? "" : `（${pageNumber}ページ目）`;
   const title = `${market.name}の企業一覧${pageLabel} | 決算探偵`;
-  const description = `${market.name}の分析済み企業${companies.length}社を証券コード順に掲載。${rangeStart}社目から${rangeEnd}社目までの財務スコア、Danger Score、売上成長率、営業利益率を確認できます。`;
+  const description = `${market.name}の上場企業${companies.length}社を証券コード順に掲載。${rangeStart}社目から${rangeEnd}社目までの会社情報を確認でき、分析済み企業では財務スコア、Danger Score、売上成長率、営業利益率も確認できます。`;
   const url = `${siteUrl}${canonical}`;
   const image = `${siteUrl}/markets/opengraph-image`;
 
@@ -193,6 +193,7 @@ export default async function MarketCompanyDirectoryPage({ params }: PageProps) 
 
   if (companies.length === 0 || pageNumber > totalPages) notFound();
 
+  const analyzedCount = companies.filter((company) => company.analyzed).length;
   const startIndex = (pageNumber - 1) * MARKET_COMPANY_PAGE_SIZE;
   const visibleCompanies = companies.slice(
     startIndex,
@@ -290,8 +291,8 @@ export default async function MarketCompanyDirectoryPage({ params }: PageProps) 
             {market.name}の企業一覧
           </h1>
           <p className="mt-5 max-w-4xl text-sm leading-7 text-slate-300 sm:text-lg sm:leading-8">
-            決算探偵で財務分析が完了している{companies.length}社を、証券コード順に掲載しています。
-            会社名を選ぶと、決算・財務指標・スコア・リスクシグナルを確認できます。
+            {market.name}の上場企業{companies.length}社を、証券コード順に掲載しています。
+            分析済み企業では決算・財務指標・スコア・リスクシグナルを確認でき、分析準備中の企業も基本情報と直近開示を同じURLで確認できます。
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3">
@@ -314,10 +315,14 @@ export default async function MarketCompanyDirectoryPage({ params }: PageProps) 
             })}
           </div>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="text-xs text-slate-400">上場企業</p>
+              <p className="mt-2 text-3xl font-black">{companies.length}社</p>
+            </div>
             <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
               <p className="text-xs text-slate-400">分析済み企業</p>
-              <p className="mt-2 text-3xl font-black">{companies.length}社</p>
+              <p className="mt-2 text-3xl font-black">{analyzedCount}社</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
               <p className="text-xs text-slate-400">現在の表示範囲</p>
@@ -435,7 +440,7 @@ function CompanyCard({
           </p>
         </div>
         <span className="shrink-0 rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs font-black text-slate-200">
-          {company.score}点
+          {company.analyzed && company.score !== null ? `${company.score}点` : "分析準備中"}
         </span>
       </div>
 
@@ -455,7 +460,7 @@ function CompanyCard({
         <div className="rounded-xl bg-black/20 p-3">
           <dt className="text-[10px] text-slate-500">Danger</dt>
           <dd className="mt-1 text-sm font-black text-slate-100">
-            {company.dangerScore}点
+            {company.dangerScore === null ? "—" : `${company.dangerScore}点`}
           </dd>
         </div>
       </dl>
@@ -465,7 +470,7 @@ function CompanyCard({
           更新：{formatDate(company.lastUpdated)}
         </span>
         <span className={`shrink-0 font-black ${tone.eyebrow}`}>
-          分析を見る →
+          {company.analyzed ? "分析を見る →" : "企業情報を見る →"}
         </span>
       </div>
     </Link>
