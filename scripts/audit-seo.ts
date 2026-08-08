@@ -1,20 +1,19 @@
-import { config } from "dotenv";
 import fs from "node:fs";
 import path from "node:path";
 
-config({ path: ".env.local" });
-
 type Severity = "ERROR" | "WARNING" | "INFO";
 type Area =
-  | "metadata"
-  | "structured-data"
   | "files"
-  | "performance"
-  | "copy"
+  | "metadata"
+  | "robots"
+  | "canonical"
+  | "sitemap"
+  | "company"
   | "links"
-  | "sitemap";
+  | "structured-data"
+  | "production";
 
-type Item = {
+type AuditItem = {
   severity: Severity;
   area: Area;
   message: string;
@@ -24,7 +23,6 @@ const files = {
   layout: "app/layout.tsx",
   home: "app/page.tsx",
   growthHome: "app/growth-home.tsx",
-  growthOg: "app/opengraph-image.tsx",
   markets: "app/markets/page.tsx",
   prime: "app/prime/page.tsx",
   standard: "app/standard/page.tsx",
@@ -32,59 +30,48 @@ const files = {
   marketDirectory: "app/companies/[market]/[[...page]]/page.tsx",
   marketDirectoryData: "lib/market-company-directory.ts",
   marketDirectoryCallout: "components/market-directory-callout.tsx",
-  robots: "app/robots.ts",
-  sitemap: "app/sitemap.ts",
   companyPage: "app/company/[ticker]/page.tsx",
   companyLayout: "app/company/[ticker]/layout.tsx",
   companyPlaceholder: "components/company-index-placeholder.tsx",
+  robots: "app/robots.ts",
+  sitemap: "app/sitemap.ts",
+  proxy: "proxy.ts",
   siteNav: "components/site-nav.tsx",
   allMarketSearch: "components/all-market-company-search.tsx",
-  xShare: "components/x-share-button.tsx",
-  jsonLd: "components/seo-json-ld.tsx",
-  og: "public/og-image-all-markets.png",
-};
+  productionVerifier: "scripts/verify-production-indexability.ts",
+} as const;
+
+function absolute(filePath: string) {
+  return path.join(process.cwd(), filePath);
+}
 
 function exists(filePath: string) {
-  return fs.existsSync(path.join(process.cwd(), filePath));
+  return fs.existsSync(absolute(filePath));
 }
 
 function read(filePath: string) {
-  return fs.readFileSync(path.join(process.cwd(), filePath), "utf8");
+  return fs.readFileSync(absolute(filePath), "utf8");
 }
 
-function add(items: Item[], severity: Severity, area: Area, message: string) {
+function add(
+  items: AuditItem[],
+  severity: Severity,
+  area: Area,
+  message: string
+) {
   items.push({ severity, area, message });
 }
 
-function requireFile(items: Item[], filePath: string, warning = false) {
+function requireFile(items: AuditItem[], filePath: string) {
   if (!exists(filePath)) {
-    add(items, warning ? "WARNING" : "ERROR", "files", `${filePath} is missing`);
+    add(items, "ERROR", "files", `${filePath} is missing`);
   }
 }
 
 function requireText(
-  items: Item[],
+  items: AuditItem[],
   filePath: string,
-  keyword: string | RegExp,
-  area: Area,
-  message: string,
-  severity: Severity = "ERROR"
-) {
-  if (!exists(filePath)) {
-    add(items, "ERROR", "files", `${filePath} is missing`);
-    return;
-  }
-
-  const content = read(filePath);
-  const found =
-    typeof keyword === "string" ? content.includes(keyword) : keyword.test(content);
-  if (!found) add(items, severity, area, message);
-}
-
-function forbidText(
-  items: Item[],
-  filePath: string,
-  keyword: string | RegExp,
+  pattern: string | RegExp,
   area: Area,
   message: string
 ) {
@@ -92,195 +79,202 @@ function forbidText(
     add(items, "ERROR", "files", `${filePath} is missing`);
     return;
   }
-
-  const content = read(filePath);
+  const source = read(filePath);
   const found =
-    typeof keyword === "string" ? content.includes(keyword) : keyword.test(content);
+    typeof pattern === "string" ? source.includes(pattern) : pattern.test(source);
+  if (!found) add(items, "ERROR", area, message);
+}
+
+function forbidText(
+  items: AuditItem[],
+  filePath: string,
+  pattern: string | RegExp,
+  area: Area,
+  message: string
+) {
+  if (!exists(filePath)) {
+    add(items, "ERROR", "files", `${filePath} is missing`);
+    return;
+  }
+  const source = read(filePath);
+  const found =
+    typeof pattern === "string" ? source.includes(pattern) : pattern.test(source);
   if (found) add(items, "ERROR", area, message);
 }
 
-function auditFiles(items: Item[]) {
-  for (const [name, filePath] of Object.entries(files)) {
-    requireFile(items, filePath, name === "og");
-  }
+function auditFiles(items: AuditItem[]) {
+  for (const filePath of Object.values(files)) requireFile(items, filePath);
 }
 
-function auditMetadata(items: Item[]) {
-  for (const keyword of [
+function auditGlobalIndexability(items: AuditItem[]) {
+  for (const pattern of [
     "metadataBase",
-    "title",
-    "description",
-    "openGraph",
-    "twitter",
+    /robots:\s*\{[\s\S]*?index:\s*true,[\s\S]*?follow:\s*true/,
+    /googleBot:\s*\{[\s\S]*?index:\s*true,[\s\S]*?follow:\s*true/,
     "verification",
   ]) {
     requireText(
       items,
       files.layout,
-      keyword,
+      pattern,
       "metadata",
-      `site-wide metadata is missing ${keyword}`,
-      keyword === "verification" ? "INFO" : "ERROR"
-    );
-  }
-
-  for (const keyword of [
-    /canonical:\s*["']\/["']/,
-    "グロース市場",
-    "openGraph",
-    "twitter",
-    "/opengraph-image",
-  ]) {
-    requireText(
-      items,
-      files.home,
-      keyword,
-      "metadata",
-      `root Growth page metadata is missing ${String(keyword)}`
-    );
-  }
-
-  for (const keyword of [
-    "ImageResponse",
-    "GROWTH MARKET",
-    "グロース市場を、決算から見抜く",
-  ]) {
-    requireText(
-      items,
-      files.growthOg,
-      keyword,
-      "metadata",
-      `Growth Open Graph image is missing ${keyword}`
+      `root metadata is missing required indexability setting: ${String(pattern)}`
     );
   }
 
   requireText(
     items,
+    files.robots,
+    'allow: "/"',
+    "robots",
+    "robots.txt must allow the public site root"
+  );
+  requireText(
+    items,
+    files.robots,
+    "sitemap:",
+    "robots",
+    "robots.txt must advertise sitemap.xml"
+  );
+  forbidText(
+    items,
+    files.robots,
+    /disallow:[\s\S]*["']\/company/,
+    "robots",
+    "robots.txt must never disallow /company"
+  );
+}
+
+function auditCanonicalHosts(items: AuditItem[]) {
+  for (const value of [
+    'const WWW_HOST = "www.kessan-tantei.jp"',
+    'const CANONICAL_HOST = "kessan-tantei.jp"',
+    "REDIRECT_HOSTS",
+    "NextResponse.redirect(canonicalUrl, 308)",
+  ]) {
+    requireText(
+      items,
+      files.proxy,
+      value,
+      "canonical",
+      `proxy canonical-host enforcement is missing: ${value}`
+    );
+  }
+
+  requireText(
+    items,
+    files.home,
+    /canonical:\s*["']\/["']/,
+    "canonical",
+    "Growth top must canonicalize to /"
+  );
+  requireText(
+    items,
     files.markets,
     /canonical:\s*["']\/markets["']/,
-    "metadata",
-    "/markets canonical is missing or incorrect"
+    "canonical",
+    "/markets canonical is missing"
   );
   requireText(
     items,
     files.latestEarnings,
     /canonical:\s*["']\/latest-earnings["']/,
-    "metadata",
-    "/latest-earnings canonical is missing or incorrect"
+    "canonical",
+    "/latest-earnings canonical is missing"
   );
+}
 
-  for (const keyword of ["title", "description", "openGraph", "twitter"]) {
-    requireText(
-      items,
-      files.latestEarnings,
-      keyword,
-      "metadata",
-      `/latest-earnings metadata is missing ${keyword}`
-    );
-  }
-
-  for (const keyword of [
+function auditCompanyIndexability(items: AuditItem[]) {
+  for (const pattern of [
     "export async function generateMetadata",
-    "alternates:",
-    "canonical:",
-    "robots:",
+    "canonical: `/company/${ticker}`",
+    /robots:\s*\{\s*index:\s*true,\s*follow:\s*true,?\s*\}/,
     "openGraph:",
     "twitter:",
   ]) {
     requireText(
       items,
       files.companyPage,
-      keyword,
-      "metadata",
-      `company page metadata is missing ${keyword}`
+      pattern,
+      "company",
+      `company page metadata is missing: ${String(pattern)}`
     );
   }
 
-  for (const keyword of [
-    "export async function generateMetadata",
-    "alternates: { canonical }",
-    "robots: { index: true, follow: true }",
-    "openGraph:",
-    "twitter:",
-    "pageNumberFromParts",
-    "redirect(pagePath(market.slug, 1))",
+  for (const forbidden of [
+    /index:\s*Boolean\(companyName\)/,
+    /index:\s*false/,
+    /<meta[^>]+(?:robots|googlebot)[^>]+noindex/i,
+  ]) {
+    forbidText(
+      items,
+      files.companyPage,
+      forbidden,
+      "company",
+      `company route contains a noindex regression: ${String(forbidden)}`
+    );
+  }
+
+  for (const forbidden of [
+    /<meta[^>]+name=["']robots["'][^>]+noindex/i,
+    /<meta[^>]+name=["']googlebot["'][^>]+noindex/i,
+  ]) {
+    forbidText(
+      items,
+      files.companyPlaceholder,
+      forbidden,
+      "company",
+      "listed company profile placeholder must never emit noindex"
+    );
+  }
+
+  for (const required of [
+    "直近の開示資料",
+    "企業基本情報",
+    "company_disclosures",
   ]) {
     requireText(
       items,
-      files.marketDirectory,
-      keyword,
-      "metadata",
-      `market company directory metadata is missing ${keyword}`
+      files.companyPlaceholder,
+      required,
+      "company",
+      `pre-analysis company profile lacks useful content: ${required}`
     );
   }
 
+  for (const required of [
+    "masterError",
+    "analysisError",
+    "throw new Error",
+    "if (master)",
+    "notFound();",
+  ]) {
+    requireText(
+      items,
+      files.companyPage,
+      required,
+      "company",
+      `company route transient-error handling is missing: ${required}`
+    );
+  }
   forbidText(
     items,
-    files.companyPlaceholder,
-    '<meta name="robots" content="noindex,follow" />',
-    "metadata",
-    "indexable company profile must not include robots noindex"
-  );
-  forbidText(
-    items,
-    files.companyPlaceholder,
-    '<meta name="googlebot" content="noindex,follow" />',
-    "metadata",
-    "indexable company profile must not include googlebot noindex"
-  );
-
-  requireText(
-    items,
-    files.companyPlaceholder,
-    "直近の開示資料",
-    "copy",
-    "indexable company profile must contain useful company-specific disclosure content"
+    files.companyPage,
+    /if\s*\(\s*(?:error|analysisError|masterError)\s*\)\s*notFound\(\)/,
+    "company",
+    "transient database errors must not be converted to 404"
   );
 
   if (exists(files.companyLayout) && read(files.companyLayout).includes("generateMetadata")) {
     add(
       items,
       "ERROR",
-      "metadata",
-      "company metadata is duplicated between page.tsx and layout.tsx"
-    );
-  }
-}
-
-function auditStructuredData(items: Item[]) {
-  for (const keyword of ["SeoJsonLd", "websiteJsonLd", "organizationJsonLd"]) {
-    requireText(
-      items,
-      files.layout,
-      keyword,
-      "structured-data",
-      `site-wide JSON-LD is missing ${keyword}`
+      "company",
+      "company metadata must not be duplicated in layout.tsx"
     );
   }
 
-  for (const keyword of [
-    "application/ld+json",
-    '"@type": "ItemList"',
-    '"@type": "BreadcrumbList"',
-  ]) {
-    requireText(
-      items,
-      files.latestEarnings,
-      keyword,
-      "structured-data",
-      `/latest-earnings is missing ${keyword}`
-    );
-    requireText(
-      items,
-      files.marketDirectory,
-      keyword,
-      "structured-data",
-      `market company directory is missing ${keyword}`
-    );
-  }
-
-  for (const keyword of [
-    "application/ld+json",
+  for (const required of [
     '"@type": "WebPage"',
     '"@type": "BreadcrumbList"',
     "tickerSymbol",
@@ -288,217 +282,185 @@ function auditStructuredData(items: Item[]) {
     requireText(
       items,
       files.companyLayout,
-      keyword,
+      required,
       "structured-data",
-      `company page is missing ${keyword}`
+      `company JSON-LD is missing ${required}`
     );
   }
 }
 
-function auditSitemap(items: Item[]) {
-  for (const keyword of [
-    "last_financial_update",
-    "last_market_master_update",
-    "companyLastModified",
-    'path: "/latest-earnings"',
+function auditSitemap(items: AuditItem[]) {
+  for (const required of [
     "loadAllListedCompanies",
     'eq("listing_status", "listed")',
-    "MARKET_COMPANY_PAGE_SIZE",
-    "marketDirectoryPath",
-    "directoryPages",
-    "market_segment",
+    '.in("market_segment", ["growth", "standard", "prime"])',
     "const companyPages",
     "companies.map",
+    "companyLastModified",
+    "directoryPages",
+    'path: "/latest-earnings"',
   ]) {
     requireText(
       items,
       files.sitemap,
-      keyword,
+      required,
       "sitemap",
-      `sitemap does not contain ${keyword}`
+      `sitemap is missing ${required}`
     );
   }
 
-  if (exists(files.sitemap)) {
-    const sitemap = read(files.sitemap);
-    if (/const\s+now\s*=\s*new\s+Date\(\)/.test(sitemap)) {
-      add(items, "ERROR", "sitemap", "sitemap still creates a synthetic current timestamp");
-    }
-    if (/companyPages[\s\S]*lastModified:\s*now/.test(sitemap)) {
-      add(items, "ERROR", "sitemap", "company pages still use a synthetic current timestamp");
-    }
-    if (/path:\s*["']\/growth["']/.test(sitemap)) {
-      add(items, "ERROR", "sitemap", "redirect URL /growth must not be included in sitemap");
-    }
-    if (sitemap.includes("loadAllAnalyzedTickers")) {
-      add(items, "ERROR", "sitemap", "company sitemap must not exclude listed companies that are still awaiting analysis");
-    }
-    if (sitemap.includes("analyzedTickers.has(company.ticker)")) {
-      add(items, "ERROR", "sitemap", "company sitemap must include all listed company profile URLs");
-    }
-    if (!sitemap.includes("...directoryPages")) {
-      add(items, "ERROR", "sitemap", "market directory pages are not returned by sitemap");
-    }
+  for (const forbidden of [
+    "loadAllAnalyzedTickers",
+    "analyzedTickers.has(company.ticker)",
+    /path:\s*["']\/growth["']/,
+    /const\s+now\s*=\s*new\s+Date\(\)/,
+  ]) {
+    forbidText(
+      items,
+      files.sitemap,
+      forbidden,
+      "sitemap",
+      `sitemap contains a regression: ${String(forbidden)}`
+    );
   }
 }
 
-function auditLinks(items: Item[]) {
-  const requiredLinks = [
-    { file: files.growthHome, value: "/ranking" },
-    { file: files.home, value: '<MarketDirectoryCallout marketSlug="growth" />' },
-    { file: files.prime, value: '<MarketDirectoryCallout marketSlug="prime" />' },
-    { file: files.standard, value: '<MarketDirectoryCallout marketSlug="standard" />' },
-    { file: files.marketDirectoryCallout, value: "/companies/" },
-    { file: files.markets, value: "/companies/" },
-    { file: files.marketDirectory, value: "/company/" },
-    { file: files.marketDirectory, value: "/companies/" },
-    { file: files.siteNav, value: "/latest-earnings" },
-    { file: files.latestEarnings, value: "/company/" },
-    { file: files.companyLayout, value: "/latest-earnings" },
-    { file: files.markets, value: "AllMarketCompanySearch" },
-    { file: files.allMarketSearch, value: "/company/" },
-    { file: files.companyPlaceholder, value: 'if (value === "growth") return "/"' },
-    { file: files.xShare, value: 'searchParams.set("utm_source", "x")' },
-    { file: files.xShare, value: 'searchParams.set("utm_medium", "social")' },
-    { file: files.xShare, value: 'searchParams.set("utm_campaign", "company_share")' },
-    { file: files.xShare, value: 'searchParams.set("utm_content", ticker)' },
-    { file: files.xShare, value: "#決算探偵" },
-  ];
-
-  for (const check of requiredLinks) {
-    requireText(
-      items,
-      check.file,
-      check.value,
-      "links",
-      `${check.file} does not contain ${check.value}`
-    );
-  }
-
-  for (const keyword of [
-    "MARKET_COMPANY_PAGE_SIZE = 100",
-    "unstable_cache",
+function auditInternalDiscovery(items: AuditItem[]) {
+  for (const required of [
     'eq("listing_status", "listed")',
-    'neq("risk_level", "EXCLUDED")',
+    "const analysisByTicker",
+    "return masters",
+    "analyzed: Boolean(analysis)",
+    'market-company-directory-v2',
   ]) {
     requireText(
       items,
       files.marketDirectoryData,
-      keyword,
+      required,
       "links",
-      `market directory data loader is missing ${keyword}`
+      `market company directory must include every listed company: ${required}`
+    );
+  }
+
+  for (const required of [
+    "/company/",
+    "company.analyzed",
+    "分析準備中",
+    "上場企業",
+  ]) {
+    requireText(
+      items,
+      files.marketDirectory,
+      required,
+      "links",
+      `market directory is missing crawlable listed-company behavior: ${required}`
+    );
+  }
+
+  for (const [filePath, required] of [
+    [files.home, '<MarketDirectoryCallout marketSlug="growth" />'],
+    [files.prime, '<MarketDirectoryCallout marketSlug="prime" />'],
+    [files.standard, '<MarketDirectoryCallout marketSlug="standard" />'],
+    [files.markets, "/companies/"],
+    [files.latestEarnings, "/company/"],
+    [files.companyLayout, "/latest-earnings"],
+    [files.allMarketSearch, "/company/"],
+    [files.siteNav, "/latest-earnings"],
+  ] as const) {
+    requireText(
+      items,
+      filePath,
+      required,
+      "links",
+      `${filePath} is missing internal discovery link ${required}`
     );
   }
 }
 
-function auditCopy(items: Item[]) {
+function auditPositioning(items: AuditItem[]) {
   requireText(
     items,
     files.growthHome,
     "GROWTH MARKET FINANCIAL DASHBOARD",
-    "copy",
+    "metadata",
     "root page must remain the Growth Market dashboard"
   );
   requireText(
     items,
     files.growthHome,
     "グロース市場を、",
-    "copy",
-    "root page Growth Market heading is missing"
+    "metadata",
+    "root page must remain Growth-market specific"
   );
   requireText(
     items,
     files.markets,
     "プライム・スタンダード・グロース",
-    "copy",
+    "metadata",
     "/markets must remain the all-market entry"
   );
-  requireText(
-    items,
-    files.marketDirectory,
-    "決算探偵で財務分析が完了している",
-    "copy",
-    "market company directory must explain that only analyzed companies are listed"
-  );
+}
 
-  const forbiddenChecks = [
-    { file: files.layout, forbidden: "グロース市場特化" },
-    { file: files.growthHome, forbidden: "JAPAN STOCK EARNINGS & FINANCIAL DASHBOARD" },
-    { file: files.growthHome, forbidden: "日本株を、" },
-  ];
-
-  for (const check of forbiddenChecks) {
-    if (exists(check.file) && read(check.file).includes(check.forbidden)) {
-      add(items, "ERROR", "copy", `incorrect copy remains: ${check.file} / ${check.forbidden}`);
-    }
+function auditProductionVerifier(items: AuditItem[]) {
+  for (const required of [
+    "Googlebot/2.1",
+    "x-robots-tag",
+    "hasNoindex",
+    "canonicalFromHtml",
+    "verifySitemap",
+    "verifyHostCanonicalization",
+    "verifyCompany",
+    "status === 200",
+    "sitemap の会社URL数",
+  ]) {
+    requireText(
+      items,
+      files.productionVerifier,
+      required,
+      "production",
+      `live production verifier is missing ${required}`
+    );
   }
 }
 
-function auditPerformance(items: Item[]) {
-  requireText(
-    items,
-    files.layout,
-    "SpeedInsights",
-    "performance",
-    "Vercel Speed Insights is not mounted",
-    "INFO"
-  );
-  requireText(
-    items,
-    files.layout,
-    "Analytics",
-    "performance",
-    "Vercel Analytics is not mounted",
-    "INFO"
-  );
-  requireText(
-    items,
-    files.marketDirectoryData,
-    "revalidate: 3600",
-    "performance",
-    "market company directory data must be cached"
-  );
-}
-
-function printGroup(title: string, items: Item[]) {
-  console.log(`\n=== ${title} ===`);
-  if (items.length === 0) {
-    console.log("OK");
-    return;
-  }
-  for (const item of items) console.log(`${item.severity} ${item.area}: ${item.message}`);
-}
-
-function score(items: Item[]) {
+function score(items: AuditItem[]) {
   const errors = items.filter((item) => item.severity === "ERROR").length;
   const warnings = items.filter((item) => item.severity === "WARNING").length;
   return Math.max(0, 100 - errors * 20 - warnings * 5);
 }
 
 function main() {
-  const items: Item[] = [];
+  const items: AuditItem[] = [];
   auditFiles(items);
-  auditMetadata(items);
-  auditStructuredData(items);
+  auditGlobalIndexability(items);
+  auditCanonicalHosts(items);
+  auditCompanyIndexability(items);
   auditSitemap(items);
-  auditLinks(items);
-  auditCopy(items);
-  auditPerformance(items);
+  auditInternalDiscovery(items);
+  auditPositioning(items);
+  auditProductionVerifier(items);
 
   const errors = items.filter((item) => item.severity === "ERROR");
   const warnings = items.filter((item) => item.severity === "WARNING");
   const info = items.filter((item) => item.severity === "INFO");
 
-  console.log("=== SEO audit ===");
-  console.log({
-    score: score(items),
-    errors: errors.length,
-    warnings: warnings.length,
-    info: info.length,
-  });
-  printGroup("ERRORS", errors);
-  printGroup("WARNINGS", warnings);
-  printGroup("INFO", info);
+  console.log("=== SEO / indexability audit ===");
+  console.log({ score: score(items), errors: errors.length, warnings: warnings.length, info: info.length });
+
+  for (const group of [
+    ["ERRORS", errors],
+    ["WARNINGS", warnings],
+    ["INFO", info],
+  ] as const) {
+    console.log(`\n=== ${group[0]} ===`);
+    if (group[1].length === 0) {
+      console.log("OK");
+    } else {
+      for (const item of group[1]) {
+        console.log(`${item.severity} ${item.area}: ${item.message}`);
+      }
+    }
+  }
 
   if (errors.length > 0) process.exitCode = 1;
 }
