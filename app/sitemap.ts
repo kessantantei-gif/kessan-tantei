@@ -9,7 +9,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 
 const appUrl = "https://kessan-tantei.jp";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
 
 type CompanySitemapRow = {
   ticker: string;
