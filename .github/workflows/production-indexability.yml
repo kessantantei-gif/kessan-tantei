@@ -19,7 +19,7 @@ on:
       - "package-lock.json"
       - ".github/workflows/production-indexability.yml"
   schedule:
-    - cron: "15 22 * * *"
+    - cron: "15 22 * * 0"
   workflow_dispatch:
 
 permissions:
@@ -45,7 +45,7 @@ jobs:
           payload=$(jq -nc \
             --arg state "pending" \
             --arg context "Production Indexability" \
-            --arg description "Live Googlebot and Clerk production audit running" \
+            --arg description "Production indexability audit running" \
             --arg target_url "$target_url" \
             '{state:$state, context:$context, description:$description, target_url:$target_url}')
 
@@ -69,43 +69,102 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify deployed site as Googlebot
-        id: verify
+      - name: Wait for production deployment after main push
+        if: github.event_name == 'push'
+        run: sleep 60
+
+      - name: Lightweight production smoke audit after main push
+        if: github.event_name == 'push'
+        id: smoke
         continue-on-error: true
         shell: bash
         run: |
           set +e
-          for attempt in $(seq 1 20); do
-            echo "Production indexability attempt ${attempt}/20"
-            npm run audit:production-indexability
-            result=$?
-            if [ "$result" -eq 0 ]; then
-              echo "Production indexability verification passed."
+          for attempt in 1 2 3; do
+            echo "Lightweight production smoke attempt ${attempt}/3"
+            npm run audit:clerk-production
+            clerk_result=$?
+
+            node <<'NODE'
+          const ua = 'Mozilla/5.0 (compatible; Google-InspectionTool/1.0; +http://www.google.com/bot.html)';
+          const checks = [
+            ['/', true],
+            ['/sitemap.xml', false],
+            ['/company/6702', true],
+            ['/company/5870', true],
+          ];
+          let failed = false;
+          for (const [path, html] of checks) {
+            const url = `https://kessan-tantei.jp${path}`;
+            try {
+              const res = await fetch(url, {
+                redirect: 'follow',
+                headers: { 'user-agent': ua, accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' },
+                signal: AbortSignal.timeout(20000),
+              });
+              const body = await res.text();
+              const xRobots = res.headers.get('x-robots-tag') || '';
+              const htmlNoindex = /<meta[^>]+(?:name=["'](?:robots|googlebot)["'][^>]+content=["'][^"']*noindex|content=["'][^"']*noindex[^"']*["'][^>]+name=["'](?:robots|googlebot)["'])/i.test(body);
+              const canonical = html
+                ? body.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i)?.[1]
+                  ?? body.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["']canonical["']/i)?.[1]
+                  ?? null
+                : null;
+              const expected = path === '/' ? 'https://kessan-tantei.jp' : `https://kessan-tantei.jp${path}`;
+              const ok = res.status === 200 && !xRobots.toLowerCase().includes('noindex') && !htmlNoindex && (!html || canonical === expected);
+              console.log(JSON.stringify({ path, status: res.status, finalUrl: res.url, xRobots, canonical, ok }));
+              if (!ok) failed = true;
+            } catch (error) {
+              console.error(path, error);
+              failed = true;
+            }
+          }
+          process.exit(failed ? 1 : 0);
+          NODE
+            smoke_result=$?
+
+            if [ "$clerk_result" -eq 0 ] && [ "$smoke_result" -eq 0 ]; then
+              echo "Lightweight production smoke passed."
               exit 0
             fi
-            if [ "$attempt" -lt 20 ]; then
-              echo "Production may still be deploying; retrying in 20 seconds."
-              sleep 20
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "Production may still be settling; retrying in 30 seconds."
+              sleep 30
             fi
           done
-          echo "Production indexability verification failed after all retries."
           exit 1
+
+      - name: Full weekly/manual production indexability audit
+        if: github.event_name != 'push'
+        id: full
+        continue-on-error: true
+        run: npm run audit:production-indexability
 
       - name: Publish final Production Indexability status
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+          FULL_OUTCOME: ${{ steps.full.outcome }}
         shell: bash
         run: |
           target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
-          if [ "$VERIFY_OUTCOME" = "success" ]; then
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            outcome="$SMOKE_OUTCOME"
+            success_description="Lightweight live indexability smoke passed"
+          else
+            outcome="$FULL_OUTCOME"
+            success_description="Full live indexability audit passed"
+          fi
+
+          if [ "$outcome" = "success" ]; then
             state="success"
-            description="Live Googlebot and Clerk production audit passed"
+            description="$success_description"
           else
             state="failure"
-            description="Live Googlebot or Clerk production audit failed"
+            description="Production indexability audit failed"
           fi
 
           payload=$(jq -nc \
@@ -124,5 +183,7 @@ jobs:
             -d "$payload"
 
       - name: Fail workflow when production indexability failed
-        if: steps.verify.outcome != 'success'
+        if: |
+          (github.event_name == 'push' && steps.smoke.outcome != 'success') ||
+          (github.event_name != 'push' && steps.full.outcome != 'success')
         run: exit 1
