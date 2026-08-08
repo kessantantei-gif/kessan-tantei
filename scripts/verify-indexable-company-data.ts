@@ -26,6 +26,7 @@ async function loadListedCompanies() {
       .from("all_market_companies")
       .select("ticker, market_segment")
       .eq("listing_status", "listed")
+      .in("market_segment", requiredMarkets)
       .order("ticker", { ascending: true })
       .range(from, from + pageSize - 1);
 
@@ -74,40 +75,35 @@ async function main() {
 
   const listedTickers = new Set(listedCompanies.map((row) => row.ticker));
   const analyzedTickers = new Set(analyzedCompanies.map((row) => row.ticker));
-  const indexableCompanies = analyzedCompanies.filter((row) => listedTickers.has(row.ticker));
-  const indexableTickers = new Set(indexableCompanies.map((row) => row.ticker));
+  const analyzedListedCompanies = analyzedCompanies.filter((row) => listedTickers.has(row.ticker));
+  const preparationCompanies = listedCompanies.filter((row) => !analyzedTickers.has(row.ticker));
   const analyzedButNotListed = analyzedCompanies.filter((row) => !listedTickers.has(row.ticker));
-  const preparationCount = listedCompanies.filter(
-    (row) => !indexableTickers.has(row.ticker)
-  ).length;
   const listedByMarket = countByMarket(listedCompanies);
-  const indexableByMarket = countByMarket(indexableCompanies);
+  const analyzedListedByMarket = countByMarket(analyzedListedCompanies);
+  const preparationByMarket = countByMarket(preparationCompanies);
   const directoryPagesByMarket = Object.fromEntries(
     requiredMarkets.map((market) => [
       market,
-      Math.ceil((indexableByMarket[market] ?? 0) / DIRECTORY_PAGE_SIZE),
+      Math.ceil((listedByMarket[market] ?? 0) / DIRECTORY_PAGE_SIZE),
     ])
   );
 
   if (listedCompanies.length === 0) {
-    throw new Error("上場企業マスタが0件です");
+    throw new Error("検索登録対象の上場企業マスタが0件です");
   }
   if (analyzedCompanies.length === 0) {
     throw new Error("EXCLUDEDを除く分析済み企業が0件です");
   }
-  if (indexableCompanies.length === 0) {
-    throw new Error("サイトマップへ掲載可能な分析済み上場企業が0件です");
-  }
-  if (indexableCompanies.length > listedCompanies.length) {
-    throw new Error("検索登録対象企業数が上場企業数を超えています");
+  if (new Set(listedCompanies.map((row) => row.ticker)).size !== listedCompanies.length) {
+    throw new Error("all_market_companiesの検索登録対象に証券コード重複があります");
   }
   if (analyzedTickers.size !== analyzedCompanies.length) {
     throw new Error("company_analysesに証券コードの重複があります");
   }
 
   for (const market of requiredMarkets) {
-    if ((indexableByMarket[market] ?? 0) === 0) {
-      throw new Error(`${market}市場の検索登録対象企業が0件です`);
+    if ((listedByMarket[market] ?? 0) === 0) {
+      throw new Error(`${market}市場の上場企業が0件です`);
     }
     if ((directoryPagesByMarket[market] ?? 0) === 0) {
       throw new Error(`${market}市場の企業一覧ページ数が0です`);
@@ -116,19 +112,21 @@ async function main() {
 
   const report = {
     checkedAt: new Date().toISOString(),
-    listedCompanies: listedCompanies.length,
+    indexableListedCompanies: listedCompanies.length,
     activeAnalyzedCompanies: analyzedCompanies.length,
-    indexableListedCompanies: indexableCompanies.length,
-    preparationCompaniesExcludedFromSitemap: preparationCount,
+    analyzedListedCompanies: analyzedListedCompanies.length,
+    indexablePreparationCompanies: preparationCompanies.length,
     analyzedButNotListed: analyzedButNotListed.length,
     listedByMarket,
-    indexableByMarket,
+    analyzedListedByMarket,
+    preparationByMarket,
     directoryPageSize: DIRECTORY_PAGE_SIZE,
     directoryPagesByMarket,
     totalDirectoryPages: Object.values(directoryPagesByMarket).reduce(
       (sum, value) => sum + value,
       0
     ),
+    preparationSamples: preparationCompanies.slice(0, 10).map((row) => row.ticker),
     analyzedButNotListedSamples: analyzedButNotListed.slice(0, 10).map((row) => row.ticker),
   };
 
