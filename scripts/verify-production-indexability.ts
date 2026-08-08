@@ -228,7 +228,7 @@ async function verifyStaticPages() {
   ];
 
   for (const path of paths) {
-    const expectedUrl = `${SITE_URL}${path}`;
+    const expectedUrl = path === "/" ? SITE_URL : `${SITE_URL}${path}`;
     const result = await fetchText(expectedUrl);
     assert(result.status === 200, `${path} が ${result.status} を返しました`);
     assert(
