@@ -16,7 +16,7 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Inspect live responses with Node fetch
         shell: bash
@@ -26,7 +26,14 @@ jobs:
             Googlebot: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
             Inspection: 'Mozilla/5.0 (compatible; Google-InspectionTool/1.0; +http://www.google.com/bot.html)',
           };
-          const paths = ['/', '/robots.txt', '/sitemap.xml', '/markets', '/latest-earnings', '/pricing', '/company/6702', '/company/5870'];
+          const paths = [
+            '/', '/robots.txt', '/sitemap.xml', '/markets', '/latest-earnings',
+            '/standard', '/standard/ranking', '/prime', '/prime/ranking', '/updates',
+            '/news', '/ranking', '/themes', '/features', '/data-quality', '/about-growth',
+            '/pricing', '/legal', '/privacy', '/terms', '/disclaimer',
+            '/companies/growth', '/companies/prime', '/companies/standard',
+            '/company/6702', '/company/5870'
+          ];
           for (const [label, ua] of Object.entries(uas)) {
             console.log(`===== ${label} =====`);
             for (const path of paths) {
@@ -55,7 +62,6 @@ jobs:
                   canonical,
                   htmlNoindex: noindex,
                   bodyLength: body.length,
-                  bodyStart: body.slice(0, 500).replace(/\s+/g, ' '),
                 }));
               } catch (e) {
                 console.log(JSON.stringify({path, error: String(e)}));
