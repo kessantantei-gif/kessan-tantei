@@ -19,6 +19,10 @@ type CompanySitemapRow = {
   updated_at: string | null;
 };
 
+type AnalysisTickerRow = {
+  ticker: string;
+};
+
 type StaticSitemapPath = {
   path: string;
   changeFrequency: NonNullable<MetadataRoute.Sitemap[number]["changeFrequency"]>;
@@ -47,6 +51,25 @@ async function loadAllListedCompanies() {
   }
 
   return rows;
+}
+
+async function loadAllAnalyzedTickers() {
+  const rows: AnalysisTickerRow[] = [];
+  const pageSize = 1000;
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabaseAdmin
+      .from("company_analyses")
+      .select("ticker")
+      .order("ticker", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) throw new Error(`sitemap分析済み企業取得失敗: ${error.message}`);
+    rows.push(...((data ?? []) as AnalysisTickerRow[]));
+    if ((data ?? []).length < pageSize) break;
+  }
+
+  return new Set(rows.map((row) => row.ticker));
 }
 
 function validDate(value: string | null | undefined) {
@@ -82,8 +105,16 @@ function marketDirectoryPath(market: MarketSlug, pageNumber: number) {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const companies = await loadAllListedCompanies();
-  const latestFinancialUpdate = newestDate(companies.map(companyLastModified));
+  const [companies, analyzedTickers] = await Promise.all([
+    loadAllListedCompanies(),
+    loadAllAnalyzedTickers(),
+  ]);
+  const indexReadyCompanies = companies.filter((company) =>
+    analyzedTickers.has(company.ticker)
+  );
+  const latestFinancialUpdate = newestDate(
+    indexReadyCompanies.map(companyLastModified)
+  );
 
   const staticPaths: StaticSitemapPath[] = [
     { path: "", changeFrequency: "daily", priority: 1, dataDriven: true },
@@ -150,7 +181,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }));
   });
 
-  const companyPages: MetadataRoute.Sitemap = companies.map((company) => {
+  const companyPages: MetadataRoute.Sitemap = indexReadyCompanies.map((company) => {
     const lastModified = companyLastModified(company);
     return {
       url: `${appUrl}/company/${company.ticker}`,
