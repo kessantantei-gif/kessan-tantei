@@ -73,24 +73,11 @@ function enhanceTrendPanels() {
 
       if (header instanceof HTMLElement) {
         header.classList.add(styles.trendHeader);
-        const period = header.firstElementChild;
         const valueElement = header.lastElementChild;
         valueElement?.classList.add(
           styles.trendValue,
           value < 0 ? styles.trendValueNegative : styles.trendValuePositive
         );
-
-        if (
-          index === rows.length - 1 &&
-          period instanceof HTMLElement &&
-          !period.querySelector("[data-latest-period='true']")
-        ) {
-          const latest = document.createElement("span");
-          latest.dataset.latestPeriod = "true";
-          latest.className = styles.latestBadge;
-          latest.textContent = "最新";
-          period.appendChild(latest);
-        }
       }
 
       if (track instanceof HTMLElement) {
