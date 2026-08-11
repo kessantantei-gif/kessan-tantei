@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/clerk-server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { generateComment } from "@/lib/comment-engine";
 import { generateLabels } from "@/lib/label-engine";
+import { generateFinancialInsight } from "@/lib/financial-insight-engine";
 import { getCompanyNews, summarizeComments } from "@/lib/news-engine";
 import {
   canViewAiAnalysis,
@@ -15,7 +15,11 @@ import CompanyBoard, { type BoardComment } from "@/components/company-board";
 import CompanyNewsCarousel from "@/components/company-news-carousel";
 import FeedbackButton from "@/components/feedback-button";
 import CompanyIndexPlaceholder from "@/components/company-index-placeholder";
-import { CompanyEarningsChange, CompanyFinancialTrends } from "@/components/company-quarterly-panels";
+import FinancialInsightPanel from "@/components/financial-insight-panel";
+import {
+  CompanyEarningsChange,
+  CompanyFinancialTrends,
+} from "@/components/company-quarterly-panels";
 import type { QuarterlyFinancialRow } from "@/lib/quarterly-financials";
 import type { Metadata } from "next";
 
@@ -48,14 +52,6 @@ type Reaction = {
 
 function yenOku(value: number) {
   return `${(value / 100000000).toFixed(2)} 億円`;
-}
-
-function riskLabel(level: string) {
-  if (level === "REJECT") return "投資対象外";
-  if (level === "DANGEROUS") return "危険";
-  if (level === "WARNING") return "警戒";
-  if (level === "WATCH") return "要観察";
-  return "安全";
 }
 
 function riskColor(level: string) {
@@ -100,9 +96,9 @@ export async function generateMetadata({
     : `${ticker}の決算・財務分析 | 決算探偵`;
 
   const description = analysis
-    ? `${companyName}（${ticker}）の財務スコア、危険度、売上・利益・キャッシュフロー推移、決算変化を確認できます。`
+    ? `${companyName}（${ticker}）のFinancial Score、Danger Score、売上・利益・営業CF、決算変化と警戒シグナルを同一基準で確認できます。`
     : master
-      ? `${companyName}（証券コード：${ticker}）の上場市場、業種、決算・財務分析情報。公式開示資料と取得済みデータを順次更新します。`
+      ? `${companyName}（証券コード：${ticker}）の上場市場、業種、直近開示と決算・財務データを確認できます。`
       : `証券コード${ticker}の決算・財務分析ページです。`;
 
   return {
@@ -180,9 +176,9 @@ export default async function CompanyPage({ params }: PageProps) {
   const { userId } = await auth();
   const isLoggedIn = Boolean(userId);
 
-  const aiPermission = await canViewAiAnalysis();
+  const detailPermission = await canViewAiAnalysis();
 
-  if (aiPermission.allowed && !aiPermission.isPro) {
+  if (detailPermission.allowed && !detailPermission.isPro) {
     await consumeFreeAiUseIfNeeded();
   }
 
@@ -309,15 +305,19 @@ export default async function CompanyPage({ params }: PageProps) {
     safety: 0,
   };
 
-  const canShowProDetail = aiPermission.isPro;
+  const canShowProDetail = detailPermission.isPro;
 
-  const detectiveComment = generateComment({
+  const financialInsight = generateFinancialInsight({
     score: data.score ?? 0,
     dangerScore: data.danger_score ?? 0,
     riskLevel: data.risk_level ?? "SAFE",
-    revenue: financials.revenue ?? 0,
-    operatingIncome: financials.operatingIncome ?? 0,
-    operatingCF: financials.operatingCF ?? 0,
+    revenue: financials.revenue ?? null,
+    revenueGrowth: financials.revenueGrowth ?? null,
+    operatingIncome: financials.operatingIncome ?? null,
+    operatingMargin: financials.operatingMargin ?? null,
+    operatingCF: financials.operatingCF ?? null,
+    operatingCFMargin: financials.operatingCFMargin ?? null,
+    equityRatio: financials.equityRatio ?? null,
     flags: risk.flags ?? [],
   });
 
@@ -330,44 +330,6 @@ export default async function CompanyPage({ params }: PageProps) {
     operatingCF: financials.operatingCF ?? 0,
     flags: risk.flags ?? [],
   });
-
-  const readableRiskLabel = riskLabel(data.risk_level ?? "SAFE");
-
-  const aiAnalysis = `
-【AI詳細財務分析】
-
-総合スコア: ${data.score ?? 0}
-Danger Score: ${data.danger_score ?? 0}
-
-売上高: ${yenOku(financials.revenue ?? 0)}
-営業利益: ${yenOku(financials.operatingIncome ?? 0)}
-営業CF: ${yenOku(financials.operatingCF ?? 0)}
-
-【総合判定】
-${
-  (data.score ?? 0) >= 80
-    ? "財務スコアは高水準です。成長性・収益品質・安全性のバランスが比較的良好です。"
-    : (data.score ?? 0) >= 60
-    ? "財務状態は平均以上ですが、収益性・営業CF・安全性のいずれかに注意点があります。"
-    : "財務面に複数の懸念があります。成長性だけで判断せず、資金繰り・希薄化・Red Flagsを慎重に確認する必要があります。"
-}
-
-【営業利益と営業CF】
-${
-  (financials.operatingIncome ?? 0) > 0 && (financials.operatingCF ?? 0) > 0
-    ? "営業利益・営業CFともにプラスで、利益が現金創出に結びついています。利益の質は比較的高いと評価できます。"
-    : (financials.operatingIncome ?? 0) > 0 && (financials.operatingCF ?? 0) <= 0
-    ? "営業黒字ですが営業CFがマイナスです。売掛金増加、在庫増加、先行費用などにより、利益が現金化されていない可能性があります。"
-    : (financials.operatingIncome ?? 0) <= 0 && (financials.operatingCF ?? 0) > 0
-    ? "営業赤字ですが営業CFはプラスです。会計上の赤字と資金流出が必ずしも一致していないため、内容の確認が重要です。"
-    : "営業利益・営業CFともにマイナスです。資金繰りと追加調達リスクには注意が必要です。"
-}
-
-【検出されたリスク】
-${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRed Flagは検出されていません。"}
-
-※ 本分析はEDINET等の開示情報をもとにした機械的分析であり、投資助言ではありません。
-`;
 
   return (
     <main className="min-h-screen bg-[#050816] text-white" data-company-page="true">
@@ -385,12 +347,15 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
       </header>
 
       <section className="relative z-10 mx-auto w-full max-w-7xl px-3 py-4 sm:px-8 sm:py-8">
-        <div data-company-section="overview" className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,420px)] lg:gap-5">
+        <div
+          data-company-section="overview"
+          className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,420px)] lg:gap-5"
+        >
           <div className="min-w-0 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-6">
             <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
-                <p className="text-[11px] tracking-[0.24em] text-slate-500 sm:text-sm">
-                  EDINET AUTO ANALYSIS
+                <p className="text-[11px] font-black tracking-[0.24em] text-cyan-300 sm:text-sm">
+                  FINANCIAL SIGNALS / OFFICIAL DISCLOSURES
                 </p>
 
                 <h1 className="mt-3 max-w-full text-2xl font-black leading-tight sm:text-5xl">
@@ -404,7 +369,7 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
                   ticker={data.ticker}
                   score={data.score ?? 0}
                   dangerScore={data.danger_score ?? 0}
-                  riskLabel={readableRiskLabel}
+                  riskLabel={financialInsight.verdict}
                 />
               </div>
             </div>
@@ -413,8 +378,8 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
               <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-slate-300 sm:px-4 sm:text-sm">
                 TSE: {data.ticker}
               </span>
-              <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-slate-300 sm:px-4 sm:text-sm">
-                {data.doc_id}
+              <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs font-bold text-cyan-200 sm:px-4 sm:text-sm">
+                公式開示ベース
               </span>
             </div>
 
@@ -462,20 +427,24 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
             ) : null}
           </div>
 
-          <div className={`min-w-0 rounded-3xl bg-gradient-to-br ${riskColor(data.risk_level)} p-[1px] shadow-2xl`}>
+          <div
+            className={`min-w-0 rounded-3xl bg-gradient-to-br ${riskColor(
+              data.risk_level ?? "SAFE"
+            )} p-[1px] shadow-2xl`}
+          >
             <div className="flex h-full min-w-0 flex-col items-center justify-center rounded-3xl bg-black/80 p-4 backdrop-blur-xl sm:p-6">
-              <p className="text-[11px] tracking-[0.24em] text-slate-400 sm:text-sm">
-                TOTAL SCORE
+              <p className="text-[11px] font-black tracking-[0.24em] text-slate-400 sm:text-sm">
+                FINANCIAL SCORE
               </p>
 
               <ScoreGauge score={data.score ?? 0} />
 
               <div className="mt-2 text-center">
                 <p className="text-xl font-black sm:text-2xl">
-                  {readableRiskLabel}
+                  判定：{financialInsight.verdict}
                 </p>
                 <p className="mt-1 text-sm text-slate-400">
-                  Danger Score {data.danger_score ?? 0}
+                  Danger Score {data.danger_score ?? 0} / 100
                 </p>
               </div>
 
@@ -516,15 +485,25 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
           </section>
         ) : null}
 
-        <CompanyFinancialTrends annualHistory={history} quarterlyHistory={quarterlyHistory} />
+        <CompanyFinancialTrends
+          annualHistory={history}
+          quarterlyHistory={quarterlyHistory}
+        />
 
-        <div data-company-section="financial-details" className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
-          <Panel title="決算探偵の見立て">{detectiveComment}</Panel>
+        <div
+          data-company-section="financial-details"
+          className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2"
+        >
+          <Panel title="決算探偵 判定">
+            <FinancialInsightPanel insight={financialInsight} compact />
+          </Panel>
 
-          <Panel title="Danger内訳 / Red Flags">
+          <Panel title="警戒シグナル">
             {canShowProDetail ? (
               (risk.flags ?? []).length === 0 ? (
-                <p>重大なレッドフラッグなし</p>
+                <p className="rounded-2xl border border-green-400/15 bg-green-500/5 p-4 font-bold text-green-200">
+                  主要な警戒フラグは検出されていません。
+                </p>
               ) : (
                 <div className="space-y-3">
                   {(risk.flags ?? []).map((flag: any, i: number) => (
@@ -532,14 +511,12 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
                       key={i}
                       className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm sm:text-base"
                     >
-                      <p className="font-black text-yellow-300">
-                        ⚠ {flag.title}
-                      </p>
-                      <p className="mt-2 text-slate-300">
-                        {flag.description ?? "詳細説明はありません。"}
-                      </p>
-                      <p className="mt-2 text-sm text-yellow-200">
-                        Danger impact: +{flag.scoreImpact ?? 0}
+                      <p className="font-black text-yellow-300">{flag.title}</p>
+                      {flag.description ? (
+                        <p className="mt-2 text-slate-300">{flag.description}</p>
+                      ) : null}
+                      <p className="mt-2 text-sm font-bold text-yellow-200">
+                        スコア影響 +{flag.scoreImpact ?? 0}
                       </p>
                     </div>
                   ))}
@@ -547,8 +524,8 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
               )
             ) : (
               <ProLock
-                title="Danger内訳はPro限定です"
-                message="どのリスクがDanger Scoreに影響しているか、初月100円のProで確認できます。"
+                title="警戒シグナルの内訳はPro限定です"
+                message="Danger Scoreを構成する項目とスコア影響を確認できます。"
               />
             )}
           </Panel>
@@ -561,37 +538,53 @@ ${(risk.flags ?? []).map((x: any) => `・${x.title}`).join("\n") || "重大なRe
             canShowProDetail={canShowProDetail}
             lockedContent={
               <ProLock
-                title="決算変化速報はPro限定です"
-                message="最新四半期の前年同期比、赤字転落・黒字化・CF悪化などをProで確認できます。"
+                title="決算変化はPro限定です"
+                message="最新四半期と比較期の売上・営業利益・営業CFの差を確認できます。"
               />
             }
           />
 
           <div data-company-section="ai-analysis">
-            <Panel title="AI詳細財務分析">
-              {aiPermission.allowed ? (
-                <pre className="whitespace-pre-wrap break-words leading-8 text-slate-300">{aiAnalysis}</pre>
+            <Panel title="詳細判定">
+              {detailPermission.allowed ? (
+                <FinancialInsightPanel insight={financialInsight} />
               ) : (
-                <ProLock title="AI詳細分析はPro限定です" message="無料では1日1回まで。Proなら全銘柄の詳細分析を制限なく確認できます。" />
+                <ProLock
+                  title="詳細判定はPro限定です"
+                  message="無料では1日1回まで。Proでは全銘柄の判定根拠と次回確認項目を制限なく確認できます。"
+                />
               )}
             </Panel>
           </div>
 
           <div data-company-section="news">
-            <Panel title="ニュース / IR要約">
+            <Panel title="ニュース / IR">
               <CompanyNewsCarousel items={companyNews} />
             </Panel>
           </div>
 
-          <div data-company-section="board" className="rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl sm:p-6">
-            <h2 className="text-2xl font-black">みんなのコメント</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">{boardSummary}</p>
-            <CompanyBoard ticker={data.ticker} companyName={data.company_name} comments={comments as BoardComment[]} isLoggedIn={isLoggedIn} />
+          <div
+            data-company-section="board"
+            className="rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl sm:p-6"
+          >
+            <h2 className="text-2xl font-black">投資家コメント</h2>
+            <p className="mt-2 text-sm font-bold leading-6 text-slate-400">
+              {boardSummary}
+            </p>
+            <CompanyBoard
+              ticker={data.ticker}
+              companyName={data.company_name}
+              comments={comments as BoardComment[]}
+              isLoggedIn={isLoggedIn}
+            />
           </div>
         </div>
 
-        <p data-company-section="disclaimer" className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs leading-6 text-slate-400">
-          本ページは開示情報の理解を補助するものであり、投資助言ではありません。投資判断はご自身の責任で行ってください。
+        <p
+          data-company-section="disclaimer"
+          className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs leading-6 text-slate-400"
+        >
+          Financial Score・Danger Score・各判定は、取得済みの公式開示データと固定ルールに基づく情報整理です。投資助言ではありません。
         </p>
       </section>
 
@@ -604,7 +597,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-2 text-xl font-black break-words sm:text-2xl">{value}</p>
+      <p className="mt-2 break-words text-xl font-black sm:text-2xl">{value}</p>
     </div>
   );
 }
@@ -639,10 +632,15 @@ function ScoreBar({ label, value, max }: { label: string; value: number; max: nu
     <div>
       <div className="mb-1 flex justify-between text-sm text-slate-400">
         <span>{label}</span>
-        <span>{value}/{max}</span>
+        <span>
+          {value}/{max}
+        </span>
       </div>
       <div className="h-2 rounded-full bg-white/10">
-        <div className="h-2 rounded-full bg-green-400" style={{ width: `${width}%` }} />
+        <div
+          className="h-2 rounded-full bg-green-400"
+          style={{ width: `${width}%` }}
+        />
       </div>
     </div>
   );

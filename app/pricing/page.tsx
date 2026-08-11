@@ -5,36 +5,36 @@ import { createCheckoutSession } from "./actions";
 
 const freeFeatures = [
   ["ランキング", "各ランキングTOP3まで閲覧"],
-  ["企業ページ", "基本指標・スコアを確認"],
+  ["企業ページ", "基本指標・Financial Score・Danger Scoreを確認"],
   ["ニュース", "関連ニュースを閲覧"],
-  ["AI分析", "無料枠内で一部利用"],
-  ["リスク確認", "概要レベルで確認"],
+  ["詳細判定", "無料枠内で一部利用"],
+  ["警戒シグナル", "概要レベルで確認"],
 ];
 
 const proFeatures = [
   ["全順位", "4位以降を含む全ランキングを閲覧"],
-  ["詳細コメント", "全社の順位理由・財務コメントを確認"],
-  ["AI詳細分析", "企業ごとの詳細財務分析を利用"],
-  ["リスク分析", "Danger内訳・Red Flagsを確認"],
-  ["決算変化", "売上・営業利益・営業CFの変化を確認"],
-  ["深掘り導線", "関連ランキング・企業ページを横断確認"],
+  ["判定根拠", "プラス材料・警戒材料・根拠数値を確認"],
+  ["詳細判定", "全銘柄の判定と次回確認項目を表示"],
+  ["警戒シグナル", "Danger Scoreの構成項目とスコア影響を確認"],
+  ["決算変化", "売上・営業利益・営業CFの比較値を確認"],
+  ["関連指標", "関連ランキング・企業ページを横断確認"],
 ];
 
 const faqs = [
   {
     question: "無料では何が見られますか？",
     answer:
-      "各ランキングのTOP3、企業ページの基本情報、ニュースなどを確認できます。4位以降のランキング詳細や一部の詳細分析はPro限定です。",
+      "各ランキングのTOP3、企業ページの基本情報、Financial Score、Danger Score、ニュースなどを確認できます。4位以降の全順位や判定根拠の詳細はPro限定です。",
   },
   {
     question: "Proでは何が増えますか？",
     answer:
-      "ランキングの全順位、4位以降の会社名・数値・コメント、企業ページの詳細財務分析、リスクシグナル内訳、決算変化速報などを確認できます。",
+      "ランキング全順位、判定根拠、警戒シグナルの内訳、比較可能な決算変化、全銘柄の詳細判定を確認できます。",
   },
   {
     question: "投資助言サービスですか？",
     answer:
-      "いいえ。決算探偵は決算情報の理解を補助する分析ツールです。特定銘柄の売買を推奨するものではありません。",
+      "いいえ。決算探偵は取得済みの開示データを固定ルールで整理・比較する分析ツールです。特定銘柄の売買を推奨するものではありません。",
   },
   {
     question: "いつでも解約できますか？",
@@ -77,13 +77,13 @@ export default async function PricingPage() {
           </p>
 
           <h1 className="mt-4 text-4xl font-black leading-tight sm:text-6xl">
-            ランキングの続きを見る。
+            全順位と判定根拠を、
             <br />
-            決算をもっと深く読む。
+            最後まで確認する。
           </h1>
 
           <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">
-            決算探偵Proは、グロース企業のランキング全順位・詳細コメント・財務分析・リスクシグナルをまとめて確認できるプランです。
+            Proでは、ランキング全順位・判定根拠・警戒シグナル内訳・決算変化を同じ画面体系で確認できます。
           </p>
 
           <div className="mt-6 flex flex-wrap justify-center gap-3 text-sm font-bold">
@@ -104,7 +104,7 @@ export default async function PricingPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-3xl font-black">Free</h2>
-                <p className="mt-2 text-slate-400">まずは無料で決算を見る</p>
+                <p className="mt-2 text-slate-400">主要指標とTOP3を確認</p>
               </div>
               <p className="text-4xl font-black">¥0</p>
             </div>
@@ -127,7 +127,7 @@ export default async function PricingPage() {
               href="/ranking"
               className="mt-8 flex min-h-12 items-center justify-center rounded-full border border-white/10 bg-black/30 px-5 py-3 text-center font-black text-white transition hover:bg-white/10 active:scale-95"
             >
-              無料でランキングを見る
+              無料ランキングを見る
             </Link>
           </div>
 
@@ -136,13 +136,11 @@ export default async function PricingPage() {
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <div className="inline-flex rounded-full bg-yellow-400 px-3 py-1 text-xs font-black text-slate-950">
-                    おすすめ
+                    FULL ACCESS
                   </div>
-                  <h2 className="mt-4 text-3xl font-black text-yellow-200">
-                    Pro
-                  </h2>
+                  <h2 className="mt-4 text-3xl font-black text-yellow-200">Pro</h2>
                   <p className="mt-2 text-slate-300">
-                    ランキングと企業分析を最後まで見る
+                    全順位・判定根拠・比較データを開放
                   </p>
                 </div>
 
@@ -180,10 +178,7 @@ export default async function PricingPage() {
                 <Link href="/privacy" className="underline underline-offset-4">
                   プライバシーポリシー
                 </Link>
-                <Link
-                  href="/disclaimer"
-                  className="underline underline-offset-4"
-                >
+                <Link href="/disclaimer" className="underline underline-offset-4">
                   免責事項
                 </Link>
                 <Link href="/legal" className="underline underline-offset-4">
@@ -219,11 +214,11 @@ export default async function PricingPage() {
                 COMPARISON
               </p>
               <h2 className="mt-2 text-2xl font-black sm:text-3xl">
-                FreeとProの違い
+                Free / Pro
               </h2>
             </div>
             <p className="text-sm leading-6 text-slate-400">
-              無料で試して、必要になったら続きを見られます。
+              表示範囲の違いを機能単位で比較します。
             </p>
           </div>
 
@@ -237,12 +232,12 @@ export default async function PricingPage() {
             {[
               ["ランキングTOP3", "○", "○"],
               ["4位以降の全順位", "—", "○"],
-              ["全社の詳細コメント", "—", "○"],
+              ["判定根拠", "一部", "○"],
               ["企業ページの基本情報", "○", "○"],
-              ["AI詳細財務分析", "一部", "○"],
-              ["リスクシグナル内訳", "—", "○"],
-              ["決算変化速報", "—", "○"],
-              ["関連ランキング深掘り", "一部", "○"],
+              ["詳細判定", "一部", "○"],
+              ["警戒シグナル内訳", "—", "○"],
+              ["決算変化", "—", "○"],
+              ["関連ランキング", "一部", "○"],
             ].map(([feature, free, pro]) => (
               <div
                 key={feature}
@@ -261,36 +256,32 @@ export default async function PricingPage() {
         <section className="mt-10 grid gap-6 lg:grid-cols-3">
           <div className="rounded-3xl border border-green-400/20 bg-green-500/10 p-6">
             <p className="text-3xl">🏆</p>
-            <h3 className="mt-4 text-xl font-black">ランキングを最後まで</h3>
+            <h3 className="mt-4 text-xl font-black">ランキング全件</h3>
             <p className="mt-3 text-sm leading-7 text-slate-300">
-              TOP3だけでなく、4位以降の会社名・指標・コメントまで確認できます。
+              TOP3だけでなく、4位以降の会社名と指標値まで確認できます。
             </p>
           </div>
 
           <div className="rounded-3xl border border-cyan-400/20 bg-cyan-500/10 p-6">
             <p className="text-3xl">📊</p>
-            <h3 className="mt-4 text-xl font-black">企業分析を深く</h3>
+            <h3 className="mt-4 text-xl font-black">判定根拠</h3>
             <p className="mt-3 text-sm leading-7 text-slate-300">
-              財務スコア、営業CF、リスクシグナルを組み合わせて企業を読み解けます。
+              プラス材料・警戒材料・根拠数値・次回確認項目を固定フォーマットで確認できます。
             </p>
           </div>
 
           <div className="rounded-3xl border border-red-400/20 bg-red-500/10 p-6">
-            <p className="text-3xl">🚨</p>
-            <h3 className="mt-4 text-xl font-black">危険銘柄を避ける</h3>
+            <p className="text-3xl">⚠</p>
+            <h3 className="mt-4 text-xl font-black">警戒シグナル内訳</h3>
             <p className="mt-3 text-sm leading-7 text-slate-300">
-              成長率だけでは見えない資金繰り・赤字・リスクの兆候を確認できます。
+              資金繰り、希薄化、営業CFなどDanger Scoreを構成する項目とスコア影響を確認できます。
             </p>
           </div>
         </section>
 
         <section className="mt-10 rounded-3xl border border-white/10 bg-[#07111f] p-6 sm:p-8">
-          <p className="text-xs font-black tracking-[0.28em] text-yellow-300">
-            FAQ
-          </p>
-          <h2 className="mt-2 text-2xl font-black sm:text-3xl">
-            よくある質問
-          </h2>
+          <p className="text-xs font-black tracking-[0.28em] text-yellow-300">FAQ</p>
+          <h2 className="mt-2 text-2xl font-black sm:text-3xl">よくある質問</h2>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             {faqs.map((faq) => (
@@ -312,10 +303,10 @@ export default async function PricingPage() {
             START PRO
           </p>
           <h2 className="mt-3 text-2xl font-black sm:text-4xl">
-            まずは初月100円で、ランキングの続きを確認。
+            初月100円で全順位と判定根拠を開放。
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
-            決算探偵は、決算情報をもとに企業を比較するための分析ツールです。売買判断ではなく、企業理解のために使ってください。
+            決算探偵は、公式開示データを固定ルールで整理・比較するための分析ツールです。
           </p>
 
           {userId ? (
@@ -327,7 +318,7 @@ export default async function PricingPage() {
               href="/ranking"
               className="mt-7 inline-flex min-h-12 items-center justify-center rounded-full bg-yellow-400 px-8 py-3 font-black text-slate-950 transition hover:bg-yellow-300 active:scale-95"
             >
-              先に無料ランキングを見る
+              無料ランキングを見る
             </Link>
           )}
         </section>

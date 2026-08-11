@@ -229,7 +229,7 @@ function auditCompanyIndexability(items: AuditItem[]) {
   }
 
   for (const required of [
-    "直近の開示資料",
+    "直近の公式開示",
     "企業基本情報",
     "company_disclosures",
   ]) {
@@ -381,14 +381,14 @@ function auditPositioning(items: AuditItem[]) {
   requireText(
     items,
     files.growthHome,
-    "GROWTH MARKET FINANCIAL DASHBOARD",
+    "GROWTH MARKET / FINANCIAL SIGNALS",
     "metadata",
-    "root page must remain the Growth Market dashboard"
+    "root page must remain the Growth Market financial-signals dashboard"
   );
   requireText(
     items,
     files.growthHome,
-    "グロース市場を、",
+    "グロース市場の決算を、",
     "metadata",
     "root page must remain Growth-market specific"
   );
@@ -445,7 +445,12 @@ function main() {
   const info = items.filter((item) => item.severity === "INFO");
 
   console.log("=== SEO / indexability audit ===");
-  console.log({ score: score(items), errors: errors.length, warnings: warnings.length, info: info.length });
+  console.log({
+    score: score(items),
+    errors: errors.length,
+    warnings: warnings.length,
+    info: info.length,
+  });
 
   for (const group of [
     ["ERRORS", errors],

@@ -38,8 +38,8 @@ function metricValue(company: RankingCompany, metric: RankingCardProps["metric"]
 }
 
 function metricLabel(metric: RankingCardProps["metric"]) {
-  if (metric === "score") return "Score";
-  if (metric === "danger") return "リスク";
+  if (metric === "score") return "Financial";
+  if (metric === "danger") return "Danger";
   if (metric === "revenue") return "売上高";
   if (metric === "operatingIncome") return "営業利益";
   return "営業CF";
@@ -72,14 +72,14 @@ export default function RankingCard({
           href={href}
           className="shrink-0 rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-bold text-slate-300 hover:border-green-400/40 hover:text-white"
         >
-          もっと見る
+          全件 →
         </Link>
       </div>
 
       <div className="mt-5 space-y-3">
         {companies.length === 0 ? (
           <p className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-slate-400">
-            表示できる銘柄がありません。
+            対象データなし
           </p>
         ) : (
           companies.map((company, index) => {
@@ -93,10 +93,10 @@ export default function RankingCard({
                   {company.locked ? (
                     <>
                       <p className="truncate font-black text-yellow-300">
-                        Pro限定ランキング銘柄
+                        4位以降はPro
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
-                        初月100円で4位以降を表示
+                        ランキング全件を表示
                       </p>
                     </>
                   ) : (

@@ -41,5 +41,8 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Product language audit
+        run: npm run audit:product-language
+
       - name: Production build
         run: npm run build

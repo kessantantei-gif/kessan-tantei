@@ -47,11 +47,16 @@ function reorderPrimarySections() {
 
   const hero = findHeroGrid(root);
   const news = findSectionCard(root, [
+    "ニュース / IR",
     "ニュース / IR要約",
     "ニュース",
     "IR要約",
   ]);
-  const board = findSectionCard(root, ["みんなのコメント", "掲示板"]);
+  const board = findSectionCard(root, [
+    "投資家コメント",
+    "みんなのコメント",
+    "掲示板",
+  ]);
 
   if (!hero || !news || !board) return false;
 
