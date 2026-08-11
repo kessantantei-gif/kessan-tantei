@@ -23,7 +23,9 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
   return (
     <div className="min-w-0 rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl sm:p-6">
       <h2 className="text-2xl font-black">{title}</h2>
-      <div className="mt-4 text-sm leading-7 text-slate-300 sm:text-base sm:leading-8">{children}</div>
+      <div className="mt-4 text-sm leading-7 text-slate-300 sm:text-base sm:leading-8">
+        {children}
+      </div>
     </div>
   );
 }
@@ -56,15 +58,30 @@ function TrendPanel({
                   </span>
                 ) : null}
                 {point.isLatest ? (
-                  <span className="shrink-0 rounded-full bg-green-400 px-2 py-0.5 text-[10px] font-black text-slate-950">最新</span>
+                  <span className="shrink-0 rounded-full bg-green-400 px-2 py-0.5 text-[10px] font-black text-slate-950">
+                    最新
+                  </span>
                 ) : null}
               </span>
-              <span className="shrink-0 font-bold text-slate-200">{yenOku(point.value)}</span>
+              <span className="shrink-0 font-bold text-slate-200">
+                {yenOku(point.value)}
+              </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-white/10">
               <div
-                className={`h-2 rounded-full ${point.periodKind === "quarterly" ? "bg-cyan-300/80" : "bg-green-400"}`}
-                style={{ width: `${point.value === null ? 0 : Math.max(2, Math.min(100, (Math.abs(point.value) / maximum) * 100))}%` }}
+                className={`h-2 rounded-full ${
+                  point.periodKind === "quarterly" ? "bg-cyan-300/80" : "bg-green-400"
+                }`}
+                style={{
+                  width: `${
+                    point.value === null
+                      ? 0
+                      : Math.max(
+                          2,
+                          Math.min(100, (Math.abs(point.value) / maximum) * 100)
+                        )
+                  }%`,
+                }}
               />
             </div>
           </div>
@@ -72,7 +89,7 @@ function TrendPanel({
       </div>
       {quarterlyHistory.length > 0 ? (
         <p className="mt-4 text-xs leading-5 text-slate-500">
-          四半期は会社開示の累計値です。営業CFなど未開示の項目は0ではなく「未開示」と表示します。
+          四半期は会社開示の累計値です。未開示項目は0に置き換えず「未開示」と表示します。
         </p>
       ) : null}
     </Panel>
@@ -87,10 +104,28 @@ export function CompanyFinancialTrends({
   quarterlyHistory: QuarterlyFinancialRow[];
 }) {
   return (
-    <div data-company-section="financial-trends" className="mt-4 grid min-w-0 gap-4 lg:grid-cols-3">
-      <TrendPanel title="売上推移" annualHistory={annualHistory} quarterlyHistory={quarterlyHistory} metric="revenue" />
-      <TrendPanel title="営業利益推移" annualHistory={annualHistory} quarterlyHistory={quarterlyHistory} metric="operatingIncome" />
-      <TrendPanel title="営業CF推移" annualHistory={annualHistory} quarterlyHistory={quarterlyHistory} metric="operatingCF" />
+    <div
+      data-company-section="financial-trends"
+      className="mt-4 grid min-w-0 gap-4 lg:grid-cols-3"
+    >
+      <TrendPanel
+        title="売上推移"
+        annualHistory={annualHistory}
+        quarterlyHistory={quarterlyHistory}
+        metric="revenue"
+      />
+      <TrendPanel
+        title="営業利益推移"
+        annualHistory={annualHistory}
+        quarterlyHistory={quarterlyHistory}
+        metric="operatingIncome"
+      />
+      <TrendPanel
+        title="営業CF推移"
+        annualHistory={annualHistory}
+        quarterlyHistory={quarterlyHistory}
+        metric="operatingCF"
+      />
     </div>
   );
 }
@@ -107,7 +142,7 @@ function ChangeMetric({
   return (
     <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-2 text-lg font-black break-words">{changeLabel(current, previous)}</p>
+      <p className="mt-2 break-words text-lg font-black">{changeLabel(current, previous)}</p>
       <p className="mt-2 text-xs leading-5 text-slate-400">
         最新: {yenOku(current)}
         <br />
@@ -131,27 +166,55 @@ export function CompanyEarningsChange({
   const comparison = findLatestComparablePeriod({ annualHistory, quarterlyHistory });
 
   return (
-    <div data-company-section="earnings" className="rounded-3xl border border-purple-400/20 bg-purple-500/10 p-4 backdrop-blur-xl sm:p-6">
-      <p className="text-[11px] tracking-[0.24em] text-purple-300 sm:text-sm">EARNINGS CHANGE</p>
-      <h2 className="mt-2 text-2xl font-black sm:text-3xl">決算変化速報</h2>
+    <div
+      data-company-section="earnings"
+      className="rounded-3xl border border-purple-400/20 bg-purple-500/10 p-4 backdrop-blur-xl sm:p-6"
+    >
+      <p className="text-[11px] font-black tracking-[0.24em] text-purple-300 sm:text-sm">
+        EARNINGS CHANGE
+      </p>
+      <h2 className="mt-2 text-2xl font-black sm:text-3xl">決算変化</h2>
+      <p className="mt-2 text-sm text-slate-400">
+        最新の比較可能期間を同じ基準で並べます。
+      </p>
       {canShowProDetail ? (
         comparison ? (
           <>
             <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-bold">
-              <span className="rounded-full bg-purple-300 px-3 py-1 text-slate-950">{comparison.periodLabel}</span>
-              <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-slate-300">{comparison.comparisonLabel}</span>
+              <span className="rounded-full bg-purple-300 px-3 py-1 text-slate-950">
+                {comparison.periodLabel}
+              </span>
+              <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-slate-300">
+                {comparison.comparisonLabel}
+              </span>
               {comparison.isQuarterly ? (
-                <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-cyan-200">四半期累計ベース</span>
+                <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-cyan-200">
+                  四半期累計ベース
+                </span>
               ) : null}
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <ChangeMetric label="売上高" current={metricValue(comparison.current, "revenue")} previous={metricValue(comparison.previous, "revenue")} />
-              <ChangeMetric label="営業利益" current={metricValue(comparison.current, "operatingIncome")} previous={metricValue(comparison.previous, "operatingIncome")} />
-              <ChangeMetric label="営業CF" current={metricValue(comparison.current, "operatingCF")} previous={metricValue(comparison.previous, "operatingCF")} />
+              <ChangeMetric
+                label="売上高"
+                current={metricValue(comparison.current, "revenue")}
+                previous={metricValue(comparison.previous, "revenue")}
+              />
+              <ChangeMetric
+                label="営業利益"
+                current={metricValue(comparison.current, "operatingIncome")}
+                previous={metricValue(comparison.previous, "operatingIncome")}
+              />
+              <ChangeMetric
+                label="営業CF"
+                current={metricValue(comparison.current, "operatingCF")}
+                previous={metricValue(comparison.previous, "operatingCF")}
+              />
             </div>
           </>
         ) : (
-          <p className="mt-4 text-slate-400">前年同期または前期と比較できる履歴データが不足しています。</p>
+          <p className="mt-4 text-slate-400">
+            比較可能な前年同期または前期データが不足しています。
+          </p>
         )
       ) : (
         lockedContent
