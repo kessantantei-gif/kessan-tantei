@@ -1,0 +1,493 @@
+name: Productize Financial Copy Once
+
+on:
+  push:
+    branches:
+      - agent/productize-financial-copy
+    paths:
+      - ".github/workflows/productize-copy-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  productize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/productize-financial-copy
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Apply product language system
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import json
+          import re
+
+          def write(path, content):
+              Path(path).write_text(content, encoding="utf-8")
+
+          def replace_required(path, old, new, count=-1):
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              if old not in text:
+                  raise SystemExit(f"required text not found in {path}: {old[:80]!r}")
+              text = text.replace(old, new, count)
+              p.write_text(text, encoding="utf-8")
+
+          write("lib/comment-engine.ts", '''export type CommentFlag = {
+            title: string;
+            scoreImpact?: number;
+          };
+
+          type CommentInput = {
+            score: number;
+            dangerScore: number;
+            riskLevel: string;
+            operatingCF: number;
+            revenue: number;
+            operatingIncome: number;
+            revenueGrowth?: number | null;
+            operatingMargin?: number | null;
+            operatingCFMargin?: number | null;
+            equityRatio?: number | null;
+            flags?: CommentFlag[];
+          };
+
+          function pct(value: number) {
+            const sign = value > 0 ? "+" : "";
+            return `${sign}${value.toFixed(1)}%`;
+          }
+
+          function moneyOku(value: number) {
+            const oku = value / 100_000_000;
+            const sign = oku > 0 ? "+" : "";
+            return `${sign}${oku.toFixed(1)}億円`;
+          }
+
+          function verdict(data: CommentInput) {
+            if (data.riskLevel === "REJECT" || data.dangerScore >= 80) return "高リスク";
+            if (data.riskLevel === "DANGEROUS" || data.dangerScore >= 60) return "警戒";
+            if (data.riskLevel === "WARNING" || data.dangerScore >= 40) return "注視";
+            if (data.score >= 80 && data.dangerScore < 30) return "良好";
+            return "中立";
+          }
+
+          export function generateComment(data: CommentInput) {
+            const positives: string[] = [];
+            const alerts: string[] = [];
+
+            if (typeof data.revenueGrowth === "number") {
+              if (data.revenueGrowth >= 20) positives.push(`売上成長 ${pct(data.revenueGrowth)}`);
+              else if (data.revenueGrowth < 0) alerts.push(`売上成長 ${pct(data.revenueGrowth)}`);
+            }
+
+            if (data.operatingIncome > 0) {
+              positives.push(`営業黒字 ${moneyOku(data.operatingIncome)}`);
+            } else {
+              alerts.push(`営業赤字 ${moneyOku(data.operatingIncome)}`);
+            }
+
+            if (data.operatingCF > 0) {
+              positives.push(`営業CF ${moneyOku(data.operatingCF)}`);
+            } else {
+              alerts.push(`営業CF ${moneyOku(data.operatingCF)}`);
+            }
+
+            if (typeof data.operatingMargin === "number") {
+              if (data.operatingMargin >= 10) positives.push(`営業利益率 ${pct(data.operatingMargin)}`);
+              else if (data.operatingMargin < 0) alerts.push(`営業利益率 ${pct(data.operatingMargin)}`);
+            }
+
+            if (typeof data.operatingCFMargin === "number" && data.operatingCFMargin < 0) {
+              alerts.push(`営業CF率 ${pct(data.operatingCFMargin)}`);
+            }
+
+            if (typeof data.equityRatio === "number") {
+              if (data.equityRatio >= 50) positives.push(`自己資本比率 ${pct(data.equityRatio)}`);
+              else if (data.equityRatio < 30) alerts.push(`自己資本比率 ${pct(data.equityRatio)}`);
+            }
+
+            for (const flag of data.flags ?? []) {
+              const impact = typeof flag.scoreImpact === "number" ? ` +${flag.scoreImpact}` : "";
+              alerts.push(`${flag.title}${impact}`);
+            }
+
+            const nextCheck = alerts[0] ?? "次回決算の売上・利益・営業CFの方向性";
+
+            return [
+              `判定: ${verdict(data)}`,
+              `スコア: Financial ${data.score} / Danger ${data.dangerScore}`,
+              `プラス: ${positives.slice(0, 4).join(" / ") || "明確な加点シグナルなし"}`,
+              `警戒: ${alerts.slice(0, 4).join(" / ") || "重大シグナルなし"}`,
+              `次回確認: ${nextCheck}`,
+            ].join("\\n");
+          }
+          '''.replace("          ", ""))
+
+          write("lib/label-engine.ts", '''export type FinancialLabel = {
+            title: string;
+            tone: "good" | "watch" | "danger" | "neutral";
+          };
+
+          export function generateLabels(data: {
+            score: number;
+            dangerScore: number;
+            riskLevel: string;
+            revenue: number;
+            operatingIncome: number;
+            operatingCF: number;
+            flags?: { title: string }[];
+          }): FinancialLabel[] {
+            const labels: FinancialLabel[] = [];
+
+            if (data.dangerScore >= 80 || data.riskLevel === "REJECT") {
+              labels.push({ title: "HIGH RISK", tone: "danger" });
+            } else if (data.dangerScore >= 45) {
+              labels.push({ title: "RISK WATCH", tone: "watch" });
+            } else if (data.score >= 80) {
+              labels.push({ title: "HIGH SCORE", tone: "good" });
+            }
+
+            labels.push(
+              data.operatingIncome > 0
+                ? { title: "営業黒字", tone: "good" }
+                : { title: "営業赤字", tone: "watch" }
+            );
+
+            labels.push(
+              data.operatingCF > 0
+                ? { title: "営業CF黒字", tone: "good" }
+                : { title: "営業CF赤字", tone: "watch" }
+            );
+
+            if (data.flags?.some((f) => f.title.includes("継続企業"))) {
+              labels.push({ title: "継続企業注記", tone: "danger" });
+            }
+            if (data.flags?.some((f) => f.title.includes("MSワラント"))) {
+              labels.push({ title: "MSワラント", tone: "danger" });
+            }
+            if (data.flags?.some((f) => f.title.includes("CB"))) {
+              labels.push({ title: "CB", tone: "watch" });
+            }
+            if (data.flags?.some((f) => f.title.includes("増資"))) {
+              labels.push({ title: "増資", tone: "watch" });
+            }
+
+            const unique = new Map<string, FinancialLabel>();
+            for (const label of labels) {
+              if (!unique.has(label.title)) unique.set(label.title, label);
+            }
+            return Array.from(unique.values()).slice(0, 5);
+          }
+          '''.replace("          ", ""))
+
+          write("lib/news-engine.ts", '''import { supabaseAdmin } from "@/lib/supabase";
+          import { isBlockedNews } from "@/lib/news-filter";
+
+          type NewsItem = {
+            id: string;
+            ticker: string | null;
+            title: string;
+            summary: string | null;
+            url: string;
+            source: string | null;
+            published_at: string | null;
+          };
+
+          type CommentLike = { body: string };
+
+          function normalizeNewsText(value: string | null | undefined) {
+            return (value ?? "").replace(/\\s+/g, " ").trim();
+          }
+
+          function isUsableNews(item: NewsItem) {
+            const title = normalizeNewsText(item.title);
+            const summary = normalizeNewsText(item.summary);
+            if (!/^https?:\\/\\//i.test(item.url)) return false;
+            if (title.length < 8 && summary.length < 28) return false;
+            if (/^(ニュース|記事|詳細|ザイン|お知らせ)$/u.test(title)) return false;
+            return true;
+          }
+
+          export async function getCompanyNews(ticker: string, limit = 5) {
+            const { data } = await supabaseAdmin
+              .from("growth_news")
+              .select("id, ticker, title, summary, url, source, published_at")
+              .eq("ticker", ticker)
+              .order("published_at", { ascending: false })
+              .limit(limit * 5);
+
+            return ((data ?? []) as NewsItem[])
+              .filter((item) => !isBlockedNews(item))
+              .filter(isUsableNews)
+              .slice(0, limit);
+          }
+
+          function countMatches(text: string, words: string[]) {
+            return words.reduce((sum, word) => {
+              const escaped = word.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&");
+              return sum + (text.match(new RegExp(escaped, "g"))?.length ?? 0);
+            }, 0);
+          }
+
+          export function summarizeComments(comments: CommentLike[]) {
+            const bodies = comments.map((comment) => comment.body).filter(Boolean).join("\\n");
+            if (!bodies.trim()) return "掲示板シグナル: データ不足";
+
+            const positiveWords = ["期待", "強い", "成長", "黒字", "買い", "良い", "上方"];
+            const negativeWords = ["危険", "赤字", "不安", "希薄化", "売り", "悪い", "下方"];
+            const positiveCount = countMatches(bodies, positiveWords);
+            const negativeCount = countMatches(bodies, negativeWords);
+
+            const signal =
+              positiveCount > negativeCount
+                ? "強気寄り"
+                : negativeCount > positiveCount
+                  ? "弱気寄り"
+                  : "中立";
+
+            return `掲示板シグナル: ${signal}（ポジティブ語 ${positiveCount} / ネガティブ語 ${negativeCount}）`;
+          }
+          '''.replace("          ", ""))
+
+          write("components/pro-lock.tsx", '''import ProValueCard, { type ProValueItem } from "./pro-value-card";
+
+          export default function ProLock({
+            title = "この機能はPro限定です",
+            message = "無料版では概要まで確認できます。Proでは詳細財務判定、Danger内訳、財務シグナル全件、比較候補全件、決算変化の詳細まで確認できます。",
+            items,
+            ctaLabel,
+            compact = false,
+          }: {
+            title?: string;
+            message?: string;
+            items?: ProValueItem[];
+            ctaLabel?: string;
+            compact?: boolean;
+          }) {
+            return (
+              <ProValueCard
+                title={title}
+                message={message}
+                items={items}
+                ctaLabel={ctaLabel}
+                compact={compact}
+              />
+            );
+          }
+          '''.replace("          ", ""))
+
+          write("components/pro-value-card.tsx", '''import Link from "next/link";
+
+          export type ProValueItem = {
+            label: string;
+            detail?: string;
+          };
+
+          type Props = {
+            title?: string;
+            message?: string;
+            items?: ProValueItem[];
+            ctaLabel?: string;
+            compact?: boolean;
+          };
+
+          export const DEFAULT_PRO_VALUE_ITEMS: ProValueItem[] = [
+            { label: "詳細財務判定", detail: "判定・根拠・警戒項目・次回確認を表示" },
+            { label: "Danger内訳・Red Flags", detail: "検出理由とスコア影響を表示" },
+            { label: "財務シグナル全件", detail: "無料枠で隠れている残りのシグナルを表示" },
+            { label: "比較候補の全件", detail: "テーマ・財務・成長率別の比較候補を表示" },
+            { label: "決算変化の詳細", detail: "改善・悪化項目と全指標の変化を表示" },
+            { label: "ランキング全順位", detail: "TOP3以降の会社名・数値・判定根拠を表示" },
+          ];
+
+          export default function ProValueCard({
+            title = "この先の詳細判定はPro限定です",
+            message = "無料版では概要まで確認できます。Proでは判定根拠・比較・リスク情報を最後まで確認できます。",
+            items = DEFAULT_PRO_VALUE_ITEMS,
+            ctaLabel = "初月100円でProを試す",
+            compact = false,
+          }: Props) {
+            return (
+              <div className="overflow-hidden rounded-3xl border border-yellow-300/35 bg-gradient-to-br from-yellow-400/20 via-yellow-400/10 to-white/[0.03] p-[1px] shadow-2xl shadow-yellow-950/20">
+                <div className={`rounded-3xl bg-[#080b14]/92 ${compact ? "p-4 sm:p-5" : "p-6 sm:p-8"}`}>
+                  <div className={compact ? "text-left" : "text-center"}>
+                    <div className={`${compact ? "h-10 w-10 text-lg" : "mx-auto h-14 w-14 text-2xl"} flex items-center justify-center rounded-2xl border border-yellow-300/30 bg-yellow-400/15 shadow-inner shadow-yellow-950/20`}>🔒</div>
+                    <p className="mt-4 text-xs font-black tracking-[0.28em] text-yellow-200">PRO ONLY</p>
+                    <h2 className={`${compact ? "text-xl" : "mx-auto max-w-2xl text-2xl sm:text-3xl"} mt-2 font-black leading-tight text-white`}>{title}</h2>
+                    <p className={`${compact ? "text-sm leading-7" : "mx-auto max-w-2xl text-sm leading-7 sm:text-base sm:leading-8"} mt-3 text-slate-300`}>{message}</p>
+                  </div>
+
+                  <div className={`mt-5 grid gap-3 ${compact ? "sm:grid-cols-2" : "mx-auto max-w-4xl sm:grid-cols-2 lg:grid-cols-3"}`}>
+                    {items.map((item) => (
+                      <div key={item.label} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left">
+                        <p className="text-sm font-black text-yellow-50">✓ {item.label}</p>
+                        {item.detail ? <p className="mt-1 text-xs leading-5 text-slate-400">{item.detail}</p> : null}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className={compact ? "mt-5" : "mt-7 text-center"}>
+                    <Link href="/pricing" className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-yellow-400 px-6 py-3 text-sm font-black text-slate-950 transition hover:bg-yellow-300 active:scale-95 sm:w-auto sm:text-base">{ctaLabel}</Link>
+                    <p className="mt-3 text-xs leading-6 text-slate-500">初月100円、2か月目以降は月額980円。いつでも解約できます。</p>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          '''.replace("          ", ""))
+
+          # Company page: numerical, deterministic product output.
+          company = Path("app/company/[ticker]/page.tsx")
+          text = company.read_text(encoding="utf-8")
+          call_old = '''    flags: risk.flags ?? [],\n  });'''
+          call_new = '''    flags: risk.flags ?? [],\n    revenueGrowth: financials.revenueGrowth,\n    operatingMargin: financials.operatingMargin,\n    operatingCFMargin: financials.operatingCFMargin,\n    equityRatio: financials.equityRatio,\n  });'''
+          if call_old not in text:
+              raise SystemExit("generateComment call not found")
+          text = text.replace(call_old, call_new, 1)
+
+          pattern = re.compile(r'  const aiAnalysis = `.*?\n`;\n\n  return \(', re.S)
+          detailed = '''  const detailedJudgement = `\n【詳細財務判定】\n\n判定: ${readableRiskLabel}\nFinancial Score: ${data.score ?? 0}\nDanger Score: ${data.danger_score ?? 0}\n\n【主要数値】\n売上高: ${yenOku(financials.revenue ?? 0)}\n営業利益: ${yenOku(financials.operatingIncome ?? 0)}\n営業CF: ${yenOku(financials.operatingCF ?? 0)}\n\n【判定根拠】\n${detectiveComment}\n\n【検出シグナル】\n${(risk.flags ?? []).map((x: any) => `・${x.title}${typeof x.scoreImpact === "number" ? ` (+${x.scoreImpact})` : ""}`).join("\\n") || "重大シグナルなし"}\n\n※ EDINET等の開示情報を同一ルールで処理した結果です。投資助言ではありません。\n`;\n\n  return ('''
+          text2, n = pattern.subn(detailed, text, count=1)
+          if n != 1:
+              raise SystemExit(f"detailed analysis block replace failed: {n}")
+          text = text2
+          replacements = {
+              "EDINET AUTO ANALYSIS": "FINANCIAL SIGNALS / EDINET",
+              "TOTAL SCORE": "FINANCIAL SCORE",
+              '<Panel title="決算探偵の見立て">{detectiveComment}</Panel>': '<Panel title="決算探偵判定"><pre className="whitespace-pre-wrap break-words leading-8 text-slate-300">{detectiveComment}</pre></Panel>',
+              'data-company-section="ai-analysis"': 'data-company-section="detailed-analysis"',
+              '<Panel title="AI詳細財務分析">': '<Panel title="詳細財務判定">',
+              '{aiAnalysis}': '{detailedJudgement}',
+              'title="AI詳細分析はPro限定です"': 'title="詳細財務判定はPro限定です"',
+              'message="無料では1日1回まで。Proなら全銘柄の詳細分析を制限なく確認できます。"': 'message="無料では1日1回まで。Proなら全銘柄の詳細財務判定を制限なく確認できます。"',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f"company product copy missing: {old}")
+              text = text.replace(old, new)
+          company.write_text(text, encoding="utf-8")
+
+          # Top page: make the service read like a rules-based financial product.
+          growth = Path("app/growth-home.tsx")
+          text = growth.read_text(encoding="utf-8")
+          text = text.replace("グロース市場を、\n            <br />\n            決算から見抜く。", "グロース市場を、\n            <br />\n            決算シグナルで比較する。")
+          text = text.replace(
+              "このページでは、グロース市場の企業を決算データから分析します。\n            売上成長、営業利益、営業CF、資金繰り、リスクシグナルを横断的に整理し、\n            「伸びている会社」と「注意すべき会社」を見える化します。",
+              "グロース市場の開示データを同じ基準で処理し、Financial Score・Danger Score・決算変化を一覧化します。\n            売上成長、営業利益、営業CF、財務安全性を数値で比較し、\n            条件に一致した企業をすぐ確認できます。"
+          )
+          text = text.replace("今日見るべき企業", "今日の決算シグナル")
+          text = text.replace("最新の取得済み決算データから、成長・キャッシュ・リスクの3方向で自動抽出しています。", "取得済み決算データから、定義済み条件に一致した企業を成長・キャッシュ・リスクの3分類で表示します。")
+          text = text.replace("FreeではTOP3まで、Proでは全順位・数値・企業コメントまで確認できます。", "FreeではTOP3まで、Proでは全順位・数値・判定根拠まで確認できます。")
+          text = text.replace("各ランキングの4位以降、リスクシグナル内訳、AI詳細分析、決算変化速報を初月100円で確認できます。", "各ランキングの4位以降、リスクシグナル内訳、詳細財務判定、決算変化速報を初月100円で確認できます。")
+          growth.write_text(text, encoding="utf-8")
+
+          # Pricing: sell the product outputs, not AI-generated prose.
+          pricing = Path("app/pricing/page.tsx")
+          text = pricing.read_text(encoding="utf-8")
+          for old, new in {
+              '["AI分析", "無料枠内で一部利用"]': '["詳細財務判定", "無料枠内で一部利用"]',
+              '["詳細コメント", "全社の順位理由・財務コメントを確認"]': '["判定根拠", "全社の順位理由・財務シグナルを確認"]',
+              '["AI詳細分析", "企業ごとの詳細財務分析を利用"]': '["詳細財務判定", "企業ごとの判定・根拠・警戒項目を確認"]',
+              "グロース企業のランキング全順位・詳細コメント・財務分析・リスクシグナル": "グロース企業のランキング全順位・判定根拠・財務シグナル・リスクシグナル",
+              '["全社の詳細コメント", "—", "○"]': '["全社の判定根拠", "—", "○"]',
+              '["AI詳細財務分析", "一部", "○"]': '["詳細財務判定", "一部", "○"]',
+              "4位以降の会社名・指標・コメントまで確認できます。": "4位以降の会社名・指標・判定根拠まで確認できます。",
+          }.items():
+              if old in text:
+                  text = text.replace(old, new)
+          pricing.write_text(text, encoding="utf-8")
+
+          # Other customer-facing files: remove legacy product names where present.
+          for filename in [
+              "app/ranking/page.tsx",
+              "app/prime/page.tsx",
+              "app/standard/page.tsx",
+              "app/markets/page.tsx",
+              "app/latest-earnings/page.tsx",
+              "components/RankingCard.tsx",
+          ]:
+              p = Path(filename)
+              if not p.exists():
+                  continue
+              text = p.read_text(encoding="utf-8")
+              text = text.replace("AI詳細財務分析", "詳細財務判定")
+              text = text.replace("AI詳細分析", "詳細財務判定")
+              text = text.replace("AI分析全文", "詳細判定全文")
+              p.write_text(text, encoding="utf-8")
+
+          write("scripts/audit-product-copy.ts", '''import fs from "node:fs";
+          import path from "node:path";
+
+          const files = [
+            "app/company/[ticker]/page.tsx",
+            "app/growth-home.tsx",
+            "app/pricing/page.tsx",
+            "components/pro-lock.tsx",
+            "components/pro-value-card.tsx",
+            "lib/comment-engine.ts",
+            "lib/news-engine.ts",
+          ];
+
+          const forbidden = [
+            "AI詳細財務分析",
+            "AI詳細分析",
+            "AI分析全文",
+            "可能性があります",
+            "評価できます",
+            "と考えられます",
+            "比較的良好",
+          ];
+
+          const errors: string[] = [];
+          for (const file of files) {
+            const full = path.join(process.cwd(), file);
+            const source = fs.readFileSync(full, "utf8");
+            for (const phrase of forbidden) {
+              if (source.includes(phrase)) errors.push(`${file}: ${phrase}`);
+            }
+          }
+
+          if (errors.length > 0) {
+            console.error("Product copy audit failed");
+            errors.forEach((error) => console.error(`- ${error}`));
+            process.exit(1);
+          }
+
+          console.log("Product copy audit: PASS");
+          '''.replace("          ", ""))
+
+          package_path = Path("package.json")
+          package = json.loads(package_path.read_text(encoding="utf-8"))
+          package["scripts"]["audit:product-copy"] = "tsx scripts/audit-product-copy.ts"
+          current_lint = package["scripts"].get("lint", "eslint")
+          if "audit:product-copy" not in current_lint:
+              package["scripts"]["lint"] = f"{current_lint} && npm run audit:product-copy"
+          package_path.write_text(json.dumps(package, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Validate productized build
+        run: |
+          npm run lint
+          npm run build
+
+      - name: Commit productization
+        shell: bash
+        run: |
+          git config user.name "kessan-tantei-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add app components lib scripts package.json
+          git commit -m "productize financial analysis copy"
+          git push origin HEAD:agent/productize-financial-copy
