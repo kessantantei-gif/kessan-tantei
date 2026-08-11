@@ -1,0 +1,91 @@
+name: Daily Data Refresh
+
+on:
+  schedule:
+    - cron: "30 11 * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/daily-data-refresh.yml"
+      - "scripts/sync-daily-news.ts"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-data-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
+      NEWS_CRON_BATCH_SIZE: "40"
+      NEWS_CRON_CONCURRENCY: "8"
+      NEWS_CRON_PER_COMPANY: "3"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${NEXT_PUBLIC_SUPABASE_URL}" || { echo "NEXT_PUBLIC_SUPABASE_URL missing"; exit 1; }
+          test -n "${SUPABASE_SERVICE_ROLE_KEY}" || { echo "SUPABASE_SERVICE_ROLE_KEY missing"; exit 1; }
+          test -n "${EDINET_API_KEY}" || { echo "EDINET_API_KEY missing"; exit 1; }
+
+      - name: Resolve JST date
+        id: refresh_date
+        shell: bash
+        run: echo "date=$(TZ=Asia/Tokyo date +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Sync TDnet disclosures
+        id: tdnet
+        continue-on-error: true
+        run: npx tsx scripts/run-tdnet-quarterly-safe-v2.ts "${{ steps.refresh_date.outputs.date }}"
+
+      - name: Sync EDINET filings
+        id: edinet
+        continue-on-error: true
+        run: npx tsx scripts/sync-daily-edinet.ts "${{ steps.refresh_date.outputs.date }}"
+
+      - name: Sync company news
+        id: news
+        continue-on-error: true
+        run: npx tsx scripts/sync-daily-news.ts
+
+      - name: Summarize refresh result
+        if: always()
+        shell: bash
+        run: |
+          echo "Refresh date: ${{ steps.refresh_date.outputs.date }}"
+          echo "TDnet:  ${{ steps.tdnet.outcome }}"
+          echo "EDINET: ${{ steps.edinet.outcome }}"
+          echo "News:   ${{ steps.news.outcome }}"
+
+      - name: Fail when any refresh failed
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.tdnet.outcome }}" != "success" ] || \
+             [ "${{ steps.edinet.outcome }}" != "success" ] || \
+             [ "${{ steps.news.outcome }}" != "success" ]; then
+            exit 1
+          fi
