@@ -65,8 +65,12 @@ function metricValue(company: RankingCompany, key: string) {
 }
 
 function focusToneClasses(tone: FocusGroup["tone"]) {
-  if (tone === "green") return "border-green-400/20 bg-green-500/10 text-green-200";
-  if (tone === "cyan") return "border-cyan-400/20 bg-cyan-500/10 text-cyan-200";
+  if (tone === "green") {
+    return "border-green-400/20 bg-green-500/10 text-green-200";
+  }
+  if (tone === "cyan") {
+    return "border-cyan-400/20 bg-cyan-500/10 text-cyan-200";
+  }
   return "border-red-400/20 bg-red-500/10 text-red-200";
 }
 
@@ -76,7 +80,9 @@ async function loadCompanies() {
     (from, to) =>
       supabaseAdmin
         .from("company_analyses")
-        .select("ticker, company_name, score, danger_score, risk_level, financials")
+        .select(
+          "ticker, company_name, score, danger_score, risk_level, financials"
+        )
         .eq("market_segment", "growth")
         .neq("risk_level", "EXCLUDED")
         .order("ticker", { ascending: true })
@@ -140,7 +146,9 @@ export default async function HomePage() {
     danger_score: company.danger_score,
   }));
 
-  const scoreTopRaw = [...companies].sort(byNumber((c) => c.score)).slice(0, 5);
+  const scoreTopRaw = [...companies]
+    .sort(byNumber((c) => c.score))
+    .slice(0, 5);
   const scoreTop = applyRankingLock(scoreTopRaw, isPro);
 
   const revenueTopRaw = [...companies]
@@ -169,8 +177,8 @@ export default async function HomePage() {
   const focusGroups: FocusGroup[] = [
     {
       label: "QUALITY GROWTH",
-      title: "高成長かつ営業黒字",
-      description: "売上成長率20%以上で、営業利益率がプラスの企業です。",
+      title: "売上成長20%以上 × 営業黒字",
+      description: "売上成長率20%以上かつ営業利益率0%以上。Financial Score順。",
       tone: "green",
       companies: [...companies]
         .filter(
@@ -184,17 +192,24 @@ export default async function HomePage() {
     {
       label: "CASH IMPROVEMENT",
       title: "営業CF改善",
-      description: "営業CFが前期から改善している企業です。",
+      description: "営業CF成長率がプラスの企業。改善率順。",
       tone: "cyan",
       companies: [...companies]
-        .filter((company) => (metricValue(company, "operatingCFGrowth") ?? 0) > 0)
-        .sort(byNumber((company) => metricValue(company, "operatingCFGrowth") ?? 0))
+        .filter(
+          (company) =>
+            (metricValue(company, "operatingCFGrowth") ?? 0) > 0
+        )
+        .sort(
+          byNumber(
+            (company) => metricValue(company, "operatingCFGrowth") ?? 0
+          )
+        )
         .slice(0, 3),
     },
     {
       label: "RISK WATCH",
-      title: "リスク要確認",
-      description: "Danger Scoreが高く、詳細項目を確認したい企業です。",
+      title: "Danger Score上位",
+      description: "Danger Scoreが高い企業。スコア降順。",
       tone: "red",
       companies: [...companies]
         .sort(byNumber((company) => company.danger_score))
@@ -206,22 +221,22 @@ export default async function HomePage() {
     {
       href: "/ranking/margin-improvement",
       label: "利益率改善",
-      description: "営業利益率が前期から改善した企業を確認",
+      description: "営業利益率の前期差を比較",
     },
     {
       href: "/ranking/ocf-improvement",
       label: "営業CF改善",
-      description: "利益だけでなく現金収支が改善した企業を確認",
+      description: "営業CFの前期差を比較",
     },
     {
       href: "/ranking/rule40-excellent",
       label: "Rule of 40",
-      description: "成長率と利益率のバランスが高い企業を確認",
+      description: "売上成長率＋営業利益率を比較",
     },
     {
       href: "/ranking/risk-signal",
-      label: "リスクシグナル",
-      description: "Danger ScoreとRed Flagsの詳細を確認",
+      label: "警戒シグナル",
+      description: "Danger Scoreと構成項目を確認",
     },
   ];
 
@@ -231,20 +246,19 @@ export default async function HomePage() {
 
       <section className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
         <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-10">
-          <p className="text-xs tracking-[0.3em] text-green-300 sm:text-sm">
-            GROWTH MARKET FINANCIAL DASHBOARD
+          <p className="text-xs font-black tracking-[0.3em] text-green-300 sm:text-sm">
+            GROWTH MARKET / FINANCIAL SIGNALS
           </p>
 
           <h1 className="mt-4 text-4xl font-black leading-tight sm:text-7xl">
-            グロース市場を、
+            グロース市場の決算を、
             <br />
-            決算から見抜く。
+            同じ基準で比較する。
           </h1>
 
           <p className="mt-5 max-w-4xl text-sm leading-7 text-slate-300 sm:mt-6 sm:text-lg sm:leading-9">
-            このページでは、グロース市場の企業を決算データから分析します。
-            売上成長、営業利益、営業CF、資金繰り、リスクシグナルを横断的に整理し、
-            「伸びている会社」と「注意すべき会社」を見える化します。
+            公式開示からFinancial Score、Danger Score、売上成長率、営業利益率、営業CF、財務安全性を共通ルールで整理します。
+            順位・判定・警戒シグナルから企業間の差を確認できます。
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3">
@@ -252,13 +266,13 @@ export default async function HomePage() {
               href="/ranking"
               className="inline-flex items-center rounded-2xl bg-green-400 px-5 py-3 font-black text-slate-950 transition hover:bg-green-300"
             >
-              決算ランキングを見る →
+              決算ランキング →
             </Link>
             <Link
               href="/about-growth"
               className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-5 py-3 font-bold text-slate-300 transition hover:border-white/20 hover:text-white"
             >
-              ランキングの考え方
+              スコア・判定ルール
             </Link>
           </div>
 
@@ -268,16 +282,16 @@ export default async function HomePage() {
 
           <div className="mt-7 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-green-400/20 bg-green-500/10 p-5">
-              <p className="text-sm text-green-300">解析済み銘柄</p>
-              <p className="mt-2 text-4xl font-black">{companies.length}</p>
+              <p className="text-sm text-green-300">解析済み</p>
+              <p className="mt-2 text-4xl font-black">{companies.length}社</p>
             </div>
             <div className="rounded-2xl border border-yellow-400/20 bg-yellow-500/10 p-5">
-              <p className="text-sm text-yellow-300">Pro特典</p>
-              <p className="mt-2 text-2xl font-black">ランキング全件</p>
+              <p className="text-sm text-yellow-300">Financial Score</p>
+              <p className="mt-2 text-2xl font-black">0 - 100</p>
             </div>
             <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-5">
-              <p className="text-sm text-cyan-300">自動更新</p>
-              <p className="mt-2 text-2xl font-black">EDINET連携</p>
+              <p className="text-sm text-cyan-300">データ更新</p>
+              <p className="mt-2 text-2xl font-black">公式開示連携</p>
             </div>
           </div>
         </div>
@@ -285,27 +299,45 @@ export default async function HomePage() {
         <section className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-xl sm:p-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-black tracking-[0.28em] text-yellow-300">TODAY&apos;S FOCUS</p>
-              <h2 className="mt-2 text-2xl font-black sm:text-3xl">今日見るべき企業</h2>
+              <p className="text-xs font-black tracking-[0.28em] text-yellow-300">
+                SIGNAL BOARD
+              </p>
+              <h2 className="mt-2 text-2xl font-black sm:text-3xl">
+                注目シグナル
+              </h2>
               <p className="mt-2 text-sm leading-7 text-slate-400">
-                最新の取得済み決算データから、成長・キャッシュ・リスクの3方向で自動抽出しています。
+                取得済みの最新決算を固定条件で3方向に抽出しています。
               </p>
             </div>
-            <Link href="/ranking" className="text-sm font-bold text-yellow-200 hover:text-yellow-100">
-              全ランキングを見る →
+            <Link
+              href="/ranking"
+              className="text-sm font-bold text-yellow-200 hover:text-yellow-100"
+            >
+              全ランキング →
             </Link>
           </div>
 
           <div className="mt-6 grid gap-4 lg:grid-cols-3">
             {focusGroups.map((group) => (
-              <div key={group.label} className={`rounded-2xl border p-4 ${focusToneClasses(group.tone)}`}>
-                <p className="text-[11px] font-black tracking-[0.22em]">{group.label}</p>
-                <h3 className="mt-2 text-lg font-black text-white">{group.title}</h3>
-                <p className="mt-2 text-xs leading-6 text-slate-400">{group.description}</p>
+              <div
+                key={group.label}
+                className={`rounded-2xl border p-4 ${focusToneClasses(
+                  group.tone
+                )}`}
+              >
+                <p className="text-[11px] font-black tracking-[0.22em]">
+                  {group.label}
+                </p>
+                <h3 className="mt-2 text-lg font-black text-white">
+                  {group.title}
+                </h3>
+                <p className="mt-2 text-xs leading-6 text-slate-400">
+                  {group.description}
+                </p>
                 <div className="mt-4 space-y-2">
                   {group.companies.length === 0 ? (
                     <p className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-slate-400">
-                      条件に該当する企業は確認中です。
+                      対象データなし
                     </p>
                   ) : (
                     group.companies.map((company, index) => (
@@ -318,7 +350,9 @@ export default async function HomePage() {
                           {index + 1}. {company.company_name}
                         </span>
                         <span className="shrink-0 text-xs font-black text-slate-300">
-                          {group.tone === "red" ? `${company.danger_score}点` : `${company.score}点`}
+                          {group.tone === "red"
+                            ? `Danger ${company.danger_score}`
+                            : `Score ${company.score}`}
                         </span>
                       </Link>
                     ))
@@ -339,51 +373,51 @@ export default async function HomePage() {
                 RANKING PORTAL
               </p>
               <h2 className="mt-3 text-2xl font-black sm:text-3xl">
-                決算ランキングから企業を比べる
+                指標別ランキング
               </h2>
               <p className="mt-3 max-w-3xl leading-7 text-slate-300">
-                財務スコア、成長性、収益性、営業CF、安全性、リスクシグナルなど、気になる観点からグロース企業を比較できます。
+                Financial Score、売上成長、利益率、営業CF、安全性、Danger Scoreなどの同一指標で企業を並べます。
               </p>
             </div>
             <span className="shrink-0 rounded-full bg-green-400 px-5 py-3 font-black text-slate-950 transition group-hover:bg-green-300">
-              一覧を見る →
+              一覧 →
             </span>
           </div>
         </Link>
 
         <div className="mt-6 grid gap-5 lg:grid-cols-2">
           <RankingCard
-            title="総合スコアランキング"
-            description="Freeは上位3社まで表示。4位以降はPro限定。"
+            title="Financial Score"
+            description="総合スコア降順。Freeは上位3社まで。"
             href="/ranking/score"
             companies={scoreTop}
             metric="score"
           />
           <RankingCard
-            title="売上高ランキング"
-            description="Freeは上位3社まで表示。4位以降はPro限定。"
+            title="売上高"
+            description="直近売上高の降順。Freeは上位3社まで。"
             href="/ranking/revenue"
             companies={revenueTop}
             metric="revenue"
           />
           <RankingCard
-            title="営業利益ランキング"
-            description="Freeは上位3社まで表示。4位以降はPro限定。"
+            title="営業利益"
+            description="直近営業利益の降順。Freeは上位3社まで。"
             href="/ranking/operating-income"
             companies={operatingIncomeTop}
             metric="operatingIncome"
           />
           <RankingCard
-            title="営業CFランキング"
-            description="Freeは上位3社まで表示。4位以降はPro限定。"
+            title="営業CF"
+            description="直近営業CFの降順。Freeは上位3社まで。"
             href="/ranking/operating-cash-flow"
             companies={operatingCFTop}
             metric="operatingCF"
           />
           <div className="lg:col-span-2">
             <RankingCard
-              title="リスクシグナルランキング"
-              description="Freeは上位3社まで表示。4位以降と内訳詳細はPro限定。"
+              title="Danger Score"
+              description="Danger Scoreの降順。Freeは上位3社まで。"
               href="/ranking/risk-signal"
               companies={dangerTop}
               metric="danger"
@@ -394,10 +428,14 @@ export default async function HomePage() {
         <section className="mt-6 rounded-3xl border border-yellow-400/25 bg-gradient-to-br from-yellow-500/15 via-white/[0.04] to-orange-500/10 p-5 backdrop-blur-xl sm:p-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-black tracking-[0.28em] text-yellow-300">PRO RANKINGS</p>
-              <h2 className="mt-2 text-2xl font-black sm:text-3xl">Proで深掘りするランキング</h2>
+              <p className="text-xs font-black tracking-[0.28em] text-yellow-300">
+                PRO RANKINGS
+              </p>
+              <h2 className="mt-2 text-2xl font-black sm:text-3xl">
+                Pro指標
+              </h2>
               <p className="mt-2 text-sm leading-7 text-slate-300">
-                FreeではTOP3まで、Proでは全順位・数値・企業コメントまで確認できます。
+                全順位、比較値、判定根拠、警戒シグナル内訳を表示します。
               </p>
             </div>
             <span className="w-fit rounded-full bg-yellow-400 px-3 py-1 text-xs font-black text-slate-950">
@@ -413,8 +451,12 @@ export default async function HomePage() {
                 className="rounded-2xl border border-yellow-300/20 bg-black/20 p-4 transition hover:-translate-y-0.5 hover:bg-yellow-400/10"
               >
                 <p className="font-black text-yellow-100">{item.label}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-400">{item.description}</p>
-                <span className="mt-4 inline-block text-sm font-bold text-yellow-200">見る →</span>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  {item.description}
+                </p>
+                <span className="mt-4 inline-block text-sm font-bold text-yellow-200">
+                  開く →
+                </span>
               </Link>
             ))}
           </div>
@@ -424,40 +466,45 @@ export default async function HomePage() {
               href="/pricing"
               className="mt-5 inline-flex min-h-11 items-center justify-center rounded-full bg-yellow-400 px-5 py-2.5 text-sm font-black text-slate-950 hover:bg-yellow-300"
             >
-              初月100円で全順位を開放する
+              Proの全指標を見る
             </Link>
           ) : null}
         </section>
 
         <section className="mt-6 rounded-3xl border border-yellow-400/20 bg-yellow-500/10 p-5 backdrop-blur-xl sm:p-7">
-          <h2 className="text-2xl font-black sm:text-3xl">
-            Proで見えるもの
-          </h2>
+          <h2 className="text-2xl font-black sm:text-3xl">Proで追加される情報</h2>
           <p className="mt-3 leading-8 text-slate-300">
-            各ランキングの4位以降、リスクシグナル内訳、AI詳細分析、決算変化速報を初月100円で確認できます。
+            ランキング4位以降、警戒シグナルのスコア影響、詳細判定、比較可能な決算変化を確認できます。
           </p>
           <Link
             href="/pricing"
             className="mt-5 inline-flex rounded-2xl bg-yellow-400 px-5 py-3 font-black text-slate-950 hover:bg-yellow-300"
           >
-            初月100円でProを試す
+            Proの内容を確認
           </Link>
         </section>
 
         <section className="mt-6 rounded-3xl border border-cyan-400/20 bg-cyan-500/10 p-5 backdrop-blur-xl sm:p-7">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-xs tracking-[0.25em] text-cyan-300">GROWTH NEWS</p>
-              <h2 className="mt-2 text-2xl font-black sm:text-3xl">グロースニュース</h2>
+              <p className="text-xs font-black tracking-[0.25em] text-cyan-300">
+                GROWTH NEWS
+              </p>
+              <h2 className="mt-2 text-2xl font-black sm:text-3xl">
+                グロースニュース
+              </h2>
             </div>
-            <Link href="/news" className="text-sm font-bold text-cyan-300 hover:text-cyan-200">
-              もっと見る →
+            <Link
+              href="/news"
+              className="text-sm font-bold text-cyan-300 hover:text-cyan-200"
+            >
+              一覧 →
             </Link>
           </div>
 
           <div className="mt-5 grid gap-4 md:grid-cols-3">
             {news.length === 0 ? (
-              <p className="text-slate-400">ニュースはまだありません。</p>
+              <p className="text-slate-400">ニュースなし</p>
             ) : (
               news.map((item: NewsItem) => (
                 <a
@@ -468,8 +515,12 @@ export default async function HomePage() {
                   className="rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:border-cyan-400/40 hover:bg-white/10"
                 >
                   <p className="font-bold leading-7">{item.title}</p>
-                  <p className="mt-3 text-sm text-slate-400">{item.source || "Google News"}</p>
-                  <p className="mt-1 text-xs text-slate-500">{formatNewsDate(item.published_at)}</p>
+                  <p className="mt-3 text-sm text-slate-400">
+                    {item.source || "Google News"}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {formatNewsDate(item.published_at)}
+                  </p>
                 </a>
               ))
             )}
