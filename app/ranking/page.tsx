@@ -5,13 +5,18 @@ import {
   rankingDefinitions,
 } from "@/lib/rankings/definitions";
 import { rankCompanies } from "@/lib/rankings/engine";
-import type { RankingCategory, RankingCompany, RankingDefinition } from "@/lib/rankings/types";
+import type {
+  RankingCategory,
+  RankingCompany,
+  RankingDefinition,
+} from "@/lib/rankings/types";
 import { loadRankingCompanies } from "@/lib/load-ranking-companies";
 
 const canonical = "https://kessan-tantei.jp/ranking";
-const title = "決算ランキング一覧｜グロース企業の財務スコア・成長率・営業CFランキング";
+const title =
+  "決算ランキング一覧｜グロース企業の財務スコア・成長率・営業CFランキング";
 const description =
-  "決算探偵のランキング一覧ページです。グロース企業を財務スコア、売上成長率、営業利益率、営業CF、自己資本比率、リスクシグナルなどで比較できます。";
+  "グロース企業をFinancial Score、売上成長率、営業利益率、営業CF、自己資本比率、Danger Scoreなどの共通指標で比較できます。";
 
 const COMPARISON_REQUIRED_SLUGS = new Set([
   "revenue-growth",
@@ -43,7 +48,14 @@ export const metadata: Metadata = {
     siteName: "決算探偵",
     locale: "ja_JP",
     type: "website",
-    images: [{ url: "https://kessan-tantei.jp/og-image-all-markets.png", width: 1200, height: 630, alt: "決算ランキング一覧" }],
+    images: [
+      {
+        url: "https://kessan-tantei.jp/og-image-all-markets.png",
+        width: 1200,
+        height: 630,
+        alt: "決算ランキング一覧",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
@@ -52,7 +64,6 @@ export const metadata: Metadata = {
     images: ["https://kessan-tantei.jp/og-image-all-markets.png"],
   },
 };
-
 
 function shouldKeepEmptyRanking(ranking: RankingDefinition) {
   return COMPARISON_REQUIRED_SLUGS.has(ranking.slug);
@@ -76,7 +87,8 @@ export default async function RankingsPage() {
   const companies = await loadRankingCompanies("growth");
   const visibleRankings = getVisibleRankings(companies);
   const visibleCategories = rankingCategories.filter(
-    (category) => getVisibleRankingsByCategory(visibleRankings, category.id).length > 0
+    (category) =>
+      getVisibleRankingsByCategory(visibleRankings, category.id).length > 0
   );
 
   const structuredData = {
@@ -102,19 +114,33 @@ export default async function RankingsPage() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(34,197,94,0.16),transparent_32%),radial-gradient(circle_at_top_left,_rgba(59,130,246,0.14),transparent_28%)]" />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(structuredData).replace(/</g, "\\u003c"),
+        }}
       />
 
       <div className="relative z-10 mx-auto max-w-7xl px-4 py-10 sm:px-8 sm:py-16">
         <section className="max-w-4xl">
-          <p className="text-xs font-bold tracking-[0.3em] text-green-300">GROWTH MARKET RANKING</p>
-          <h1 className="mt-4 text-4xl font-black sm:text-5xl">決算ランキング一覧</h1>
-          <p className="mt-5 text-base leading-8 text-slate-300 sm:text-lg">
-            グロース企業を、総合評価・成長性・収益性・キャッシュ創出力・安全性・リスクシグナル・業種・テーマから比較できます。気になる切り口から決算を読み解いてみましょう。
+          <p className="text-xs font-bold tracking-[0.3em] text-green-300">
+            GROWTH MARKET / METRIC RANKINGS
           </p>
+          <h1 className="mt-4 text-4xl font-black sm:text-5xl">決算ランキング</h1>
+          <p className="mt-5 text-base leading-8 text-slate-300 sm:text-lg">
+            全銘柄を同じ計算条件で並べ、総合・成長・収益・キャッシュ・安全性・リスクの差を数値で比較します。
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2 text-xs font-bold sm:text-sm">
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-slate-300">
+              公開ランキング {visibleRankings.length}
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-slate-300">
+              解析対象 {companies.length}社
+            </span>
+            <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-2 text-cyan-200">
+              取得済み最新決算を使用
+            </span>
+          </div>
           <p className="mt-3 text-sm text-slate-500">
-            公開中：{visibleRankings.length}ランキング ／ 解析対象：{companies.length}社
-            <span className="ml-2 text-slate-600">成長率系は、2期分以上の比較データが揃い次第ランキングに反映されます。</span>
+            前期比較が必要なランキングは、2期分以上の比較データが揃った企業から反映します。
           </p>
         </section>
 
@@ -132,7 +158,10 @@ export default async function RankingsPage() {
 
         <div className="mt-10 space-y-8">
           {visibleCategories.map((category) => {
-            const rankings = getVisibleRankingsByCategory(visibleRankings, category.id);
+            const rankings = getVisibleRankingsByCategory(
+              visibleRankings,
+              category.id
+            );
             return (
               <section
                 key={category.id}
@@ -140,17 +169,24 @@ export default async function RankingsPage() {
                 className="scroll-mt-6 rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl sm:p-8"
               >
                 <div className="flex items-start gap-4">
-                  <span className="text-3xl" aria-hidden="true">{category.icon}</span>
+                  <span className="text-3xl" aria-hidden="true">
+                    {category.icon}
+                  </span>
                   <div>
-                    <h2 className="text-2xl font-black sm:text-3xl">{category.title}ランキング</h2>
-                    <p className="mt-2 text-sm leading-6 text-slate-400">{category.description}</p>
+                    <h2 className="text-2xl font-black sm:text-3xl">
+                      {category.title}ランキング
+                    </h2>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                      {category.description}
+                    </p>
                   </div>
                 </div>
 
                 <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {rankings.map((ranking) => {
                     const isComparisonEmpty =
-                      shouldKeepEmptyRanking(ranking) && rankCompanies(companies, ranking).length === 0;
+                      shouldKeepEmptyRanking(ranking) &&
+                      rankCompanies(companies, ranking).length === 0;
 
                     return (
                       <Link
@@ -164,14 +200,17 @@ export default async function RankingsPage() {
                             TOP3無料
                           </span>
                         </div>
-                        <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">{ranking.description}</p>
+                        <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">
+                          {ranking.description}
+                        </p>
                         {isComparisonEmpty ? (
                           <p className="mt-3 rounded-xl border border-yellow-400/20 bg-yellow-400/10 px-3 py-2 text-xs font-bold leading-5 text-yellow-100">
-                            2期分の比較データ待ち
+                            比較データ待ち
                           </p>
                         ) : null}
                         <span className="mt-4 inline-block text-sm font-bold text-green-300">
-                          見る <span className="transition group-hover:translate-x-1">→</span>
+                          ランキングを見る{" "}
+                          <span className="transition group-hover:translate-x-1">→</span>
                         </span>
                       </Link>
                     );
@@ -183,16 +222,28 @@ export default async function RankingsPage() {
         </div>
 
         <section className="mt-10 rounded-3xl border border-white/10 bg-[#07111f] p-6 sm:p-8">
-          <h2 className="text-2xl font-black">決算ランキングの見方</h2>
+          <h2 className="text-2xl font-black">比較ルール</h2>
           <div className="mt-5 grid gap-6 leading-8 text-slate-300 md:grid-cols-3">
-            <p><strong className="text-green-300">1. 切り口を選ぶ</strong><br />知りたい観点に近いカテゴリーと指標を選びます。</p>
-            <p><strong className="text-green-300">2. 数字の差を見る</strong><br />順位だけでなく、企業間で数値がどれだけ違うかを確認します。</p>
-            <p><strong className="text-green-300">3. 複数指標で確かめる</strong><br />企業ページや関連ランキングから、決算を多面的に確認します。</p>
+            <p>
+              <strong className="text-green-300">1. 指標を固定</strong>
+              <br />
+              ランキングごとに比較指標と並び順を固定します。
+            </p>
+            <p>
+              <strong className="text-green-300">2. 数値差を表示</strong>
+              <br />
+              順位だけでなく、各社の指標値そのものを確認します。
+            </p>
+            <p>
+              <strong className="text-green-300">3. 企業ページで検証</strong>
+              <br />
+              Financial Score、Danger Score、決算変化、警戒シグナルをあわせて確認します。
+            </p>
           </div>
         </section>
 
         <p className="mt-8 rounded-2xl border border-white/10 bg-black/20 px-5 py-4 text-xs leading-6 text-slate-400">
-          本ページは決算情報の理解を補助することを目的としており、特定の銘柄の売買を推奨するものではありません。投資判断はご自身の責任で行ってください。
+          ランキングは取得済みの開示データと固定条件による比較結果です。特定銘柄の売買推奨ではありません。
         </p>
       </div>
     </main>
