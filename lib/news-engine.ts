@@ -44,6 +44,13 @@ export async function getCompanyNews(ticker: string, limit = 5) {
     .slice(0, limit);
 }
 
+function countTerms(text: string, terms: string[]) {
+  return terms.reduce((total, term) => {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return total + (text.match(new RegExp(escaped, "g"))?.length ?? 0);
+  }, 0);
+}
+
 export function summarizeComments(comments: CommentLike[]) {
   const bodies = comments
     .map((comment) => comment.body)
@@ -51,29 +58,21 @@ export function summarizeComments(comments: CommentLike[]) {
     .join("\n");
 
   if (!bodies.trim()) {
-    return "掲示板コメントはまだ少ないため、要約はありません。";
+    return "コメント傾向：データ不足";
   }
 
   const positiveWords = ["期待", "強い", "成長", "黒字", "買い", "良い", "上方"];
   const negativeWords = ["危険", "赤字", "不安", "希薄化", "売り", "悪い", "下方"];
-
-  const positiveCount = positiveWords.reduce(
-    (sum, word) => sum + (bodies.includes(word) ? 1 : 0),
-    0
-  );
-
-  const negativeCount = negativeWords.reduce(
-    (sum, word) => sum + (bodies.includes(word) ? 1 : 0),
-    0
-  );
+  const positiveCount = countTerms(bodies, positiveWords);
+  const negativeCount = countTerms(bodies, negativeWords);
 
   if (positiveCount > negativeCount) {
-    return "掲示板では、成長期待や業績改善に関する前向きなコメントが目立ちます。";
+    return `コメント傾向：前向き語が優勢（前向き ${positiveCount} / 慎重 ${negativeCount}）`;
   }
 
   if (negativeCount > positiveCount) {
-    return "掲示板では、赤字・希薄化・業績不安などに関する慎重なコメントが目立ちます。";
+    return `コメント傾向：慎重語が優勢（前向き ${positiveCount} / 慎重 ${negativeCount}）`;
   }
 
-  return "掲示板では、強気・弱気の見方が分かれており、投資家の評価はまだ定まっていないようです。";
+  return `コメント傾向：拮抗（前向き ${positiveCount} / 慎重 ${negativeCount}）`;
 }
