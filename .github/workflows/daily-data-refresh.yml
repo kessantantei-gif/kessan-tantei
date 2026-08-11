@@ -13,10 +13,11 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: daily-data-refresh
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   refresh:
@@ -31,6 +32,26 @@ jobs:
       NEWS_CRON_PER_COMPANY: "3"
 
     steps:
+      - name: Publish pending refresh status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          payload=$(jq -nc \
+            --arg state "pending" \
+            --arg context "Daily Data Refresh" \
+            --arg description "TDnet / EDINET / news refresh running" \
+            --arg target_url "$target_url" \
+            '{state:$state, context:$context, description:$description, target_url:$target_url}')
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d "$payload"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -79,6 +100,36 @@ jobs:
           echo "TDnet:  ${{ steps.tdnet.outcome }}"
           echo "EDINET: ${{ steps.edinet.outcome }}"
           echo "News:   ${{ steps.news.outcome }}"
+
+      - name: Publish final refresh status
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          if [ "${{ steps.tdnet.outcome }}" = "success" ] && \
+             [ "${{ steps.edinet.outcome }}" = "success" ] && \
+             [ "${{ steps.news.outcome }}" = "success" ]; then
+            state="success"
+            description="TDnet / EDINET / news refresh passed"
+          else
+            state="failure"
+            description="Daily data refresh failed; inspect Actions log"
+          fi
+          payload=$(jq -nc \
+            --arg state "$state" \
+            --arg context "Daily Data Refresh" \
+            --arg description "$description" \
+            --arg target_url "$target_url" \
+            '{state:$state, context:$context, description:$description, target_url:$target_url}')
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d "$payload"
 
       - name: Fail when any refresh failed
         if: always()
