@@ -20,21 +20,31 @@ type Props = {
 function ProCta() {
   return (
     <div className="mt-4 rounded-2xl border border-yellow-300/30 bg-yellow-400/10 p-4 text-sm leading-7 text-yellow-50">
-      <p className="font-black text-yellow-200">🔒 AI分析の全文はPro限定</p>
+      <p className="font-black text-yellow-200">🔒 AIコメント全文はPro限定</p>
       <p className="mt-1 text-slate-300">
-        無料版では要約の冒頭だけ表示しています。Proでは良い点・注意点・確認ポイント、Red Flags、詳細コメントまで確認できます。
+        無料版ではコメント冒頭と各項目の一部を表示します。Proではプラス材料・警戒材料・次回確認をすべて確認できます。
       </p>
       <Link
         href="/pricing"
         className="mt-3 inline-flex min-h-10 items-center justify-center rounded-full bg-yellow-400 px-4 py-2 text-xs font-black text-slate-950 hover:bg-yellow-300"
       >
-        ProでAI分析を読む
+        AIコメント全文を見る
       </Link>
     </div>
   );
 }
 
-function ListBlock({ title, items, tone, isPro }: { title: string; items: string[]; tone: "green" | "yellow" | "cyan"; isPro: boolean }) {
+function ListBlock({
+  title,
+  items,
+  tone,
+  isPro,
+}: {
+  title: string;
+  items: string[];
+  tone: "green" | "yellow" | "cyan";
+  isPro: boolean;
+}) {
   const visibleItems = isPro ? items : items.slice(0, 1);
   if (visibleItems.length === 0) return null;
 
@@ -52,7 +62,9 @@ function ListBlock({ title, items, tone, isPro }: { title: string; items: string
           <li key={item}>・{item}</li>
         ))}
         {!isPro && items.length > visibleItems.length ? (
-          <li className="text-yellow-200">🔒 残り{items.length - visibleItems.length}件はPro限定</li>
+          <li className="text-yellow-200">
+            🔒 残り{items.length - visibleItems.length}件はPro限定
+          </li>
         ) : null}
       </ul>
     </div>
@@ -60,8 +72,8 @@ function ListBlock({ title, items, tone, isPro }: { title: string; items: string
 }
 
 function previewText(text: string) {
-  if (text.length <= 90) return text;
-  return `${text.slice(0, 90)}…`;
+  if (text.length <= 110) return text;
+  return `${text.slice(0, 110)}…`;
 }
 
 export default function CompanyAiSummary({ ticker }: Props) {
@@ -73,18 +85,24 @@ export default function CompanyAiSummary({ ticker }: Props) {
     let cancelled = false;
 
     Promise.all([
-      fetch(`/api/company/${ticker}/ai-summary`, { cache: "no-store" }).then((res) => (res.ok ? res.json() : null)),
-      fetch("/api/pro-status", { cache: "no-store" }).then((res) => (res.ok ? res.json() : null)),
+      fetch(`/api/company/${ticker}/ai-summary`, { cache: "no-store" }).then((res) =>
+        res.ok ? res.json() : null
+      ),
+      fetch("/api/pro-status", { cache: "no-store" }).then((res) =>
+        res.ok ? res.json() : null
+      ),
     ])
-      .then(([data, status]: [SummaryPayload | null, { isPro?: boolean } | null]) => {
-        if (cancelled) return;
-        if (!data) {
-          setFailed(true);
-          return;
+      .then(
+        ([data, status]: [SummaryPayload | null, { isPro?: boolean } | null]) => {
+          if (cancelled) return;
+          if (!data) {
+            setFailed(true);
+            return;
+          }
+          setPayload(data);
+          setIsPro(Boolean(status?.isPro));
         }
-        setPayload(data);
-        setIsPro(Boolean(status?.isPro));
-      })
+      )
       .catch(() => {
         if (!cancelled) setFailed(true);
       });
@@ -99,8 +117,10 @@ export default function CompanyAiSummary({ ticker }: Props) {
   if (!payload) {
     return (
       <section className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-5 text-slate-300 sm:p-6">
-        <p className="text-xs font-bold tracking-[0.24em] text-cyan-200">AI SUMMARY</p>
-        <p className="mt-3 text-sm">決算サマリーを生成中です。</p>
+        <p className="text-xs font-black tracking-[0.24em] text-cyan-200">
+          AI COMMENT
+        </p>
+        <p className="mt-3 text-sm">決算コメントを生成中です。</p>
       </section>
     );
   }
@@ -109,30 +129,58 @@ export default function CompanyAiSummary({ ticker }: Props) {
     <section className="mt-6 overflow-hidden rounded-3xl border border-cyan-300/20 bg-gradient-to-br from-cyan-500/12 via-white/[0.04] to-green-500/10 p-5 shadow-2xl shadow-black/20 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-xs font-bold tracking-[0.24em] text-cyan-200">AI SUMMARY</p>
-          <h2 className="mt-2 text-2xl font-black text-white">AI決算サマリー</h2>
-          <p className="mt-1 text-sm font-bold text-slate-400">{payload.companyName} / {payload.ticker}</p>
+          <p className="text-xs font-black tracking-[0.24em] text-cyan-200">
+            AI COMMENT / FINANCIAL INTERPRETATION
+          </p>
+          <h2 className="mt-2 text-2xl font-black text-white">AI決算コメント</h2>
+          <p className="mt-1 text-sm font-bold text-slate-400">
+            {payload.companyName} / {payload.ticker}
+          </p>
         </div>
-        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${isPro ? "border-green-300/20 bg-green-300/10 text-green-100" : "border-yellow-300/20 bg-yellow-300/10 text-yellow-100"}`}>
-          {isPro ? "Pro 全文表示" : "一部無料 / 全文Pro"}
+        <span
+          className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${
+            isPro
+              ? "border-green-300/20 bg-green-300/10 text-green-100"
+              : "border-yellow-300/20 bg-yellow-300/10 text-yellow-100"
+          }`}
+        >
+          {isPro ? "Pro 全文" : "一部無料 / 全文Pro"}
         </span>
       </div>
 
-      <p className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-8 text-slate-100 sm:text-base">
-        {isPro ? payload.summary : previewText(payload.summary)}
-      </p>
+      <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+        <p className="text-[11px] font-black tracking-[0.18em] text-slate-500">
+          COMMENT
+        </p>
+        <p className="mt-2 text-sm leading-8 text-slate-100 sm:text-base">
+          {isPro ? payload.summary : previewText(payload.summary)}
+        </p>
+      </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
-        <ListBlock title="良い点" items={payload.positives} tone="green" isPro={isPro} />
-        <ListBlock title="注意点" items={payload.cautions} tone="yellow" isPro={isPro} />
-        <ListBlock title="確認ポイント" items={payload.watchPoints} tone="cyan" isPro={isPro} />
+        <ListBlock
+          title="プラス材料"
+          items={payload.positives}
+          tone="green"
+          isPro={isPro}
+        />
+        <ListBlock
+          title="警戒材料"
+          items={payload.cautions}
+          tone="yellow"
+          isPro={isPro}
+        />
+        <ListBlock
+          title="次回確認"
+          items={payload.watchPoints}
+          tone="cyan"
+          isPro={isPro}
+        />
       </div>
 
       {!isPro ? <ProCta /> : null}
 
-      <p className="mt-4 text-xs leading-6 text-slate-500">
-        {payload.disclaimer}
-      </p>
+      <p className="mt-4 text-xs leading-6 text-slate-500">{payload.disclaimer}</p>
     </section>
   );
 }
