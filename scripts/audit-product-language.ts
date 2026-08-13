@@ -2,12 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 
 const publicProductFiles = [
+  "app/layout.tsx",
   "app/company/[ticker]/page.tsx",
   "app/growth-home.tsx",
   "app/ranking/page.tsx",
   "app/latest-earnings/page.tsx",
   "app/pricing/page.tsx",
   "app/about-growth/page.tsx",
+  "components/company-ai-summary.tsx",
   "components/company-index-placeholder.tsx",
   "components/company-quarterly-panels.tsx",
   "components/RankingCard.tsx",
@@ -39,6 +41,7 @@ const forbiddenVisiblePhrases = [
 ] as const;
 
 const requiredByFile: Record<string, readonly string[]> = {
+  "app/layout.tsx": ["CompanyAiSummaryInjector"],
   "app/company/[ticker]/page.tsx": [
     "FINANCIAL SIGNALS / OFFICIAL DISCLOSURES",
     "決算探偵 判定",
@@ -53,6 +56,13 @@ const requiredByFile: Record<string, readonly string[]> = {
     "Danger Score",
   ],
   "app/ranking/page.tsx": ["比較ルール", "取得済み最新決算を使用"],
+  "components/company-ai-summary.tsx": [
+    "AI決算コメント",
+    "プラス材料",
+    "警戒材料",
+    "次回確認",
+    "AIコメント全文",
+  ],
   "components/ranking-results.tsx": [
     "RANKING EVIDENCE",
     "Financial {company.score} / Danger {company.danger_score}",
