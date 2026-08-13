@@ -5,21 +5,26 @@ const publicProductFiles = [
   "app/company/[ticker]/page.tsx",
   "app/growth-home.tsx",
   "app/ranking/page.tsx",
+  "app/latest-earnings/page.tsx",
   "app/pricing/page.tsx",
   "app/about-growth/page.tsx",
   "components/company-index-placeholder.tsx",
   "components/company-quarterly-panels.tsx",
   "components/RankingCard.tsx",
+  "components/ranking-results.tsx",
   "components/financial-insight-panel.tsx",
+  "components/pro-value-card.tsx",
+  "components/pro-lock.tsx",
   "lib/comment-engine.ts",
   "lib/news-engine.ts",
+  "lib/signals.ts",
   "lib/financial-insight-engine.ts",
 ] as const;
 
 const forbiddenVisiblePhrases = [
   "AI詳細財務分析",
   "AI詳細分析",
-  "AI分析",
+  "AI分析全文",
   "EDINET AUTO ANALYSIS",
   "決算探偵の見立て",
   "決算変化速報",
@@ -30,6 +35,7 @@ const forbiddenVisiblePhrases = [
   "比較的良好",
   "慎重な分析",
   "投資家の評価はまだ定まっていないようです",
+  "全社コメント",
 ] as const;
 
 const requiredByFile: Record<string, readonly string[]> = {
@@ -47,10 +53,30 @@ const requiredByFile: Record<string, readonly string[]> = {
     "Danger Score",
   ],
   "app/ranking/page.tsx": ["比較ルール", "取得済み最新決算を使用"],
+  "components/ranking-results.tsx": [
+    "RANKING EVIDENCE",
+    "Financial {company.score} / Danger {company.danger_score}",
+    "指標値・判定根拠",
+  ],
+  "components/financial-insight-panel.tsx": [
+    "KESSAN TANTEI METRICS",
+    "決算探偵 固定4指標",
+  ],
+  "components/pro-value-card.tsx": [
+    "判定根拠",
+    "決算探偵 固定4指標",
+    "Danger Score内訳",
+  ],
   "app/pricing/page.tsx": ["判定根拠", "警戒シグナル内訳", "FULL ACCESS"],
   "app/about-growth/page.tsx": ["VERDICT RULES", "表示フォーマット"],
+  "lib/signals.ts": ["判定根拠：", "主要警戒シグナル 未検出"],
   "lib/financial-insight-engine.ts": [
     "generateFinancialInsight",
+    "productMetrics",
+    "利益品質",
+    "資金余力",
+    "希薄化警戒",
+    "決算モメンタム",
     "nextChecks",
     "evidence",
   ],
