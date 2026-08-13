@@ -1,6 +1,7 @@
 import type {
   FinancialInsight,
   InsightTone,
+  ProductMetric,
 } from "@/lib/financial-insight-engine";
 
 function toneClass(tone: InsightTone) {
@@ -37,6 +38,21 @@ export default function FinancialInsightPanel({
         <p className="mt-3 text-xl font-black text-white">{insight.headline}</p>
       </div>
 
+      <section className="rounded-2xl border border-white/10 bg-black/20 p-4">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <p className="text-[11px] font-black tracking-[0.18em] text-cyan-200">KESSAN TANTEI METRICS</p>
+            <h3 className="mt-1 text-base font-black text-white">決算探偵 固定4指標</h3>
+          </div>
+          <span className="text-[11px] font-bold text-slate-500">固定ルール / 開示データのみ</span>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {insight.productMetrics.map((metric) => (
+            <ProductMetricCard key={metric.key} metric={metric} />
+          ))}
+        </div>
+      </section>
+
       <div className="grid gap-3 sm:grid-cols-2">
         <InsightList title="プラス材料" items={insight.positives} />
         <InsightList title="警戒材料" items={insight.watches} />
@@ -69,6 +85,16 @@ export default function FinancialInsightPanel({
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function ProductMetricCard({ metric }: { metric: ProductMetric }) {
+  return (
+    <div className={`rounded-xl border p-3 ${toneClass(metric.tone)}`}>
+      <p className="text-[11px] font-black tracking-[0.12em] opacity-70">{metric.label}</p>
+      <p className="mt-1 text-lg font-black text-white">{metric.value}</p>
+      <p className="mt-2 text-xs leading-5 opacity-80">{metric.detail}</p>
     </div>
   );
 }

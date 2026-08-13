@@ -14,19 +14,19 @@ type Props = {
 };
 
 export const DEFAULT_PRO_VALUE_ITEMS: ProValueItem[] = [
-  { label: "AI分析全文", detail: "良い点・注意点・確認ポイントまで表示" },
-  { label: "Danger内訳・Red Flags", detail: "検出理由と確認すべき開示を表示" },
-  { label: "財務シグナル全件", detail: "無料枠で隠れている残りのシグナルを表示" },
-  { label: "比較候補の全件", detail: "テーマ・財務・成長率別の比較候補を表示" },
-  { label: "決算変化の詳細", detail: "改善・悪化項目と全指標の変化を表示" },
-  { label: "ランキング全順位", detail: "TOP3以降の会社名・数値・コメントを表示" },
+  { label: "判定根拠", detail: "プラス材料・警戒材料・根拠数値を表示" },
+  { label: "Danger Score内訳", detail: "構成シグナルとスコア影響を表示" },
+  { label: "決算探偵 固定4指標", detail: "利益品質・資金余力・希薄化警戒・決算モメンタム" },
+  { label: "比較候補 全件", detail: "テーマ・財務・成長率別の比較候補を表示" },
+  { label: "決算変化", detail: "売上・営業利益・営業CFの比較値を表示" },
+  { label: "ランキング 全順位", detail: "TOP3以降の会社名・指標値・判定根拠を表示" },
 ];
 
 export default function ProValueCard({
-  title = "この先の詳細分析はPro限定です",
-  message = "無料版では概要まで確認できます。Proでは判断材料になる詳細分析・比較・リスク情報を最後まで確認できます。",
+  title = "この先の詳細指標はPro限定です",
+  message = "無料版では主要指標まで表示します。Proでは全順位、判定根拠、警戒シグナル内訳、固定4指標を確認できます。",
   items = DEFAULT_PRO_VALUE_ITEMS,
-  ctaLabel = "初月100円でProを試す",
+  ctaLabel = "Proの表示範囲を確認",
   compact = false,
 }: Props) {
   return (

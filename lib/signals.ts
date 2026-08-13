@@ -28,8 +28,8 @@ export function generateSignals(metrics: SignalMetrics): DetectiveSignal[] {
   if (isThreeConsecutiveNegative(metrics.operatingCashFlows)) {
     signals.push({
       level: "danger",
-      title: "営業CFが3期連続マイナス",
-      description: "事業活動によるキャッシュ創出力に注意が必要です。",
+      title: "営業CF 3期連続マイナス",
+      description: "判定根拠：直近3期の営業CFがすべてマイナス",
     });
   }
 
@@ -44,7 +44,7 @@ export function generateSignals(metrics: SignalMetrics): DetectiveSignal[] {
       signals.push({
         level: "danger",
         title: "Cash Runway 12ヶ月未満",
-        description: "追加資金調達リスクを確認すべき水準です。",
+        description: `判定根拠：推定Cash Runway ${runwayMonths.toFixed(1)}ヶ月`,
       });
     }
   }
@@ -52,16 +52,16 @@ export function generateSignals(metrics: SignalMetrics): DetectiveSignal[] {
   if (metrics.hasMsWarrant) {
     signals.push({
       level: "danger",
-      title: "MSワラントあり",
-      description: "株式価値の希薄化リスクが高い可能性があります。",
+      title: "MSワラント検出",
+      description: "判定根拠：MSワラント開示あり / 希薄化警戒",
     });
   }
 
   if (metrics.equityFinancingCountLast3Years >= 2) {
     signals.push({
       level: "warning",
-      title: "増資頻度が高い",
-      description: "資金調達依存度や希薄化リスクを確認してください。",
+      title: "増資頻度 高",
+      description: `判定根拠：過去3年のエクイティ調達 ${metrics.equityFinancingCountLast3Years}回`,
     });
   }
 
@@ -69,39 +69,39 @@ export function generateSignals(metrics: SignalMetrics): DetectiveSignal[] {
     signals.push({
       level: "warning",
       title: "監査法人交代",
-      description: "交代理由と監査上の論点を確認すべきです。",
+      description: "判定根拠：監査法人の変更開示あり",
     });
   }
 
   if (metrics.goingConcernNote) {
     signals.push({
       level: "danger",
-      title: "継続企業の前提注記あり",
-      description: "事業継続リスクが明示されています。",
+      title: "継続企業注記あり",
+      description: "判定根拠：継続企業の前提に関する注記を検出",
     });
   }
 
   if (isThreeConsecutiveNegative(metrics.operatingIncomes)) {
     signals.push({
       level: "warning",
-      title: "営業利益が3期連続マイナス",
-      description: "黒字化までの道筋を確認すべきです。",
+      title: "営業利益 3期連続マイナス",
+      description: "判定根拠：直近3期の営業利益がすべてマイナス",
     });
   }
 
   if (metrics.currentRatioTrend === "declining") {
     signals.push({
       level: "warning",
-      title: "流動比率が低下傾向",
-      description: "短期的な支払余力の低下に注意が必要です。",
+      title: "流動比率 低下",
+      description: "判定根拠：流動比率トレンドがdeclining",
     });
   }
 
   if (signals.length === 0) {
     signals.push({
       level: "positive",
-      title: "重大な危険シグナルなし",
-      description: "現時点で主要な会計リスクは検出されていません。",
+      title: "主要警戒シグナル 未検出",
+      description: "判定根拠：設定済み警戒条件への該当なし",
     });
   }
 
