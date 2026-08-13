@@ -49,8 +49,15 @@ const requiredByFile: Record<string, readonly string[]> = {
   "app/ranking/page.tsx": ["比較ルール", "取得済み最新決算を使用"],
   "app/pricing/page.tsx": ["判定根拠", "警戒シグナル内訳", "FULL ACCESS"],
   "app/about-growth/page.tsx": ["VERDICT RULES", "表示フォーマット"],
+  "components/financial-insight-panel.tsx": [
+    "決算探偵コメント",
+    "KT COMMENT v2",
+    "insight.comment",
+  ],
   "lib/financial-insight-engine.ts": [
     "generateFinancialInsight",
+    "commentFor",
+    "comment:",
     "nextChecks",
     "evidence",
   ],
