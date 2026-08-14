@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import FormSubmitButton from "@/components/form-submit-button";
 import LoginRequiredCard from "@/components/login-required-card";
@@ -117,7 +118,7 @@ export default function CompanyBoard({
             {companyName} 掲示板
           </h2>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-400">
-            決算を読んだ感想や気になる論点を残せます。投稿内容は投資助言ではなく、ユーザー同士の情報交換です。
+            決算・開示資料について論点を共有する掲示板です。投稿は各利用者の見解であり、決算探偵が内容を保証・推奨するものではありません。
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs font-bold text-slate-300">
@@ -127,6 +128,28 @@ export default function CompanyBoard({
           <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-3 py-1 text-cyan-200">
             表示中 {activeCommentsCount}件
           </span>
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm leading-7 text-red-100">
+        <p className="font-black text-red-200">投稿前に確認してください</p>
+        <p className="mt-1">
+          根拠のない噂・虚偽情報、未公表情報の断定、株価を動かす目的の買い煽り・売り煽りや示し合わせ、誹謗中傷・個人情報の掲載は禁止です。
+          事実は確認できる根拠を示し、予想は予想であることを明確にしてください。
+        </p>
+        <div className="mt-3 flex flex-wrap gap-3 text-xs font-black">
+          <Link
+            href="/community-guidelines"
+            className="rounded-full border border-red-300/20 bg-black/20 px-3 py-2 text-red-100 hover:bg-black/30"
+          >
+            掲示板ガイドライン
+          </Link>
+          <Link
+            href="/community-guidelines#report"
+            className="rounded-full border border-yellow-300/20 bg-yellow-400/10 px-3 py-2 text-yellow-100 hover:bg-yellow-400/20"
+          >
+            権利侵害・違法投稿の削除申請
+          </Link>
         </div>
       </div>
 
@@ -159,7 +182,7 @@ export default function CompanyBoard({
             name="body"
             value={body}
             onChange={(event) => setBody(event.target.value)}
-            placeholder="この会社についてコメントする。例：営業CFが改善している点が気になる、リスクシグナルの内容を確認したい など"
+            placeholder="例：営業CFが改善。決算短信○ページの売掛金減少も影響していそう。個人的には次四半期も継続するか確認したい。"
             maxLength={1000}
             required
             rows={4}
@@ -168,7 +191,7 @@ export default function CompanyBoard({
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs leading-6 text-slate-500">
-              最大1,000文字。誹謗中傷や根拠のない断定は避けてください。
+              最大1,000文字。投稿すると利用規約・掲示板ガイドラインに同意したものとして扱います。
             </p>
             <FormSubmitButton
               pendingText="投稿中..."

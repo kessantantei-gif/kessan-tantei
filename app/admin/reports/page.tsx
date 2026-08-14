@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { adminHideComment } from "@/app/admin/comments/actions";
 import { isAdminUser } from "@/lib/admin-engine";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -69,7 +70,17 @@ export default async function AdminReportsPage() {
         <header className="mb-8">
           <p className="text-xs font-black tracking-[0.3em] text-red-300">REPORTS</p>
           <h1 className="mt-2 text-3xl font-black sm:text-5xl">通報コメント</h1>
-          <p className="mt-3 text-slate-400">通報された本文、投稿者、対象銘柄、通報数を確認できます。</p>
+          <p className="mt-3 text-slate-400">
+            通報された本文、投稿者、対象銘柄、通報数を確認し、通報数にかかわらず管理者判断で非表示にできます。
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3 text-sm font-bold">
+            <Link href="/admin/comments" className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2 text-cyan-200">
+              全投稿を見る
+            </Link>
+            <Link href="/community-guidelines" className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-slate-200">
+              掲示板ガイドライン
+            </Link>
+          </div>
         </header>
 
         {loadError ? (
@@ -87,9 +98,12 @@ export default async function AdminReportsPage() {
               const userId = text(comment, ["clerk_user_id", "user_id", "author_id", "profile_id"]);
               const authorName = text(comment, ["display_name", "author_name", "user_name"]) || profileMap.get(userId) || "不明";
               const body = text(comment, ["content", "body", "comment", "text"]);
+              const deletedAt = text(comment, ["deleted_at"]);
+              const deletedBy = text(comment, ["deleted_by"]);
+              const isDeleted = Boolean(deletedAt);
 
               return (
-                <article key={id} className="rounded-3xl border border-red-400/25 bg-red-500/10 p-6">
+                <article key={id} className={`rounded-3xl border p-6 ${isDeleted ? "border-slate-500/20 bg-slate-500/5" : "border-red-400/25 bg-red-500/10"}`}>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-3">
@@ -97,8 +111,18 @@ export default async function AdminReportsPage() {
                           通報 {reports.length}件
                         </span>
                         <p className="font-black text-red-100">{ticker ? `${ticker} の掲示板` : "掲示板投稿"}</p>
+                        {isDeleted ? (
+                          <span className="rounded-full border border-slate-300/20 bg-slate-400/10 px-3 py-1 text-xs font-black text-slate-200">
+                            非表示済み
+                          </span>
+                        ) : null}
                       </div>
                       <p className="mt-2 text-sm text-slate-300">投稿者: {authorName}</p>
+                      {isDeleted ? (
+                        <p className="mt-1 text-xs text-slate-500">
+                          非表示: {formatDate(deletedAt)} / 処理者: {deletedBy || "不明"}
+                        </p>
+                      ) : null}
                     </div>
                     <p className="text-xs text-slate-500">投稿: {formatDate(comment.created_at)}</p>
                   </div>
@@ -140,6 +164,17 @@ export default async function AdminReportsPage() {
                         銘柄ページで確認
                       </Link>
                     )}
+                    {!isDeleted && id ? (
+                      <form action={adminHideComment}>
+                        <input type="hidden" name="comment_id" value={id} />
+                        <button
+                          type="submit"
+                          className="rounded-full border border-red-300/30 bg-red-400 px-4 py-2 text-xs font-black text-slate-950 hover:bg-red-300"
+                        >
+                          管理者判断で非表示
+                        </button>
+                      </form>
+                    ) : null}
                   </div>
                 </article>
               );
