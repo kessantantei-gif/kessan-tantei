@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 
+const ALLOWED_TYPES = new Set([
+  "不具合",
+  "改善要望",
+  "問い合わせ",
+  "掲示板・権利侵害の通報",
+  "その他",
+]);
+
 export async function POST(req: Request) {
   try {
     const resendApiKey = process.env.RESEND_API_KEY;
@@ -16,23 +24,32 @@ export async function POST(req: Request) {
 
     const body = await req.json();
 
-    const type = body.type ?? "その他";
-    const email = body.email ?? "未入力";
-    const message = body.message ?? "";
+    const rawType = String(body.type ?? "その他").trim();
+    const type = ALLOWED_TYPES.has(rawType) ? rawType : "その他";
+    const email = String(body.email ?? "").trim().slice(0, 320) || "未入力";
+    const message = String(body.message ?? "").trim();
 
-    if (!message.trim()) {
+    if (!message) {
       return NextResponse.json(
         { error: "message required" },
         { status: 400 }
       );
     }
 
+    if (message.length > 4000) {
+      return NextResponse.json(
+        { error: "message too long" },
+        { status: 400 }
+      );
+    }
+
     const resend = new Resend(resendApiKey);
+    const urgentPrefix = type === "掲示板・権利侵害の通報" ? "【要確認】" : "";
 
     await resend.emails.send({
       from: "onboarding@resend.dev",
       to: feedbackToEmail,
-      subject: `【決算探偵 Feedback】${type}`,
+      subject: `${urgentPrefix}【決算探偵 Feedback】${type}`,
       text: `
 種別: ${type}
 
