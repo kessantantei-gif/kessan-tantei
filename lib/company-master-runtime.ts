@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import {
   classifyIndustryThemes,
   industryThemeLabel,
@@ -181,7 +182,7 @@ async function loadCuratedRows() {
   return rows;
 }
 
-export async function loadRuntimeCompanyMasterEntries() {
+async function loadRuntimeCompanyMasterEntriesUncached() {
   const [allMarketCompanies, curatedRows] = await Promise.all([
     loadAllMarketCompanies(),
     loadCuratedRows(),
@@ -198,6 +199,58 @@ export async function loadRuntimeCompanyMasterEntries() {
   }
 
   return [...merged.values()].sort((a, b) => a.ticker.localeCompare(b.ticker, "ja"));
+}
+
+const loadRuntimeCompanyMasterEntriesCached = unstable_cache(
+  loadRuntimeCompanyMasterEntriesUncached,
+  ["runtime-company-master-entries-v2"],
+  { revalidate: 3600 }
+);
+
+export async function loadRuntimeCompanyMasterEntries() {
+  return loadRuntimeCompanyMasterEntriesCached();
+}
+
+async function loadRuntimeCompanyMasterEntryUncached(
+  ticker: string
+): Promise<RuntimeCompanyMasterEntry | null> {
+  const [marketResult, curatedResult] = await Promise.all([
+    supabaseAdmin
+      .from("all_market_companies")
+      .select("ticker, company_name, market_segment, industry_name, listing_status")
+      .eq("ticker", ticker)
+      .eq("listing_status", "listed")
+      .maybeSingle(),
+    supabaseAdmin
+      .from("company_master")
+      .select(
+        "ticker, company_name, theme, sub_theme, business_model, market_cap_class, rival_tickers, keywords, reviewed, updated_at"
+      )
+      .eq("ticker", ticker)
+      .maybeSingle(),
+  ]);
+
+  const marketRow = marketResult.data as AllMarketCompanyRow | null;
+  const staticEntry = getCompanyMasterEntries().find((entry) => entry.ticker === ticker);
+  const fallback = marketRow
+    ? fromAllMarketRow(marketRow)
+    : staticEntry
+      ? fromStaticEntry(staticEntry)
+      : null;
+
+  const curatedRow = curatedResult.data as CompanyMasterRow | null;
+  if (curatedRow) return fromDatabaseRow(curatedRow, fallback ?? undefined);
+  return fallback;
+}
+
+const loadRuntimeCompanyMasterEntryCached = unstable_cache(
+  loadRuntimeCompanyMasterEntryUncached,
+  ["runtime-company-master-entry-v2"],
+  { revalidate: 3600 }
+);
+
+export async function loadRuntimeCompanyMasterEntry(ticker: string) {
+  return loadRuntimeCompanyMasterEntryCached(ticker);
 }
 
 export async function loadRuntimeCompanyMasterMap() {
