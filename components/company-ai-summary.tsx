@@ -1,5 +1,6 @@
 "use client";
 
+import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -77,21 +78,26 @@ function previewText(text: string) {
 }
 
 export default function CompanyAiSummary({ ticker }: Props) {
+  const { isLoaded, isSignedIn } = useAuth();
   const [payload, setPayload] = useState<SummaryPayload | null>(null);
   const [failed, setFailed] = useState(false);
   const [isPro, setIsPro] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
+    if (!isLoaded) return;
 
-    Promise.all([
-      fetch(`/api/company/${ticker}/ai-summary`, { cache: "no-store" }).then((res) =>
-        res.ok ? res.json() : null
-      ),
-      fetch("/api/pro-status", { cache: "no-store" }).then((res) =>
-        res.ok ? res.json() : null
-      ),
-    ])
+    let cancelled = false;
+    const summaryRequest = fetch(`/api/company/${ticker}/ai-summary`, {
+      cache: "force-cache",
+    }).then((res) => (res.ok ? res.json() : null));
+
+    const proStatusRequest = isSignedIn
+      ? fetch("/api/pro-status", { cache: "no-store" }).then((res) =>
+          res.ok ? res.json() : null
+        )
+      : Promise.resolve({ isPro: false });
+
+    Promise.all([summaryRequest, proStatusRequest])
       .then(
         ([data, status]: [SummaryPayload | null, { isPro?: boolean } | null]) => {
           if (cancelled) return;
@@ -110,7 +116,7 @@ export default function CompanyAiSummary({ ticker }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [ticker]);
+  }, [isLoaded, isSignedIn, ticker]);
 
   if (failed) return null;
 
