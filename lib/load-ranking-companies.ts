@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";
 import type { RankingCompany } from "@/lib/rankings/types";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -31,7 +32,7 @@ function hasMinimumFinancialData(company: RankingCompany) {
   return availableCoreFields >= 2;
 }
 
-export async function loadRankingCompanies(marketSegment: string) {
+async function loadRankingCompaniesUncached(marketSegment: string) {
   const [companies, specialSecurities] = await Promise.all([
     loadAllSupabaseRows<RankingCompany>(
       `${marketSegment}ランキング会社取得失敗`,
@@ -69,4 +70,14 @@ export async function loadRankingCompanies(marketSegment: string) {
     (company) =>
       !excludedTickers.has(company.ticker) && hasMinimumFinancialData(company)
   );
+}
+
+const loadRankingCompaniesCached = unstable_cache(
+  loadRankingCompaniesUncached,
+  ["ranking-companies-v2"],
+  { revalidate: 1800 }
+);
+
+export async function loadRankingCompanies(marketSegment: string) {
+  return loadRankingCompaniesCached(marketSegment);
 }
