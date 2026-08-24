@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import CompanyPageScrollReset from "@/components/company-page-scroll-reset";
 import CompanyMarketBadges from "@/components/company-market-badges";
 import CompanyPageVisualEnhancer from "@/components/company-page-visual-enhancer";
-import { loadRuntimeCompanyMasterMap } from "@/lib/company-master-runtime";
+import { loadRuntimeCompanyMasterEntry } from "@/lib/company-master-runtime";
 import { supabaseAdmin } from "@/lib/supabase";
 
 type Props = {
@@ -30,28 +31,39 @@ function jsonLd(value: unknown) {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
+const loadCompanyLayoutContext = unstable_cache(
+  async (ticker: string) => {
+    const [master, marketResult, disclosureResult] = await Promise.all([
+      loadRuntimeCompanyMasterEntry(ticker),
+      supabaseAdmin
+        .from("all_market_companies")
+        .select("market_segment, industry_name, last_financial_update, updated_at")
+        .eq("ticker", ticker)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("company_disclosures")
+        .select("title, disclosed_at")
+        .eq("ticker", ticker)
+        .eq("source", "tdnet")
+        .in("document_type", earningsTypes)
+        .order("disclosed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    return {
+      master,
+      market: marketResult.data,
+      latestDisclosure: disclosureResult.data,
+    };
+  },
+  ["company-layout-context-v2"],
+  { revalidate: 1800 }
+);
+
 export default async function CompanyLayout({ children, params }: Props) {
   const { ticker } = await params;
-  const [masterMap, marketResult, disclosureResult] = await Promise.all([
-    loadRuntimeCompanyMasterMap(),
-    supabaseAdmin
-      .from("all_market_companies")
-      .select("market_segment, industry_name, last_financial_update, updated_at")
-      .eq("ticker", ticker)
-      .maybeSingle(),
-    supabaseAdmin
-      .from("company_disclosures")
-      .select("title, disclosed_at")
-      .eq("ticker", ticker)
-      .eq("source", "tdnet")
-      .in("document_type", earningsTypes)
-      .order("disclosed_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
-  const master = masterMap.get(ticker);
-  const market = marketResult.data;
-  const latestDisclosure = disclosureResult.data;
+  const { master, market, latestDisclosure } = await loadCompanyLayoutContext(ticker);
   const marketSegment = market?.market_segment || "growth";
   const marketLabel = marketLabels[marketSegment] || marketLabels.other;
   const rankingHref =
