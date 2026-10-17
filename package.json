@@ -65,7 +65,8 @@
     "check:financial-sector-parser": "tsx scripts/check-financial-sector-parser.ts",
     "check:market-ranking-parser": "tsx scripts/check-market-ranking-parser.ts",
     "audit:market-order": "tsx scripts/audit-market-display-order.ts",
-    "audit:pro-boundaries": "tsx scripts/audit-pro-boundaries.ts"
+    "audit:pro-boundaries": "tsx scripts/audit-pro-boundaries.ts",
+    "audit:scheduled-workflows": "tsx scripts/audit-scheduled-workflows.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.5.9",
