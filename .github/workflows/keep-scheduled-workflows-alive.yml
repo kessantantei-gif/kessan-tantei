@@ -6,6 +6,10 @@ on:
     # being auto-disabled after 60 days of inactivity.
     - cron: "17 3 1 * *"
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/keep-scheduled-workflows-alive.yml"
 
 permissions:
   actions: write
@@ -36,19 +40,17 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
-            git fetch -q --depth=1 origin "$branch"
-            git checkout -q -B "$branch" FETCH_HEAD
-          else
-            git checkout -q --orphan "$branch"
-            git rm -rf . >/dev/null 2>&1 || true
-          fi
+          # Rebuild the controlled branch from the current default branch each
+          # month. This keeps vercel.json on the branch, where Vercel sees that
+          # automation-keepalive is explicitly excluded from deployments.
+          git fetch -q --depth=1 origin "${GITHUB_DEFAULT_BRANCH}"
+          git checkout -q -B "$branch" FETCH_HEAD
 
           mkdir -p .github
           date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/scheduled-workflow-keepalive.txt
           git add .github/scheduled-workflow-keepalive.txt
           git commit -q -m "chore: keep scheduled workflows active [skip ci]"
-          git push -q origin HEAD:"$branch"
+          git push -q --force origin HEAD:"$branch"
 
       - name: Ensure critical scheduled workflows stay enabled
         env:
