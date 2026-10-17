@@ -47,5 +47,8 @@ jobs:
       - name: Vercel CPU regression audit
         run: npm run audit:vercel-cpu
 
+      - name: Scheduled workflow safety audit
+        run: npm run audit:scheduled-workflows
+
       - name: Production build
         run: npm run build
