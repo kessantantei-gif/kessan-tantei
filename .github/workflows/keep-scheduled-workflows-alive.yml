@@ -43,7 +43,7 @@ jobs:
           # Rebuild the controlled branch from the current default branch each
           # month. This keeps vercel.json on the branch, where Vercel sees that
           # automation-keepalive is explicitly excluded from deployments.
-          git fetch -q --depth=1 origin "${GITHUB_DEFAULT_BRANCH}"
+          git fetch -q --depth=1 origin "${GITHUB_REF_NAME}"
           git checkout -q -B "$branch" FETCH_HEAD
 
           mkdir -p .github
