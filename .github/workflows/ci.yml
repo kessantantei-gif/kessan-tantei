@@ -50,5 +50,8 @@ jobs:
       - name: Scheduled workflow safety audit
         run: npm run audit:scheduled-workflows
 
+      - name: Supabase grant audit
+        run: npm run audit:supabase-grants
+
       - name: Production build
         run: npm run build
