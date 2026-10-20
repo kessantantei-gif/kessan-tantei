@@ -34,10 +34,10 @@ for (const marker of [
   }
 }
 
-if (/grant\s+(?:all|insert|update|delete|truncate)[\s\S]*?\bto\s+anon\b/i.test(catchup)) {
+if (/grant\s+(?:all|insert|update|delete|truncate)[^;]*?\bto\s+anon\b/i.test(catchup)) {
   fail("catch-up migration must not grant anon write/all privileges");
 }
-if (/grant\s+(?:all|insert|update|delete|truncate)[\s\S]*?\bto\s+authenticated\b/i.test(catchup)) {
+if (/grant\s+(?:all|insert|update|delete|truncate)[^;]*?\bto\s+authenticated\b/i.test(catchup)) {
   fail("catch-up migration must not grant authenticated write/all privileges");
 }
 
