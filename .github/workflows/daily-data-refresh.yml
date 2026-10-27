@@ -10,6 +10,10 @@ on:
     paths:
       - ".github/workflows/daily-data-refresh.yml"
       - "scripts/sync-daily-news.ts"
+      - "scripts/sync-daily-edinet.ts"
+      - "scripts/run-tdnet-quarterly-safe-v2.ts"
+      - "lib/edinet-api-client.ts"
+      - "scripts/audit-external-data-sources.ts"
 
 permissions:
   contents: read
@@ -63,6 +67,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Audit external data sources
+        run: npm run audit:external-data-sources
 
       - name: Verify required secrets
         shell: bash

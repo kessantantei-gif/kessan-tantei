@@ -9,6 +9,16 @@ on:
         default: ""
   schedule:
     - cron: "20 12 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/quarterly-disclosures.yml"
+      - "scripts/sync-tdnet-quarterly.ts"
+      - "scripts/run-tdnet-quarterly-safe-v2.ts"
+      - "scripts/repair-tdnet-audit-gaps.ts"
+      - "scripts/sync-edinet-semiannual.ts"
+      - "lib/edinet-api-client.ts"
 
 permissions:
   contents: read
@@ -52,6 +62,9 @@ jobs:
           else
             npm run sync:tdnet-quarterly
           fi
+
+      - name: Repair historical TDnet quarterly gaps
+        run: npm run repair:tdnet-audit-gaps
 
       - name: Audit all TDnet data since operation start
         env:

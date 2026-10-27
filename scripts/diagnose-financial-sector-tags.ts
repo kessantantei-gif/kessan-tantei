@@ -146,7 +146,7 @@ function candidateRows(rows: CsvRow[]) {
 
 async function fetchCsvZip(docID: string) {
   const url = new URL(
-    `https://disclosure.edinet-fsa.go.jp/api/v2/documents/${docID}`
+    `https://api.edinet-fsa.go.jp/api/v2/documents/${docID}`
   );
   url.searchParams.set("type", "5");
   url.searchParams.set("Subscription-Key", EDINET_API_KEY!);

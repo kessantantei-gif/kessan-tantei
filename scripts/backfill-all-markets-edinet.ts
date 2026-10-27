@@ -3,6 +3,7 @@ dotenv.config({ path: ".env.local" });
 
 import { spawn } from "node:child_process";
 import { supabaseAdmin } from "../lib/supabase";
+import { buildEdinetApiUrl, fetchEdinetJson } from "../lib/edinet-api-client";
 
 const EDINET_API_KEY = process.env.EDINET_API_KEY;
 if (!EDINET_API_KEY) throw new Error("EDINET_API_KEY missing");
@@ -74,32 +75,16 @@ function compareDocumentsNewestFirst(a: EdinetDocument, b: EdinetDocument) {
 }
 
 async function fetchDocuments(date: string): Promise<EdinetDocument[]> {
-  const url = new URL("https://disclosure.edinet-fsa.go.jp/api/v2/documents.json");
-  url.searchParams.set("date", date);
-  url.searchParams.set("type", "2");
-  url.searchParams.set("Subscription-Key", EDINET_API_KEY!);
-
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
-    const response = await fetch(url, {
-      headers: { "user-agent": "kessan-tantei-edinet-backfill/4.0" },
-    });
-
-    if (response.ok) {
-      const json = (await response.json()) as { results?: EdinetDocument[] };
-      if (!Array.isArray(json.results)) {
-        throw new Error(`${date}: documents.jsonにresultsがありません`);
-      }
-      return json.results;
-    }
-
-    if (attempt === 5) {
-      throw new Error(`${date}: documents.json取得失敗 ${response.status} ${response.statusText}`);
-    }
-
-    await sleep(attempt * 2000);
+  const url = buildEdinetApiUrl("documents.json", {
+    date,
+    type: "2",
+    "Subscription-Key": EDINET_API_KEY!,
+  });
+  const json = await fetchEdinetJson<{ results?: EdinetDocument[] }>(url, 5);
+  if (!Array.isArray(json.results)) {
+    throw new Error(`${date}: documents.jsonにresultsがありません`);
   }
-
-  return [];
+  return json.results;
 }
 
 async function loadCompanies() {

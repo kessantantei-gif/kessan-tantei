@@ -25,6 +25,7 @@ on:
       - "scripts/repair-tdnet-document-classification.ts"
       - "scripts/repair-tdnet-text-block-financials.ts"
       - "scripts/audit-tdnet-ingestion.ts"
+      - "scripts/repair-tdnet-audit-gaps.ts"
       - "scripts/audit-tdnet-xbrl-availability-v2.ts"
       - "scripts/audit-tdnet-cash-flow.ts"
       - ".github/workflows/quarterly-disclosures.yml"
@@ -91,6 +92,9 @@ jobs:
 
       - name: Backfill and verify every TDnet list page
         run: npm run sync:tdnet-quarterly -- --from=${{ steps.range.outputs.from }} --to=${{ steps.range.outputs.to }}
+
+      - name: Repair historical TDnet quarterly gaps
+        run: npm run repair:tdnet-audit-gaps
 
       - name: Audit repaired range
         env:

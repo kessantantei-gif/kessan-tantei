@@ -15,7 +15,7 @@ function sleep(ms: number) {
 }
 
 async function hasResults(date: string) {
-  const url = new URL("https://disclosure.edinet-fsa.go.jp/api/v2/documents.json");
+  const url = new URL("https://api.edinet-fsa.go.jp/api/v2/documents.json");
   url.searchParams.set("date", date);
   url.searchParams.set("type", "2");
   url.searchParams.set("Subscription-Key", apiKey!);

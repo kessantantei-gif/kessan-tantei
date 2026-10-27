@@ -53,5 +53,8 @@ jobs:
       - name: Supabase grant audit
         run: npm run audit:supabase-grants
 
+      - name: External data source audit
+        run: npm run audit:external-data-sources
+
       - name: Production build
         run: npm run build

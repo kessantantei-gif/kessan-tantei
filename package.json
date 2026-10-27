@@ -67,7 +67,9 @@
     "audit:market-order": "tsx scripts/audit-market-display-order.ts",
     "audit:pro-boundaries": "tsx scripts/audit-pro-boundaries.ts",
     "audit:scheduled-workflows": "tsx scripts/audit-scheduled-workflows.ts",
-    "audit:supabase-grants": "tsx scripts/audit-supabase-grants.ts"
+    "audit:supabase-grants": "tsx scripts/audit-supabase-grants.ts",
+    "repair:tdnet-audit-gaps": "DOTENV_CONFIG_PATH=.env.local tsx scripts/repair-tdnet-audit-gaps.ts",
+    "audit:external-data-sources": "tsx scripts/audit-external-data-sources.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.5.9",

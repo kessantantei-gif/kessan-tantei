@@ -3,6 +3,7 @@ dotenv.config({ path: ".env.local" });
 
 import { spawnSync } from "child_process";
 import { supabaseAdmin } from "../lib/supabase";
+import { buildEdinetApiUrl, fetchEdinetJson } from "../lib/edinet-api-client";
 
 const EDINET_API_KEY = process.env.EDINET_API_KEY;
 if (!EDINET_API_KEY) throw new Error("EDINET_API_KEY missing");
@@ -30,17 +31,12 @@ function targetDate() {
 }
 
 async function fetchDocuments(date: string): Promise<EdinetDocument[]> {
-  const url = new URL("https://disclosure.edinet-fsa.go.jp/api/v2/documents.json");
-  url.searchParams.set("date", date);
-  url.searchParams.set("type", "2");
-  url.searchParams.set("Subscription-Key", EDINET_API_KEY!);
-
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`documents.json取得失敗: ${response.status} ${response.statusText}`);
-  }
-
-  const json = (await response.json()) as { results?: EdinetDocument[] };
+  const url = buildEdinetApiUrl("documents.json", {
+    date,
+    type: "2",
+    "Subscription-Key": EDINET_API_KEY!,
+  });
+  const json = await fetchEdinetJson<{ results?: EdinetDocument[] }>(url);
   if (!Array.isArray(json.results)) throw new Error("documents.jsonにresultsがありません");
   return json.results;
 }

@@ -1,9 +1,7 @@
 import fs from "fs";
 import path from "path";
 import * as XLSX from "xlsx";
-
-const JPX_URL =
-  "https://www.jpx.co.jp/markets/statistics-equities/misc/tvdivq0000001vg2-att/data_j.xls";
+import { resolveJpxListWorkbookUrl } from "../lib/jpx-list-source";
 
 type GrowthCompany = {
   ticker: string;
@@ -21,8 +19,9 @@ function clean(value: unknown): string {
 async function main() {
   console.log("===== Growth Companies Sync Start =====");
 
-  const res = await fetch(JPX_URL);
-  if (!res.ok) throw new Error(`JPX download failed: ${res.status}`);
+  const jpxUrl = await resolveJpxListWorkbookUrl();
+  const res = await fetch(jpxUrl);
+  if (!res.ok) throw new Error(`JPX download failed: ${res.status} ${res.statusText} ${jpxUrl}`);
 
   const buffer = Buffer.from(await res.arrayBuffer());
   const workbook = XLSX.read(buffer, { type: "buffer" });
