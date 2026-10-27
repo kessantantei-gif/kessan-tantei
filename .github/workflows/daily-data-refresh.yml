@@ -14,6 +14,7 @@ on:
       - "scripts/run-tdnet-quarterly-safe-v2.ts"
       - "lib/edinet-api-client.ts"
       - "scripts/audit-external-data-sources.ts"
+      - "scripts/analyze-company.ts"
 
 permissions:
   contents: read
