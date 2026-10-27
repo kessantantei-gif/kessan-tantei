@@ -5,6 +5,17 @@ on:
     # 平日19:15 UTC（日本時間 翌日04:15）にJPX・EDINET差分を同期する。
     - cron: "15 19 * * 1-5"
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/all-markets-nightly.yml"
+      - "scripts/sync-jpx-all-markets.ts"
+      - "scripts/sync-daily-edinet.ts"
+      - "scripts/run-all-markets-completion.ts"
+      - "lib/jpx-list-source.ts"
+      - "lib/edinet-api-client.ts"
+      - "scripts/audit-external-data-sources.ts"
 
 permissions:
   contents: read
@@ -41,6 +52,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Audit external data sources
+        run: npm run audit:external-data-sources
 
       - name: Run all-market completion suite with daily EDINET
         run: npm run complete:all-markets -- --with-daily-edinet
