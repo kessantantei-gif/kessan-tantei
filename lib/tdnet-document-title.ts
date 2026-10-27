@@ -21,7 +21,7 @@ function compact(title: string) {
 export function isTdnetSupplementalMaterial(title: string) {
   const normalized = compact(title);
   return (
-    /決算短信.*(?:補足資料|補足説明資料|決算説明資料|説明会資料|参考資料|補足説明|説明資料)/.test(
+    /決算短信.*(?:補足(?:資料|説明資料|説明)?|決算説明資料|説明会資料|参考資料|説明資料)/.test(
       normalized
     ) ||
     /(?:補足資料|補足説明資料|決算説明資料|説明会資料|参考資料).*(?:決算短信|決算)/.test(

@@ -57,7 +57,7 @@ jobs:
         run: npm run audit:external-data-sources
 
       - name: Run all-market completion suite with daily EDINET
-        run: npm run complete:all-markets -- --with-daily-edinet
+        run: REPAIR_SCORE_MODELS=1 npm run complete:all-markets -- --with-daily-edinet
 
       - name: Verify market entry pages
         shell: bash

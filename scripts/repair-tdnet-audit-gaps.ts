@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
 import { spawnSync } from "node:child_process";
+import { isTdnetNonEarningsDocument } from "../lib/tdnet-document-title";
 import { supabaseAdmin } from "../lib/supabase";
 
 const operationStart = process.env.TDNET_OPERATION_START_DATE ?? "2026-07-25";
@@ -15,6 +16,7 @@ type Disclosure = {
   fiscal_period_end: string | null;
   quarter: number | null;
   accounting_scope: string | null;
+  xbrl_url: string | null;
 };
 
 type QuarterlyKey = {
@@ -32,15 +34,6 @@ function addDays(date: string, days: number) {
   const value = new Date(`${date}T12:00:00Z`);
   value.setUTCDate(value.getUTCDate() + days);
   return value.toISOString().slice(0, 10);
-}
-
-function isNonEarningsNotice(title: string) {
-  const normalized = title.normalize("NFKC").replace(/\s+/g, "");
-  return (
-    /決算短信.*(?:開示|公表|発表).*(?:45日|超える|超過|延期|遅延|延長|予定|時期|変更)/.test(normalized) ||
-    /(?:45日|超える|超過|延期|遅延|延長).*(?:決算短信|決算発表)/.test(normalized) ||
-    /決算発表.*(?:延期|遅延|変更|予定)/.test(normalized)
-  );
 }
 
 function key(row: {
@@ -64,7 +57,7 @@ async function loadEarningsDisclosures(): Promise<Disclosure[]> {
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabaseAdmin
       .from("company_disclosures")
-      .select("ticker,title,document_type,disclosed_at,fiscal_period_end,quarter,accounting_scope")
+      .select("ticker,title,document_type,disclosed_at,fiscal_period_end,quarter,accounting_scope,xbrl_url")
       .eq("source", "tdnet")
       .gte("disclosed_at", start)
       .lt("disclosed_at", end)
@@ -81,7 +74,7 @@ async function loadEarningsDisclosures(): Promise<Disclosure[]> {
     (row) =>
       ["q1_earnings", "q2_earnings", "q3_earnings", "annual_earnings", "correction"].includes(
         row.document_type
-      ) && !isNonEarningsNotice(row.title)
+      ) && !isTdnetNonEarningsDocument(row.title, row.xbrl_url)
   );
 }
 
@@ -119,8 +112,17 @@ async function keyExists(value: string) {
   return Boolean(data);
 }
 
+function runStoredDisclosureRepair(date: string) {
+  console.log(`TDnet gap repair: rebuilding from stored disclosure ${date}`);
+  return spawnSync(
+    "npx",
+    ["tsx", "scripts/repair-tdnet-text-block-financials.ts", date],
+    { stdio: "inherit", env: process.env }
+  );
+}
+
 function runRepairDate(date: string) {
-  console.log(`TDnet gap repair: reprocessing ${date}`);
+  console.log(`TDnet gap repair: reprocessing live/archive list ${date}`);
   return spawnSync(
     "npx",
     ["tsx", "scripts/run-tdnet-quarterly-safe-v2.ts", date],
@@ -162,12 +164,24 @@ async function main() {
     let repaired = false;
 
     for (const date of dates) {
-      const result = runRepairDate(date);
-      if (result.status !== 0) {
-        console.warn(`TDnet gap repair command failed for ${value} on ${date}: ${result.status}`);
+      const storedResult = runStoredDisclosureRepair(date);
+      if (storedResult.status !== 0) {
+        console.warn(
+          `TDnet stored-disclosure repair failed for ${value} on ${date}: ${storedResult.status}`
+        );
       }
       if (await keyExists(value)) {
-        console.log(`TDnet gap repaired: ${value} via ${date}`);
+        console.log(`TDnet gap repaired from stored disclosure: ${value} via ${date}`);
+        repaired = true;
+        break;
+      }
+
+      const result = runRepairDate(date);
+      if (result.status !== 0) {
+        console.warn(`TDnet gap live-list repair failed for ${value} on ${date}: ${result.status}`);
+      }
+      if (await keyExists(value)) {
+        console.log(`TDnet gap repaired from live list: ${value} via ${date}`);
         repaired = true;
         break;
       }

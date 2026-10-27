@@ -20,9 +20,12 @@ type Disclosure = {
   title: string;
   document_type: string;
   disclosed_at: string;
+  fiscal_year: number | null;
   fiscal_period_end: string | null;
   quarter: number | null;
   accounting_scope: string | null;
+  accounting_standard: string | null;
+  currency: string | null;
   xbrl_url: string | null;
 };
 
@@ -86,7 +89,7 @@ async function loadDisclosures(from: string, to: string) {
     const { data, error } = await supabaseAdmin
       .from("company_disclosures")
       .select(
-        "id, company_id, ticker, title, document_type, disclosed_at, fiscal_period_end, quarter, accounting_scope, xbrl_url"
+        "id, company_id, ticker, title, document_type, disclosed_at, fiscal_year, fiscal_period_end, quarter, accounting_scope, accounting_standard, currency, xbrl_url"
       )
       .eq("source", "tdnet")
       .in("document_type", [
@@ -146,7 +149,84 @@ async function main() {
 
   for (const disclosure of disclosures) {
     const row = await loadQuarterlyRow(disclosure);
-    if (!row) continue;
+
+    if (!row) {
+      checked += 1;
+      try {
+        const parsed = parseTdnetTextBlockFinancials(await fetchBuffer(disclosure.xbrl_url!));
+        if (parsed.cashFlowTableFound) cashFlowTables += 1;
+
+        const coreValues = [
+          parsed.revenue,
+          parsed.operatingIncome,
+          parsed.ordinaryIncome,
+          parsed.profitAttributableToOwners,
+        ];
+        if (!coreValues.some((value) => value !== null)) {
+          throw new Error("保存済みXBRLから主要損益数値を復元できません");
+        }
+
+        const fiscalYear =
+          disclosure.fiscal_year ??
+          Number(String(disclosure.fiscal_period_end).slice(0, 4));
+        if (!Number.isInteger(fiscalYear) || fiscalYear < 2000) {
+          throw new Error("fiscal_yearを復元できません");
+        }
+
+        const { error } = await supabaseAdmin
+          .from("company_quarterly_financials")
+          .insert({
+            company_id: disclosure.company_id,
+            disclosure_id: disclosure.id,
+            ticker: disclosure.ticker,
+            fiscal_year: fiscalYear,
+            fiscal_period_end: disclosure.fiscal_period_end!,
+            quarter: disclosure.quarter!,
+            cumulative: true,
+            accounting_scope: disclosure.accounting_scope ?? "unknown",
+            accounting_standard: disclosure.accounting_standard,
+            currency: disclosure.currency ?? "JPY",
+            revenue: parsed.revenue,
+            operating_income: parsed.operatingIncome,
+            ordinary_income: parsed.ordinaryIncome,
+            profit_attributable_to_owners: parsed.profitAttributableToOwners,
+            operating_cf: parsed.operatingCF,
+            investing_cf: parsed.investingCF,
+            financing_cf: parsed.financingCF,
+            data_quality: "unreviewed",
+            extraction_version: TEXT_BLOCK_VERSION,
+            raw_financials: {
+              repairedFromStoredDisclosure: true,
+              textBlockFallback: parsed,
+            },
+            updated_at: new Date().toISOString(),
+          });
+        if (error) throw new Error(error.message);
+
+        repaired += 1;
+        details.push({
+          ticker: disclosure.ticker,
+          disclosureId: disclosure.id,
+          fiscalPeriodEnd: disclosure.fiscal_period_end,
+          quarter: disclosure.quarter,
+          createdMissingQuarterlyRow: true,
+          cashFlowTableFound: parsed.cashFlowTableFound,
+          revenue: parsed.revenue,
+          operating_income: parsed.operatingIncome,
+          ordinary_income: parsed.ordinaryIncome,
+          profit_attributable_to_owners: parsed.profitAttributableToOwners,
+          operating_cf: parsed.operatingCF,
+          investing_cf: parsed.investingCF,
+          financing_cf: parsed.financingCF,
+        });
+        continue;
+      } catch (error) {
+        failures.push(
+          `${disclosure.ticker}:${disclosure.id} ${error instanceof Error ? error.message : String(error)}`
+        );
+        continue;
+      }
+    }
 
     const replaceFallback = REPLACEABLE_VERSIONS.has(row.extraction_version ?? "");
     const missingProfitMetric = [
