@@ -56,7 +56,7 @@ const nightly = read(nightlyPath);
 requireMarker(
   nightlyPath,
   nightly,
-  "REPAIR_SCORE_MODELS=1 npm run complete:all-markets -- --with-daily-edinet"
+  "REPAIR_SCORE_MODELS=1 npm run complete:all-markets -- --with-daily-edinet --with-repairs"
 );
 
 console.log("Data pipeline resilience audit passed.");
