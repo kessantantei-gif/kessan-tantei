@@ -96,6 +96,7 @@ async function loadCompanies() {
       .from("all_market_companies")
       .select("ticker, company_name, edinet_code, market_segment")
       .eq("listing_status", "listed")
+      .eq("is_foreign", false)
       .not("edinet_code", "is", null)
       .order("ticker", { ascending: true })
       .range(from, from + pageSize - 1);
