@@ -1,0 +1,23 @@
+name: Diagnose TDnet residual gaps
+on:
+  push:
+    branches: [agent/diagnose-tdnet-residual-gaps]
+    paths:
+      - ".github/workflows/diagnose-tdnet-residual-gaps.yml"
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsx scripts/diagnose-tdnet-residual-gaps.ts
