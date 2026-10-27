@@ -50,6 +50,7 @@ async function loadCompanies(): Promise<Company[]> {
       .from("all_market_companies")
       .select("id, ticker, company_name, edinet_code, market_segment, listing_status")
       .eq("listing_status", "listed")
+      .eq("is_foreign", false)
       .not("edinet_code", "is", null)
       .range(from, from + pageSize - 1);
 
