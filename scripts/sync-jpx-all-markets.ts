@@ -2,10 +2,8 @@ import "dotenv/config";
 import AdmZip from "adm-zip";
 import * as XLSX from "xlsx";
 import { createClient } from "@supabase/supabase-js";
+import { resolveJpxListWorkbookUrl } from "../lib/jpx-list-source";
 
-const JPX_LIST_URL =
-  process.env.JPX_LIST_URL ||
-  "https://www.jpx.co.jp/markets/statistics-equities/misc/tvdivq0000001vg2-att/data_j.xls";
 const EDINET_CODELIST_URL =
   process.env.EDINET_CODELIST_URL ||
   "https://disclosure2dl.edinet-fsa.go.jp/searchdocument/codelist/Edinetcode.zip";
@@ -85,8 +83,8 @@ async function download(url: string) {
   return Buffer.from(await response.arrayBuffer());
 }
 
-async function loadJpxCompanies(): Promise<JpxCompany[]> {
-  const buffer = await download(JPX_LIST_URL);
+async function loadJpxCompanies(jpxListUrl: string): Promise<JpxCompany[]> {
+  const buffer = await download(jpxListUrl);
   const workbook = XLSX.read(buffer, { type: "buffer" });
   const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
   if (!firstSheet) throw new Error("JPXファイルにシートがありません。");
@@ -281,13 +279,14 @@ async function upsertInChunks(rows: Record<string, unknown>[], size = 500) {
 }
 
 async function main() {
+  const jpxListUrl = await resolveJpxListWorkbookUrl();
   const startedAt = new Date().toISOString();
   const { data: run, error: runError } = await supabase
     .from("data_import_runs")
     .insert({
       import_type: "jpx_market_master",
       status: "running",
-      source: JPX_LIST_URL,
+      source: jpxListUrl,
       started_at: startedAt,
       metadata: { edinetSource: EDINET_CODELIST_URL },
     })
@@ -297,7 +296,7 @@ async function main() {
 
   try {
     const [jpxCompanies, edinetCompanies, existingCompanies] = await Promise.all([
-      loadJpxCompanies(),
+      loadJpxCompanies(jpxListUrl),
       loadEdinetCompanies(),
       loadExistingCompanies(),
     ]);
@@ -325,7 +324,7 @@ async function main() {
         source_payload: {
           jpx: company,
           edinet: edinet ?? null,
-          jpxSource: JPX_LIST_URL,
+          jpxSource: jpxListUrl,
           edinetSource: EDINET_CODELIST_URL,
         },
         updated_at: now,
@@ -364,7 +363,7 @@ async function main() {
           effective_from: new Date().toISOString().slice(0, 10),
           is_current: true,
           source: "jpx_market_master",
-          source_reference: JPX_LIST_URL,
+          source_reference: jpxListUrl,
         });
         if (error) throw new Error(`市場履歴追加失敗 ${company.ticker}: ${error.message}`);
       }
@@ -392,7 +391,7 @@ async function main() {
         success_count: rows.length,
         failure_count: 0,
         metadata: {
-          jpxSource: JPX_LIST_URL,
+          jpxSource: jpxListUrl,
           edinetSource: EDINET_CODELIST_URL,
           prime: rows.filter((row) => row.market_segment === "prime").length,
           standard: rows.filter((row) => row.market_segment === "standard").length,
