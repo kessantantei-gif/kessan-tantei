@@ -1,0 +1,33 @@
+name: Verify expired TDnet gap recovery
+
+on:
+  push:
+    branches: [agent/repair-expired-tdnet-gaps]
+    paths:
+      - ".github/workflows/verify-expired-tdnet-gap-recovery.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      TDNET_OPERATION_START_DATE: "2026-07-25"
+      TDNET_GAP_REPAIR_MAX: "10"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Repair missing TDnet quarterly rows
+        run: npm run repair:tdnet-audit-gaps
+      - name: Strict TDnet ingestion audit
+        run: npm run audit:tdnet-ingestion
+      - name: TDnet cash-flow audit
+        run: npm run audit:tdnet-cash-flow
