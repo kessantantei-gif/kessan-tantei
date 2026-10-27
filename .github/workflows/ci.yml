@@ -44,6 +44,9 @@ jobs:
       - name: Product language audit
         run: npm run audit:product-language
 
+      - name: Phase 8 product audit
+        run: npm run audit:phase8
+
       - name: Vercel CPU regression audit
         run: npm run audit:vercel-cpu
 

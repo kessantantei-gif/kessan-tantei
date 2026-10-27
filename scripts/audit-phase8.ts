@@ -20,19 +20,32 @@ function requireText(relativePath: string, expected: string) {
   }
 }
 
-requireText("app/page.tsx", "TODAY&apos;S FOCUS");
-requireText("app/page.tsx", "PRO RANKINGS");
-requireText("app/page.tsx", "高成長かつ営業黒字");
-requireText("app/page.tsx", "営業CF改善");
+requireText("app/page.tsx", "GrowthHomePage");
+requireText("app/growth-home.tsx", "SIGNAL BOARD");
+requireText("app/growth-home.tsx", "PRO RANKINGS");
+requireText("app/growth-home.tsx", "売上成長20%以上 × 営業黒字");
+requireText("app/growth-home.tsx", "営業CF改善");
+
 requireText("components/pro-lock.tsx", "ProValueCard");
-requireText("components/pro-value-card.tsx", "AI分析全文");
+requireText("components/pro-value-card.tsx", "判定根拠");
+requireText("components/pro-value-card.tsx", "決算探偵 固定4指標");
+requireText("components/pro-value-card.tsx", "ランキング 全順位");
+requireText("components/ranking-results.tsx", "RANKING EVIDENCE");
+requireText("components/ranking-results.tsx", "Financial");
+
 requireText("components/company-page-order-controller.tsx", "ニュース / IR");
+requireText("app/api/company/[ticker]/ai-summary/route.ts", 'generatedBy: "accounting-rules-v3"');
 requireText("app/api/company/[ticker]/ai-summary/route.ts", "利益とキャッシュ");
 requireText("app/api/company/[ticker]/pro-analysis/route.ts", "前期からの変化");
 
 const orderController = read("components/company-page-order-controller.tsx");
 if (orderController.includes("MutationObserver")) {
-  failures.push("company page ordering must not use MutationObserver");
+  if (!orderController.includes("observer.disconnect()")) {
+    failures.push("company page MutationObserver must be explicitly disconnected");
+  }
+  if (!orderController.includes("window.setTimeout(() =>") || !orderController.includes("10000")) {
+    failures.push("company page MutationObserver must be bounded by a finite timeout");
+  }
 }
 
 const packageJson = JSON.parse(read("package.json") || "{}") as {
@@ -49,7 +62,7 @@ if (failures.length > 0) {
 }
 
 console.log("Phase 8 audit passed.");
-console.log("- Pro value presentation unified");
-console.log("- Company-page information order controlled without continuous DOM monitoring");
-console.log("- Accounting-oriented AI analysis enabled");
-console.log("- Today's focus and Pro ranking hubs enabled");
+console.log("- Growth home signal board and Pro ranking hubs verified");
+console.log("- Pro value presentation and ranking evidence verified");
+console.log("- Company-page DOM ordering observer is bounded and disconnected");
+console.log("- Accounting-oriented AI and Pro analysis verified");

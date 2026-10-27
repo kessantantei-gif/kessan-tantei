@@ -16,6 +16,7 @@ on:
       - "lib/jpx-list-source.ts"
       - "lib/edinet-api-client.ts"
       - "scripts/audit-external-data-sources.ts"
+      - "scripts/audit-phase8.ts"
 
 permissions:
   contents: read
