@@ -25,6 +25,7 @@ on:
       - "scripts/repair-tdnet-document-classification.ts"
       - "scripts/repair-tdnet-text-block-financials.ts"
       - "scripts/audit-tdnet-ingestion.ts"
+      - "scripts/repair-tdnet-audit-gaps.ts"
       - "scripts/audit-tdnet-xbrl-availability-v2.ts"
       - "scripts/audit-tdnet-cash-flow.ts"
       - ".github/workflows/quarterly-disclosures.yml"
