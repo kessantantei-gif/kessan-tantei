@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 import { supabaseAdmin } from "../lib/supabase";
+import { parseTdnetTextBlockFinancials } from "../lib/tdnet-text-block-financials";
 
 const targets = ["4475", "3172"];
 
@@ -35,6 +36,18 @@ async function main() {
       candidate:{title:candidate.title,ticker:candidate.ticker,quarter:candidate.quarter,documentType:candidate.documentType,xbrlUrl:candidate.xbrlUrl}
     },null,2));
   }
+  console.log("=== DIRECT XBRL TEXT-BLOCK PARSE ===");
+  for (const d of disclosures ?? []) {
+    if (!d.xbrl_url || !["4475","3172"].includes(d.ticker)) continue;
+    const response = await fetch(d.xbrl_url, { headers: { "user-agent": "kessan-tantei-gap-diagnostic/1.0" } });
+    const buffer = Buffer.from(await response.arrayBuffer());
+    let parsed: unknown = null;
+    let parseError: string | null = null;
+    try { parsed = parseTdnetTextBlockFinancials(buffer); }
+    catch (e) { parseError = e instanceof Error ? e.message : String(e); }
+    console.log(JSON.stringify({ticker:d.ticker,status:response.status,bytes:buffer.length,parsed,parseError},null,2));
+  }
+
   console.log("=== TARGET QUARTERLY ROWS ===");
   console.log(JSON.stringify(rows,null,2));
 }
