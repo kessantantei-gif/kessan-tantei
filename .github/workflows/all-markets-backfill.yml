@@ -80,9 +80,9 @@ jobs:
           fi
           DOTENV_CONFIG_PATH=.env.local npx tsx scripts/backfill-all-markets-edinet.ts "${args[@]}"
 
-      - name: Audit all-market coverage
+      - name: Audit and repair all-market coverage
         if: always()
-        run: npm run audit:all-markets-data
+        run: REPAIR_SCORE_MODELS=1 npm run audit:all-markets-data
 
       - name: Upload reports
         if: always()
