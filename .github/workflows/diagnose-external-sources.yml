@@ -1,4 +1,4 @@
-name: Diagnose external data sources
+name: Verify repaired data pipelines
 
 on:
   push:
@@ -11,32 +11,44 @@ permissions:
   contents: read
 
 jobs:
-  diagnose:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 90
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
+      TDNET_LIST_URL_TEMPLATE: ${{ vars.TDNET_LIST_URL_TEMPLATE }}
+      TDNET_OPERATION_START_DATE: "2026-07-25"
+      TDNET_GAP_REPAIR_MAX: "10"
+
     steps:
-      - name: Inspect JPX listing page and EDINET API
-        env:
-          EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import os, re, urllib.request, urllib.parse, json
-          ua={"User-Agent":"kessan-tantei-source-diagnostic/1.0"}
-          page="https://www.jpx.co.jp/markets/statistics-equities/misc/01.html"
-          req=urllib.request.Request(page,headers=ua)
-          html=urllib.request.urlopen(req,timeout=20).read().decode("utf-8","replace")
-          print("JPX_PAGE_BYTES",len(html))
-          for m in re.findall(r'href=["\']([^"\']+)["\']',html,re.I):
-              low=m.lower()
-              if any(x in low for x in [".xls",".xlsx",".csv","clientportal"]):
-                  print("JPX_HREF",urllib.parse.urljoin(page,m))
-          key=os.environ.get("EDINET_API_KEY","")
-          url="https://api.edinet-fsa.go.jp/api/v2/documents.json?date=2026-10-27&type=2&Subscription-Key="+urllib.parse.quote(key)
-          req=urllib.request.Request(url,headers=ua)
-          body=urllib.request.urlopen(req,timeout=20).read()
-          print("EDINET_BYTES",len(body),"PREFIX",body[:80])
-          data=json.loads(body)
-          print("EDINET_RESULTS",len(data.get("results",[])))
-          PY
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit external source configuration
+        run: npm run audit:external-data-sources
+
+      - name: Sync current JPX company master
+        run: npm run sync:jpx-markets
+
+      - name: Verify EDINET daily endpoint
+        run: npx tsx scripts/sync-daily-edinet.ts 2026-10-27
+
+      - name: Repair historical TDnet quarterly gaps
+        run: npm run repair:tdnet-audit-gaps
+
+      - name: Verify full TDnet ingestion history
+        run: npm run audit:tdnet-ingestion
+
+      - name: Verify all-market coverage
+        run: npm run audit:all-markets-data
