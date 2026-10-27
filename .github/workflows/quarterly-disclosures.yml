@@ -53,6 +53,9 @@ jobs:
             npm run sync:tdnet-quarterly
           fi
 
+      - name: Repair historical TDnet quarterly gaps
+        run: npm run repair:tdnet-audit-gaps
+
       - name: Audit all TDnet data since operation start
         env:
           TDNET_AUDIT_REPORT_PATH: tdnet-ingestion-audit.json
