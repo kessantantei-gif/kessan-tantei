@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { loadRankingCompanies } from "../lib/load-ranking-companies";
+import { loadRankingCompaniesUncached } from "../lib/load-ranking-companies";
 import { getRankingDefinition } from "../lib/rankings/definitions";
 import { rankCompanies } from "../lib/rankings/engine";
 
@@ -26,7 +26,7 @@ async function main() {
   const failures: string[] = [];
 
   for (const market of MARKETS) {
-    const companies = await loadRankingCompanies(market);
+    const companies = await loadRankingCompaniesUncached(market);
     const rankings = REQUIRED_RANKINGS.map((slug) => {
       const definition = getRankingDefinition(slug);
       if (!definition) throw new Error(`Ranking definition not found: ${slug}`);

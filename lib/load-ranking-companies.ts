@@ -32,7 +32,7 @@ function hasMinimumFinancialData(company: RankingCompany) {
   return availableCoreFields >= 2;
 }
 
-async function loadRankingCompaniesUncached(marketSegment: string) {
+export async function loadRankingCompaniesUncached(marketSegment: string) {
   const [companies, specialSecurities] = await Promise.all([
     loadAllSupabaseRows<RankingCompany>(
       `${marketSegment}ランキング会社取得失敗`,
