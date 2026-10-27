@@ -92,6 +92,9 @@ jobs:
       - name: Backfill and verify every TDnet list page
         run: npm run sync:tdnet-quarterly -- --from=${{ steps.range.outputs.from }} --to=${{ steps.range.outputs.to }}
 
+      - name: Repair historical TDnet quarterly gaps
+        run: npm run repair:tdnet-audit-gaps
+
       - name: Audit repaired range
         env:
           TDNET_AUDIT_REPORT_PATH: tdnet-backfill-audit.json
