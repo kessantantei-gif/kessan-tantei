@@ -4,6 +4,7 @@ dotenv.config({ path: ".env.local" });
 import { spawnSync } from "node:child_process";
 import { parseEdinetFinancials } from "../lib/edinet-parser";
 import { supabaseAdmin } from "../lib/supabase";
+import { buildEdinetApiUrl, fetchEdinetJson } from "../lib/edinet-api-client";
 
 const EDINET_API_KEY = process.env.EDINET_API_KEY;
 if (!EDINET_API_KEY) throw new Error("EDINET_API_KEY missing");
@@ -35,13 +36,12 @@ function datesToProcess() {
 }
 
 async function fetchDocuments(date: string): Promise<EdinetDocument[]> {
-  const url = new URL("https://api.edinet-fsa.go.jp/api/v2/documents.json");
-  url.searchParams.set("date", date);
-  url.searchParams.set("type", "2");
-  url.searchParams.set("Subscription-Key", EDINET_API_KEY!);
-  const response = await fetch(url, { headers: { "user-agent": "kessan-tantei-semiannual/1.0" } });
-  if (!response.ok) throw new Error(`${date}: EDINET一覧取得失敗 ${response.status}`);
-  const body = (await response.json()) as { results?: EdinetDocument[] };
+  const url = buildEdinetApiUrl("documents.json", {
+    date,
+    type: "2",
+    "Subscription-Key": EDINET_API_KEY!,
+  });
+  const body = await fetchEdinetJson<{ results?: EdinetDocument[] }>(url);
   if (!Array.isArray(body.results)) throw new Error(`${date}: resultsがありません`);
   return body.results;
 }
