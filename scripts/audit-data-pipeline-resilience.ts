@@ -17,7 +17,12 @@ for (const marker of [
   "loadHistoryDocumentIds",
   'from("company_financial_periods")',
   'HISTORY_DOC_IDS: historyDocIds.join(",")',
+  '.eq("is_foreign", false)',
 ]) requireMarker(dailyEdinetPath, dailyEdinet, marker);
+
+const edinetBackfillPath = "scripts/backfill-all-markets-edinet.ts";
+const edinetBackfill = read(edinetBackfillPath);
+requireMarker(edinetBackfillPath, edinetBackfill, '.eq("is_foreign", false)');
 
 const tdnetTitlePath = "lib/tdnet-document-title.ts";
 const tdnetTitle = read(tdnetTitlePath);
