@@ -26,14 +26,17 @@ for (const root of scanRoots) {
   }
 }
 
-const staleEdinet = sourceFiles.filter((file) =>
+const auditFilePath = path.resolve(repoRoot, "scripts", "audit-external-data-sources.ts");
+const auditedSourceFiles = sourceFiles.filter((file) => path.resolve(file) !== auditFilePath);
+
+const staleEdinet = auditedSourceFiles.filter((file) =>
   fs.readFileSync(file, "utf8").includes(forbiddenEdinetHost)
 );
 if (staleEdinet.length) {
   fail(`stale EDINET API host remains in: ${staleEdinet.map((file) => path.relative(repoRoot, file)).join(", ")}`);
 }
 
-const edinetUsers = sourceFiles.filter((file) =>
+const edinetUsers = auditedSourceFiles.filter((file) =>
   fs.readFileSync(file, "utf8").includes("edinet-fsa.go.jp/api/v2")
 );
 if (!edinetUsers.length) fail("no EDINET API callers found");
@@ -56,7 +59,7 @@ for (const marker of [
   if (!jpx.includes(marker)) fail(`JPX resolver is missing marker: ${marker}`);
 }
 
-for (const file of sourceFiles) {
+for (const file of auditedSourceFiles) {
   const content = fs.readFileSync(file, "utf8");
   if (
     content.includes('tvdivq0000001vg2-att/data_j.xls"') ||
