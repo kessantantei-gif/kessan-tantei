@@ -6,6 +6,12 @@ on:
       - main
     paths:
       - ".github/workflows/all-markets-backfill.yml"
+      - "scripts/sync-jpx-all-markets.ts"
+      - "scripts/backfill-all-markets-edinet.ts"
+      - "scripts/run-edinet-backfill-safe.ts"
+      - "lib/jpx-list-source.ts"
+      - "lib/edinet-api-client.ts"
+      - "scripts/audit-external-data-sources.ts"
   schedule:
     # 毎日20:30 UTC（日本時間05:30）に未解析・更新対象を最大150社処理する。
     - cron: "30 20 * * *"
@@ -53,6 +59,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Audit external data sources
+        run: npm run audit:external-data-sources
 
       - name: Refresh JPX and EDINET company master
         run: npm run sync:jpx-markets
