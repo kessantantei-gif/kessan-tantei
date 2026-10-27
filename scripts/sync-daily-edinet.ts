@@ -74,7 +74,28 @@ async function latestDocumentId(ticker: string) {
   return data?.doc_id ?? null;
 }
 
-function analyze(company: Company, document: EdinetDocument) {
+async function loadHistoryDocumentIds(company: Company, currentDocId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("company_financial_periods")
+    .select("document_id, period_end")
+    .eq("company_id", company.id)
+    .eq("period_type", "annual")
+    .not("document_id", "is", null)
+    .order("period_end", { ascending: false })
+    .limit(8);
+
+  if (error) {
+    throw new Error(`既存EDINET履歴取得失敗 ${company.ticker}: ${error.message}`);
+  }
+
+  const priorIds = (data ?? [])
+    .map((row) => String(row.document_id ?? "").trim())
+    .filter((value) => /^S100[A-Z0-9]+$/.test(value));
+
+  return Array.from(new Set([currentDocId, ...priorIds])).slice(0, 6);
+}
+
+function analyze(company: Company, document: EdinetDocument, historyDocIds: string[]) {
   return spawnSync("npx", ["tsx", "scripts/analyze-company.ts"], {
     stdio: "inherit",
     env: {
@@ -82,6 +103,7 @@ function analyze(company: Company, document: EdinetDocument) {
       COMPANY_NAME: company.company_name,
       TICKER: company.ticker,
       DOC_ID: document.docID,
+      HISTORY_DOC_IDS: historyDocIds.join(","),
     },
   });
 }
@@ -136,8 +158,11 @@ async function main() {
         continue;
       }
 
-      console.log(`NEW DOC: ${company.ticker} ${company.company_name} [${company.market_segment}]`);
-      const result = analyze(company, document);
+      const historyDocIds = await loadHistoryDocumentIds(company, document.docID);
+      console.log(
+        `NEW DOC: ${company.ticker} ${company.company_name} [${company.market_segment}] history=${historyDocIds.length}`
+      );
+      const result = analyze(company, document, historyDocIds);
       if (result.status === 0) {
         successCount += 1;
       } else {
