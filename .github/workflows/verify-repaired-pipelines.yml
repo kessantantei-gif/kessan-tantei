@@ -1,0 +1,42 @@
+name: Verify repaired data pipelines v2
+
+on:
+  push:
+    branches:
+      - agent/fix-scheduled-data-pipelines-20261028
+    paths:
+      - ".github/workflows/verify-repaired-pipelines.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
+      TDNET_LIST_URL_TEMPLATE: ${{ vars.TDNET_LIST_URL_TEMPLATE }}
+      TDNET_OPERATION_START_DATE: "2026-07-25"
+      TDNET_GAP_REPAIR_MAX: "10"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Audit external source configuration
+        run: npm run audit:external-data-sources
+      - name: Sync current JPX company master
+        run: npm run sync:jpx-markets
+      - name: Verify EDINET daily endpoint
+        run: npx tsx scripts/sync-daily-edinet.ts 2026-10-27
+      - name: Repair historical TDnet quarterly gaps
+        run: npm run repair:tdnet-audit-gaps
+      - name: Verify full TDnet ingestion history
+        run: npm run audit:tdnet-ingestion
+      - name: Verify all-market coverage
+        run: npm run audit:all-markets-data
