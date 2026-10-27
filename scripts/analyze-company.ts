@@ -77,10 +77,6 @@ function loadGrowthCompany(): GrowthCompany | null {
   return companies.find((company) => company.ticker === ticker) ?? null;
 }
 
-function q(value: string) {
-  return `"${value.replace(/"/g, '\\"')}"`;
-}
-
 function zipPath(id: string) {
   return path.join(process.cwd(), "downloads", `${id}.zip`);
 }
@@ -103,15 +99,61 @@ function downloadIfNeeded(id: string) {
   });
 }
 
-function fetchHistoryDocIDs(searchName: string): string[] {
-  const output = execSync(
-    `COMPANY_NAME=${q(searchName)} npx tsx scripts/fetch-history.ts`,
-    { encoding: "utf8" }
-  );
+function validEdinetDocId(value: unknown): value is string {
+  return typeof value === "string" && /^S100[A-Z0-9]+$/i.test(value);
+}
 
-  return Array.from(
-    new Set([...output.matchAll(/S100[A-Z0-9]+/g)].map((match) => match[0]))
-  );
+function explicitHistoryDocIds() {
+  return String(process.env.HISTORY_DOC_IDS ?? "")
+    .split(/[\s,]+/)
+    .map((value) => value.trim().toUpperCase())
+    .filter(validEdinetDocId);
+}
+
+async function loadKnownHistoryDocIDs(
+  companyId: string | null,
+  growthCompany: GrowthCompany | null
+): Promise<string[]> {
+  const ids: string[] = [...explicitHistoryDocIds()];
+
+  if (companyId) {
+    const { data, error } = await supabaseAdmin
+      .from("company_financial_periods")
+      .select("document_id, period_end")
+      .eq("company_id", companyId)
+      .not("document_id", "is", null)
+      .order("period_end", { ascending: false })
+      .limit(8);
+    if (error) throw new Error(`保存済み財務履歴取得失敗 ${ticker}: ${error.message}`);
+    for (const row of data ?? []) {
+      if (validEdinetDocId(row.document_id)) ids.push(row.document_id.toUpperCase());
+    }
+  }
+
+  const { data: legacy, error: legacyError } = await supabaseAdmin
+    .from("company_analyses")
+    .select("doc_id, history, created_at")
+    .eq("ticker", ticker)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (legacyError) throw new Error(`既存分析履歴取得失敗 ${ticker}: ${legacyError.message}`);
+
+  if (validEdinetDocId(legacy?.doc_id)) ids.push(legacy.doc_id.toUpperCase());
+  if (Array.isArray(legacy?.history)) {
+    for (const item of legacy.history) {
+      if (!item || typeof item !== "object") continue;
+      const record = item as Record<string, unknown>;
+      const value = record.docID ?? record.doc_id;
+      if (validEdinetDocId(value)) ids.push(value.toUpperCase());
+    }
+  }
+
+  if (validEdinetDocId(growthCompany?.edinetMatchedDocID)) {
+    ids.push(growthCompany.edinetMatchedDocID.toUpperCase());
+  }
+
+  return Array.from(new Set(ids));
 }
 
 function calculateOcfNegativeStreak(items: { operatingCF: number }[]) {
@@ -291,10 +333,6 @@ async function main() {
 
   const finalCompanyName =
     allMarketCompany?.company_name || growthCompany?.name || companyName;
-  const searchName =
-    growthCompany?.edinetFilerName ||
-    growthCompany?.edinetHint ||
-    finalCompanyName;
   const marketSegment = allMarketCompany?.market_segment || "growth";
   const industryType = classifyIndustry(
     allMarketCompany?.industry_name || finalCompanyName
@@ -302,9 +340,13 @@ async function main() {
 
   downloadIfNeeded(docID);
 
-  let historyDocIDs = fetchHistoryDocIDs(searchName);
-  if (!historyDocIDs.includes(docID)) historyDocIDs.unshift(docID);
-  historyDocIDs = Array.from(new Set(historyDocIDs)).slice(0, 6);
+  const knownHistoryDocIDs = await loadKnownHistoryDocIDs(
+    allMarketCompany?.id ?? null,
+    growthCompany
+  );
+  const historyDocIDs = Array.from(
+    new Set([docID.toUpperCase(), ...knownHistoryDocIDs])
+  ).slice(0, 6);
 
   const parsedHistory: HistoryRow[] = [];
   for (const id of historyDocIDs) {
@@ -315,8 +357,8 @@ async function main() {
     }
   }
 
-  // HISTORY_DOC_IDSは新しい順。最初に現れた書類を保持することで、
-  // 同一決算期では最新書類・訂正有報を古い書類で上書きしない。
+  // 現在の書類を先頭にし、その後にDB保存済み履歴を新しい順で並べる。
+  // EDINETの日付総当たり検索には戻らず、同一決算期では先頭の最新書類を保持する。
   const latestByPeriod = new Map<string, HistoryRow>();
   for (const row of parsedHistory) {
     if (!latestByPeriod.has(row.periodEnd)) latestByPeriod.set(row.periodEnd, row);
