@@ -46,6 +46,12 @@ for (const marker of [
   "repair-tdnet-text-block-financials.ts",
   "gap repaired from stored disclosure",
   "isTdnetNonEarningsDocument",
+  "repairScopeAlias",
+  "repairQ4FromAnnualEdinet",
+  'from("company_financial_periods")',
+  "tdnet-gap-from-edinet-annual-v1",
+  "repairKnownOfficialGap",
+  "tdnet-official-ir-gap-repair-v1",
 ]) requireMarker(gapRepairPath, gapRepair, marker);
 
 const backfillPath = ".github/workflows/all-markets-backfill.yml";
