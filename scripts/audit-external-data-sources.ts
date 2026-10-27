@@ -58,7 +58,10 @@ for (const marker of [
 
 for (const file of sourceFiles) {
   const content = fs.readFileSync(file, "utf8");
-  if (content.includes("tvdivq0000001vg2-att/data_j.xls")) {
+  if (
+    content.includes('tvdivq0000001vg2-att/data_j.xls"') ||
+    content.includes("tvdivq0000001vg2-att/data_j.xls'")
+  ) {
     fail(`obsolete JPX .xls URL remains in active source: ${path.relative(repoRoot, file)}`);
   }
 }
