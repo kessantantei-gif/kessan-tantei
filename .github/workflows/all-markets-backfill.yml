@@ -12,6 +12,7 @@ on:
       - "lib/jpx-list-source.ts"
       - "lib/edinet-api-client.ts"
       - "scripts/audit-external-data-sources.ts"
+      - "scripts/analyze-company.ts"
   schedule:
     # 毎日20:30 UTC（日本時間05:30）に未解析・更新対象を最大150社処理する。
     - cron: "30 20 * * *"
