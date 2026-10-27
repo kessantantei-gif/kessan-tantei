@@ -1,4 +1,4 @@
-name: Verify expired TDnet gap recovery
+name: Verify residual pipeline repairs
 
 on:
   push:
@@ -12,10 +12,11 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
       TDNET_OPERATION_START_DATE: "2026-07-25"
       TDNET_GAP_REPAIR_MAX: "10"
     steps:
@@ -25,9 +26,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Audit external data source guards
+        run: npm run audit:external-data-sources
       - name: Repair missing TDnet quarterly rows
         run: npm run repair:tdnet-audit-gaps
       - name: Strict TDnet ingestion audit
         run: npm run audit:tdnet-ingestion
-      - name: TDnet cash-flow audit
-        run: npm run audit:tdnet-cash-flow
+      - name: Verify EDINET daily analysis without date scan
+        run: npx tsx scripts/sync-daily-edinet.ts 2026-10-27
