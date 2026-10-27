@@ -72,3 +72,19 @@ for (const file of auditedSourceFiles) {
 console.log(
   `External data source audit passed: ${edinetUsers.length} EDINET caller(s) use the official API host and JPX listing discovery is enabled.`
 );
+
+
+const analyzeCompanyPath = path.join(repoRoot, "scripts", "analyze-company.ts");
+const analyzeCompany = fs.readFileSync(analyzeCompanyPath, "utf8");
+if (analyzeCompany.includes("npx tsx scripts/fetch-history.ts")) {
+  fail("analyze-company.ts must not invoke fetch-history.ts; use saved document IDs instead");
+}
+for (const marker of [
+  "company_financial_periods",
+  "HISTORY_DOC_IDS",
+  "loadKnownHistoryDocIDs",
+]) {
+  if (!analyzeCompany.includes(marker)) {
+    fail(`analyze-company.ts is missing stored-history marker: ${marker}`);
+  }
+}
