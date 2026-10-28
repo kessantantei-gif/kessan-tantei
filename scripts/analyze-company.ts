@@ -302,14 +302,33 @@ async function main() {
 
   downloadIfNeeded(docID);
 
-  let historyDocIDs = fetchHistoryDocIDs(searchName);
+  // Daily/backfill callers already resolved the official annual document IDs. Reuse
+  // those exact IDs instead of issuing another company-wide EDINET history search.
+  const suppliedHistoryIDs = process.env.HISTORY_DOC_IDS;
+  if (suppliedHistoryIDs !== undefined) {
+    const invalidIDs = suppliedHistoryIDs
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id && !/^S100[A-Z0-9]+$/.test(id));
+    if (invalidIDs.length > 0) {
+      throw new Error(`Invalid HISTORY_DOC_IDS: ${invalidIDs.join(",")}`);
+    }
+  }
+  let historyDocIDs = suppliedHistoryIDs !== undefined
+    ? suppliedHistoryIDs.split(",").map((id) => id.trim()).filter(Boolean)
+    : fetchHistoryDocIDs(searchName);
   if (!historyDocIDs.includes(docID)) historyDocIDs.unshift(docID);
   historyDocIDs = Array.from(new Set(historyDocIDs)).slice(0, 6);
 
   const parsedHistory: HistoryRow[] = [];
   for (const id of historyDocIDs) {
     try {
-      parsedHistory.push(buildHistoryRow(id));
+      const parsed = buildHistoryRow(id);
+      if (allMarketCompany?.is_financial && !(Number.isFinite(parsed.revenue) && parsed.revenue > 0)) {
+        console.warn(`Exclude non-operating financial/trust history document: ${ticker} ${id}`);
+        continue;
+      }
+      parsedHistory.push(parsed);
     } catch (error) {
       console.log("history parse failed:", id, error);
     }
@@ -331,6 +350,10 @@ async function main() {
   }
 
   const financials = parseEdinetFinancials(docID);
+  // Reject non-operating financial/trust reports before overwriting company data.
+  if (allMarketCompany?.is_financial && !(Number.isFinite(financials.revenue) && financials.revenue > 0)) {
+    throw new Error(`Financial company annual EDINET document has no operating revenue: ${ticker} ${docID}`);
+  }
   const scores = calculateMarketScores(marketSegment, financials, history);
   const disclosureSignals = parseDisclosureSignals(docID);
   const ocfNegativeStreak = calculateOcfNegativeStreak(history);

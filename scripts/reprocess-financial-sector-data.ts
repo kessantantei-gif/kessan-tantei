@@ -24,6 +24,8 @@ type AnalysisRow = {
     periodEnd?: string;
     fiscalYear?: number | string;
     year?: number | string;
+    revenue?: number | null;
+    operatingIncome?: number | null;
   }> | null;
   financials: StoredFinancials | null;
 };
@@ -45,13 +47,41 @@ function parsePositiveInteger(name: string, fallback: number) {
 function latestHistoryDocument(history: AnalysisRow["history"]) {
   if (!Array.isArray(history)) return null;
   return [...history]
-    .filter((row) => typeof row.docID === "string" && /^S100[A-Z0-9]+$/.test(row.docID))
+    .filter((row) =>
+      typeof row.docID === "string" && /^S100[A-Z0-9]+$/.test(row.docID) &&
+      typeof row.revenue === "number" && Number.isFinite(row.revenue) && row.revenue > 0
+    )
     .sort((left, right) => {
       const leftKey = left.periodEnd ?? String(left.fiscalYear ?? left.year ?? "");
       const rightKey = right.periodEnd ?? String(right.fiscalYear ?? right.year ?? "");
       return leftKey.localeCompare(rightKey);
     })
     .at(-1)?.docID ?? null;
+}
+
+function nearlyEqual(left: number, right: number) {
+  const scale = Math.max(Math.abs(left), Math.abs(right), 1);
+  return Math.abs(left - right) / scale <= 0.02;
+}
+
+// The strict financial audit compares the headline metrics with the most recent
+// annual history row. Reprocess such drift even if metadata and doc IDs look valid.
+function hasFinancialHistoryDrift(analysis: AnalysisRow): boolean {
+  const latest = Array.isArray(analysis.history)
+    ? [...analysis.history].sort((left, right) =>
+        (left.periodEnd ?? String(left.fiscalYear ?? left.year ?? "")).localeCompare(
+          right.periodEnd ?? String(right.fiscalYear ?? right.year ?? "")
+        )
+      ).at(-1)
+    : undefined;
+  if (!latest) return true;
+  if (typeof latest.revenue !== "number" || !Number.isFinite(latest.revenue) || latest.revenue <= 0) return true;
+  const currentRevenue = analysis.financials?.revenue;
+  if (typeof currentRevenue !== "number" || !nearlyEqual(currentRevenue, latest.revenue)) return true;
+  const currentIncome = (analysis.financials as StoredFinancials & {operatingIncome?: number | null})?.operatingIncome;
+  if (typeof currentIncome === "number" && typeof latest.operatingIncome === "number"
+      && !nearlyEqual(currentIncome, latest.operatingIncome)) return true;
+  return false;
 }
 
 function alreadyUsesFinancialMetadata(financials: StoredFinancials | null) {
@@ -133,7 +163,8 @@ async function main() {
         !force &&
         alreadyUsesFinancialMetadata(analysis.financials) &&
         revenueIsValid &&
-        isCurrentDocument
+        isCurrentDocument &&
+        !hasFinancialHistoryDrift(analysis)
       ) {
         alreadyUpdated += 1;
         return null;
@@ -142,9 +173,9 @@ async function main() {
       const historyDocIDs = Array.from(
         new Set([
           latestDocID,
-          analysis.doc_id,
           ...(Array.isArray(analysis.history)
             ? analysis.history
+                .filter((row) => typeof row.revenue === "number" && row.revenue > 0)
                 .map((row) => row?.docID)
                 .filter(
                   (docID): docID is string =>
