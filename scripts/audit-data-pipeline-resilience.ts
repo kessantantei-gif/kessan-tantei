@@ -11,6 +11,21 @@ function requireMarker(path: string, content: string, marker: string) {
   }
 }
 
+const analyzeCompanyPath = "scripts/analyze-company.ts";
+const analyzeCompany = read(analyzeCompanyPath);
+for (const marker of [
+  "process.env.HISTORY_DOC_IDS",
+  "suppliedHistoryIDs !== undefined",
+  ": fetchHistoryDocIDs(searchName)",
+]) requireMarker(analyzeCompanyPath, analyzeCompany, marker);
+
+const financialReprocessPath = "scripts/reprocess-financial-sector-data.ts";
+const financialReprocess = read(financialReprocessPath);
+for (const marker of [
+  "hasFinancialHistoryDrift",
+  "!hasFinancialHistoryDrift(analysis)",
+]) requireMarker(financialReprocessPath, financialReprocess, marker);
+
 const dailyEdinetPath = "scripts/sync-daily-edinet.ts";
 const dailyEdinet = read(dailyEdinetPath);
 for (const marker of [
