@@ -29,7 +29,9 @@ permissions:
   issues: write
 
 concurrency:
-  group: tdnet-quarterly-ingestion
+  # Epoch bump: old GitHub Actions still run the obsolete full-archive ZIP audit.
+  # Keep quarterly and TDnet backfill in ONE serial group for future executions.
+  group: tdnet-quarterly-ingestion-v2
   cancel-in-progress: false
 
 jobs:
