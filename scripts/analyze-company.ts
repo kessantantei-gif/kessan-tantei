@@ -323,7 +323,12 @@ async function main() {
   const parsedHistory: HistoryRow[] = [];
   for (const id of historyDocIDs) {
     try {
-      parsedHistory.push(buildHistoryRow(id));
+      const parsed = buildHistoryRow(id);
+      if (allMarketCompany?.is_financial && !(Number.isFinite(parsed.revenue) && parsed.revenue > 0)) {
+        console.warn(`Exclude non-operating financial/trust history document: ${ticker} ${id}`);
+        continue;
+      }
+      parsedHistory.push(parsed);
     } catch (error) {
       console.log("history parse failed:", id, error);
     }
@@ -345,6 +350,10 @@ async function main() {
   }
 
   const financials = parseEdinetFinancials(docID);
+  // Reject non-operating financial/trust reports before overwriting company data.
+  if (allMarketCompany?.is_financial && !(Number.isFinite(financials.revenue) && financials.revenue > 0)) {
+    throw new Error(`Financial company annual EDINET document has no operating revenue: ${ticker} ${docID}`);
+  }
   const scores = calculateMarketScores(marketSegment, financials, history);
   const disclosureSignals = parseDisclosureSignals(docID);
   const ocfNegativeStreak = calculateOcfNegativeStreak(history);
