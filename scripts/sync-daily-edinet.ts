@@ -4,6 +4,7 @@ dotenv.config({ path: ".env.local" });
 import { spawnSync } from "child_process";
 import { supabaseAdmin } from "../lib/supabase";
 import { buildEdinetApiUrl, fetchEdinetJson } from "../lib/edinet-api-client";
+import { isCorporateAnnualEdinetDocument } from "../lib/edinet-document-filter";
 
 const EDINET_API_KEY = process.env.EDINET_API_KEY;
 if (!EDINET_API_KEY) throw new Error("EDINET_API_KEY missing");
@@ -12,6 +13,7 @@ type EdinetDocument = {
   docID: string;
   edinetCode: string;
   docTypeCode: string;
+  docDescription?: string;
   filerName?: string;
   submitDateTime?: string;
 };
@@ -134,9 +136,7 @@ async function main() {
       loadCompanies(),
     ]);
 
-    const annualDocuments = documents.filter(
-      (document) => document.docTypeCode === "120" || document.docTypeCode === "130"
-    );
+    const annualDocuments = documents.filter(isCorporateAnnualEdinetDocument);
     const companiesByEdinet = new Map(
       companies.map((company) => [company.edinet_code, company])
     );
