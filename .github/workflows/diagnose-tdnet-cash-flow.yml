@@ -41,8 +41,8 @@ jobs:
       - name: Repair TDnet document quarters
         run: npm run repair:tdnet-document-classification -- --from=2026-07-25 --to=2026-07-31
 
-      - name: Repair TDnet P&L and cash-flow tables
-        run: npm run repair:tdnet-text-block -- --from=2026-07-25 --to=2026-07-31
+      - name: Repair missing TDnet quarterly keys from normalized or official sources
+        run: npm run repair:tdnet-audit-gaps
 
       - name: Audit TDnet disclosures and quarterly rows
         env:
