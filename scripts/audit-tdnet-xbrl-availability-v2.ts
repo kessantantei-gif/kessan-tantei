@@ -12,6 +12,9 @@ type Disclosure = {
   title: string;
   source_document_id: string;
   disclosed_at: string;
+  fiscal_period_end: string | null;
+  quarter: number | null;
+  accounting_scope: string | null;
   xbrl_url: string | null;
 };
 
@@ -30,6 +33,15 @@ function argumentValue(name: string) {
   return process.argv.find((value) => value.startsWith(prefix))?.slice(prefix.length) ?? null;
 }
 
+function key(row: {
+  ticker: string;
+  fiscal_period_end: string | null;
+  quarter: number | null;
+  accounting_scope: string | null;
+}) {
+  return [row.ticker, row.fiscal_period_end, row.quarter, row.accounting_scope ?? "unknown"].join("|");
+}
+
 async function main() {
   const from = argumentValue("from") ?? operationStart;
   const to = argumentValue("to") ?? todayJst();
@@ -41,7 +53,9 @@ async function main() {
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabaseAdmin
       .from("company_disclosures")
-      .select("ticker, title, source_document_id, disclosed_at, xbrl_url")
+      .select(
+        "ticker, title, source_document_id, disclosed_at, fiscal_period_end, quarter, accounting_scope, xbrl_url"
+      )
       .eq("source", "tdnet")
       .not("quarter", "is", null)
       .gte("disclosed_at", `${from}T00:00:00+09:00`)
@@ -58,12 +72,44 @@ async function main() {
   );
   const missingXbrl = actualEarnings.filter((row) => !row.xbrl_url);
 
+  const missingTickers = [...new Set(missingXbrl.map((row) => row.ticker))];
+  const storedKeys = new Set<string>();
+  for (let offset = 0; offset < missingTickers.length; offset += 40) {
+    const tickers = missingTickers.slice(offset, offset + 40);
+    if (!tickers.length) continue;
+    for (let fromRow = 0; ; fromRow += 1000) {
+      const { data, error } = await supabaseAdmin
+        .from("company_quarterly_financials")
+        .select("ticker,fiscal_period_end,quarter,accounting_scope")
+        .in("ticker", tickers)
+        .range(fromRow, fromRow + 999);
+      if (error) throw new Error(`四半期数値取得失敗: ${error.message}`);
+      for (const row of data ?? []) {
+        storedKeys.add(key(row));
+      }
+      if ((data ?? []).length < 1000) break;
+    }
+  }
+
+  const missingXbrlWithStoredFinancials = missingXbrl.filter(
+    (row) => row.fiscal_period_end !== null && storedKeys.has(key(row))
+  );
+  const unresolvedMissingXbrl = missingXbrl.filter(
+    (row) => row.fiscal_period_end === null || !storedKeys.has(key(row))
+  );
+
   const report = {
     range: { from, to },
     scannedQuarterlyDisclosures: rows.length,
     actualEarnings: actualEarnings.length,
     xbrlAvailable: actualEarnings.length - missingXbrl.length,
-    missingXbrl: missingXbrl.map((row) => ({
+    missingXbrlWithStoredFinancials: missingXbrlWithStoredFinancials.map((row) => ({
+      ticker: row.ticker,
+      sourceDocumentId: row.source_document_id,
+      disclosedAt: row.disclosed_at,
+      title: row.title,
+    })),
+    unresolvedMissingXbrl: unresolvedMissingXbrl.map((row) => ({
       ticker: row.ticker,
       sourceDocumentId: row.source_document_id,
       disclosedAt: row.disclosed_at,
@@ -71,11 +117,13 @@ async function main() {
     })),
   };
 
-  console.log("===== TDnet XBRL availability audit v2 =====");
+  console.log("===== TDnet XBRL availability audit v3 =====");
   console.log(JSON.stringify(report, null, 2));
 
-  if (missingXbrl.length > 0) {
-    throw new Error(`実決算短信${missingXbrl.length}件でXBRLリンクがありません`);
+  if (unresolvedMissingXbrl.length > 0) {
+    throw new Error(
+      `実決算短信${unresolvedMissingXbrl.length}件でXBRLリンクも保存済み四半期数値もありません`
+    );
   }
 }
 
