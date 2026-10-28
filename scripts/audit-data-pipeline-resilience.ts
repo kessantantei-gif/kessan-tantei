@@ -72,6 +72,20 @@ for (const marker of [
   ".insert({",
 ]) requireMarker(textRepairPath, textRepair, marker);
 
+const cashFlowAuditPath = "scripts/audit-tdnet-cash-flow.ts";
+const cashFlowAudit = read(cashFlowAuditPath);
+for (const required of [
+  "archivedWithoutRawCashFlowEvidence",
+  "archivedRawFactsVerified",
+  "cashFlowDiffs(stored, evidence)",
+  "freshSourceChecked",
+  "if (!row)",
+  "if (disclosure.disclosed_at.slice(0, 10) < freshCutoff) continue;",
+]) requireMarker(cashFlowAuditPath, cashFlowAudit, required);
+
+const diagnosticWorkflow = read(".github/workflows/diagnose-tdnet-cash-flow.yml");
+requireMarker(".github/workflows/diagnose-tdnet-cash-flow.yml", diagnosticWorkflow, "npm run repair:tdnet-audit-gaps");
+
 const tdnetXbrlAuditPath = "scripts/audit-tdnet-xbrl-availability-v2.ts";
 const tdnetXbrlAudit = read(tdnetXbrlAuditPath);
 for (const marker of [
