@@ -29,8 +29,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: market-ranking-data-repair
-  cancel-in-progress: true
+  group: company-analysis-financial-writes
+  cancel-in-progress: false
 
 jobs:
   repair:
