@@ -73,9 +73,28 @@ async function main() {
   const missingXbrl = actualEarnings.filter((row) => !row.xbrl_url);
 
   const missingTickers = [...new Set(missingXbrl.map((row) => row.ticker))];
-  const storedKeys = new Set<string>();
+
+  const foreignTickers = new Set<string>();
   for (let offset = 0; offset < missingTickers.length; offset += 40) {
     const tickers = missingTickers.slice(offset, offset + 40);
+    if (!tickers.length) continue;
+    const { data, error } = await supabaseAdmin
+      .from("all_market_companies")
+      .select("ticker")
+      .in("ticker", tickers)
+      .eq("listing_status", "listed")
+      .eq("is_foreign", true);
+    if (error) throw new Error(`外国株区分取得失敗: ${error.message}`);
+    for (const row of data ?? []) foreignTickers.add(row.ticker);
+  }
+
+  const domesticMissingXbrl = missingXbrl.filter((row) => !foreignTickers.has(row.ticker));
+  const skippedForeignSecurities = missingXbrl.filter((row) => foreignTickers.has(row.ticker));
+
+  const domesticMissingTickers = [...new Set(domesticMissingXbrl.map((row) => row.ticker))];
+  const storedKeys = new Set<string>();
+  for (let offset = 0; offset < domesticMissingTickers.length; offset += 40) {
+    const tickers = domesticMissingTickers.slice(offset, offset + 40);
     if (!tickers.length) continue;
     for (let fromRow = 0; ; fromRow += 1000) {
       const { data, error } = await supabaseAdmin
@@ -91,10 +110,10 @@ async function main() {
     }
   }
 
-  const missingXbrlWithStoredFinancials = missingXbrl.filter(
+  const missingXbrlWithStoredFinancials = domesticMissingXbrl.filter(
     (row) => row.fiscal_period_end !== null && storedKeys.has(key(row))
   );
-  const unresolvedMissingXbrl = missingXbrl.filter(
+  const unresolvedMissingXbrl = domesticMissingXbrl.filter(
     (row) => row.fiscal_period_end === null || !storedKeys.has(key(row))
   );
 
@@ -103,6 +122,12 @@ async function main() {
     scannedQuarterlyDisclosures: rows.length,
     actualEarnings: actualEarnings.length,
     xbrlAvailable: actualEarnings.length - missingXbrl.length,
+    skippedForeignSecurities: skippedForeignSecurities.map((row) => ({
+      ticker: row.ticker,
+      sourceDocumentId: row.source_document_id,
+      disclosedAt: row.disclosed_at,
+      title: row.title,
+    })),
     missingXbrlWithStoredFinancials: missingXbrlWithStoredFinancials.map((row) => ({
       ticker: row.ticker,
       sourceDocumentId: row.source_document_id,

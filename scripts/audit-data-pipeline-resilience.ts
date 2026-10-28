@@ -45,6 +45,10 @@ for (const marker of [
   "missingXbrlWithStoredFinancials",
   "unresolvedMissingXbrl",
   'from("company_quarterly_financials")',
+  '.from("all_market_companies")',
+  '.eq("is_foreign", true)',
+  "skippedForeignSecurities",
+  "domesticMissingXbrl",
 ]) requireMarker(tdnetXbrlAuditPath, tdnetXbrlAudit, marker);
 
 const gapRepairPath = "scripts/repair-tdnet-audit-gaps.ts";
@@ -91,5 +95,6 @@ for (const marker of [
   "scripts/audit-tdnet-xbrl-availability-v2.ts",
   "lib/tdnet-document-title.ts",
 ]) requireMarker(quarterlyWorkflowPath, quarterlyWorkflow, marker);
+
 
 console.log("Data pipeline resilience audit passed.");
