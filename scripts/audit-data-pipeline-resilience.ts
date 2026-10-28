@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { isCorporateAnnualEdinetDocument } from "../lib/edinet-document-filter";
 
 function read(path: string) {
   if (!fs.existsSync(path)) throw new Error(`Data pipeline resilience audit: missing ${path}`);
@@ -29,6 +30,19 @@ for (const marker of [
 const rankingAuditPath = "scripts/audit-market-ranking-data.ts";
 const rankingAudit = read(rankingAuditPath);
 requireMarker(rankingAuditPath, rankingAudit, "loadRankingCompaniesUncached(market)");
+
+if (!isCorporateAnnualEdinetDocument({ docTypeCode: "120", docDescription: "有価証券報告書－第76期" })) {
+  throw new Error("Corporate annual EDINET document was incorrectly excluded");
+}
+if (isCorporateAnnualEdinetDocument({ docTypeCode: "120", docDescription: "有価証券報告書（内国信託受益証券等）－第1期" })) {
+  throw new Error("Beneficiary trust EDINET document must not become corporate financials");
+}
+if (isCorporateAnnualEdinetDocument({ docTypeCode: "160", docDescription: "半期報告書" })) {
+  throw new Error("Non-annual EDINET document was incorrectly selected");
+}
+for (const path of ["scripts/sync-daily-edinet.ts", "scripts/backfill-all-markets-edinet.ts"]) {
+  requireMarker(path, read(path), "isCorporateAnnualEdinetDocument");
+}
 
 const dailyEdinetPath = "scripts/sync-daily-edinet.ts";
 const dailyEdinet = read(dailyEdinetPath);
