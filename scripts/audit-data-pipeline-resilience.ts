@@ -39,6 +39,14 @@ for (const marker of [
   ".insert({",
 ]) requireMarker(textRepairPath, textRepair, marker);
 
+const tdnetXbrlAuditPath = "scripts/audit-tdnet-xbrl-availability-v2.ts";
+const tdnetXbrlAudit = read(tdnetXbrlAuditPath);
+for (const marker of [
+  "missingXbrlWithStoredFinancials",
+  "unresolvedMissingXbrl",
+  'from("company_quarterly_financials")',
+]) requireMarker(tdnetXbrlAuditPath, tdnetXbrlAudit, marker);
+
 const gapRepairPath = "scripts/repair-tdnet-audit-gaps.ts";
 const gapRepair = read(gapRepairPath);
 for (const marker of [

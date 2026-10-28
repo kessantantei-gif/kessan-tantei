@@ -38,7 +38,9 @@ export function isTdnetTimingOrDelayNotice(title: string) {
     ) ||
     /(?:期末|四半期末).*後.*\d+日.*(?:超え|超過)/.test(normalized) ||
     /(?:超え|超過|延期|遅延|延長).*(?:決算短信|決算発表)/.test(normalized) ||
-    /決算発表.*(?:延期|遅延|変更|予定|時期|日程|見込み|未定)/.test(normalized)
+    /決算発表.*(?:延期|遅延|変更|予定|時期|日程|見込み|未定)/.test(normalized) ||
+    /決算短信.*(?:レビュー結論不表明|レビュー報告書|監査意見|監査報告).*(?:お知らせ|について)/.test(normalized) ||
+    /(?:配当原資|配当支払開始予定日|配当支払).*(?:変更|訂正).*(?:決算短信).*(?:一部変更|変更).*(?:お知らせ|について)/.test(normalized)
   );
 }
 
@@ -54,6 +56,10 @@ export function isTdnetNonNumericCorrectionNotice(title: string, xbrlUrl: string
 
   if (/(?:訂正|修正).*(?:お知らせ|関するお知らせ)/.test(normalized)) {
     return true;
+  }
+
+  if (/(?:訂正|修正).*(?:文言追加|表現変更|記載変更|一部変更).*(?:について|お知らせ)/.test(normalized)) {
+    return !xbrlUrl;
   }
 
   if (/(?:一部)?訂正について/.test(normalized)) {
