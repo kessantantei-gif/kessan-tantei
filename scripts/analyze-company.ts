@@ -302,7 +302,21 @@ async function main() {
 
   downloadIfNeeded(docID);
 
-  let historyDocIDs = fetchHistoryDocIDs(searchName);
+  // Daily/backfill callers already resolved the official annual document IDs. Reuse
+  // those exact IDs instead of issuing another company-wide EDINET history search.
+  const suppliedHistoryIDs = process.env.HISTORY_DOC_IDS;
+  if (suppliedHistoryIDs !== undefined) {
+    const invalidIDs = suppliedHistoryIDs
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id && !/^S100[A-Z0-9]+$/.test(id));
+    if (invalidIDs.length > 0) {
+      throw new Error(`Invalid HISTORY_DOC_IDS: ${invalidIDs.join(",")}`);
+    }
+  }
+  let historyDocIDs = suppliedHistoryIDs !== undefined
+    ? suppliedHistoryIDs.split(",").map((id) => id.trim()).filter(Boolean)
+    : fetchHistoryDocIDs(searchName);
   if (!historyDocIDs.includes(docID)) historyDocIDs.unshift(docID);
   historyDocIDs = Array.from(new Set(historyDocIDs)).slice(0, 6);
 
