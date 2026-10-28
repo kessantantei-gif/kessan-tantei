@@ -75,8 +75,8 @@ async function main() {
   const missingTickers = [...new Set(missingXbrl.map((row) => row.ticker))];
 
   const foreignTickers = new Set<string>();
-  for (let offset = 0; offset < domesticMissingTickers.length; offset += 40) {
-    const tickers = domesticMissingTickers.slice(offset, offset + 40);
+  for (let offset = 0; offset < missingTickers.length; offset += 40) {
+    const tickers = missingTickers.slice(offset, offset + 40);
     if (!tickers.length) continue;
     const { data, error } = await supabaseAdmin
       .from("all_market_companies")
@@ -93,8 +93,8 @@ async function main() {
 
   const domesticMissingTickers = [...new Set(domesticMissingXbrl.map((row) => row.ticker))];
   const storedKeys = new Set<string>();
-  for (let offset = 0; offset < missingTickers.length; offset += 40) {
-    const tickers = missingTickers.slice(offset, offset + 40);
+  for (let offset = 0; offset < domesticMissingTickers.length; offset += 40) {
+    const tickers = domesticMissingTickers.slice(offset, offset + 40);
     if (!tickers.length) continue;
     for (let fromRow = 0; ; fromRow += 1000) {
       const { data, error } = await supabaseAdmin
