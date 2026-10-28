@@ -24,6 +24,8 @@ type AnalysisRow = {
     periodEnd?: string;
     fiscalYear?: number | string;
     year?: number | string;
+    revenue?: number | null;
+    operatingIncome?: number | null;
   }> | null;
   financials: StoredFinancials | null;
 };
@@ -52,6 +54,31 @@ function latestHistoryDocument(history: AnalysisRow["history"]) {
       return leftKey.localeCompare(rightKey);
     })
     .at(-1)?.docID ?? null;
+}
+
+function nearlyEqual(left: number, right: number) {
+  const scale = Math.max(Math.abs(left), Math.abs(right), 1);
+  return Math.abs(left - right) / scale <= 0.02;
+}
+
+// The strict financial audit compares the headline metrics with the most recent
+// annual history row. Reprocess such drift even if metadata and doc IDs look valid.
+function hasFinancialHistoryDrift(analysis: AnalysisRow): boolean {
+  const latest = Array.isArray(analysis.history)
+    ? [...analysis.history].sort((left, right) =>
+        (left.periodEnd ?? String(left.fiscalYear ?? left.year ?? "")).localeCompare(
+          right.periodEnd ?? String(right.fiscalYear ?? right.year ?? "")
+        )
+      ).at(-1)
+    : undefined;
+  if (!latest) return true;
+  if (typeof latest.revenue !== "number" || !Number.isFinite(latest.revenue) || latest.revenue <= 0) return true;
+  const currentRevenue = analysis.financials?.revenue;
+  if (typeof currentRevenue !== "number" || !nearlyEqual(currentRevenue, latest.revenue)) return true;
+  const currentIncome = (analysis.financials as StoredFinancials & {operatingIncome?: number | null})?.operatingIncome;
+  if (typeof currentIncome === "number" && typeof latest.operatingIncome === "number"
+      && !nearlyEqual(currentIncome, latest.operatingIncome)) return true;
+  return false;
 }
 
 function alreadyUsesFinancialMetadata(financials: StoredFinancials | null) {
@@ -133,7 +160,8 @@ async function main() {
         !force &&
         alreadyUsesFinancialMetadata(analysis.financials) &&
         revenueIsValid &&
-        isCurrentDocument
+        isCurrentDocument &&
+        !hasFinancialHistoryDrift(analysis)
       ) {
         alreadyUpdated += 1;
         return null;
