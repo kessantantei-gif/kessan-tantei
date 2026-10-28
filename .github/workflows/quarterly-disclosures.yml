@@ -58,6 +58,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check data pipeline repair guards
+        run: npm run audit:data-pipeline-resilience
+
       - name: Sync and verify TDnet quarterly disclosures
         shell: bash
         run: |
