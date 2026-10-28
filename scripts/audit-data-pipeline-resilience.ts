@@ -26,6 +26,10 @@ for (const marker of [
   "!hasFinancialHistoryDrift(analysis)",
 ]) requireMarker(financialReprocessPath, financialReprocess, marker);
 
+const rankingAuditPath = "scripts/audit-market-ranking-data.ts";
+const rankingAudit = read(rankingAuditPath);
+requireMarker(rankingAuditPath, rankingAudit, "loadRankingCompaniesUncached(market)");
+
 const dailyEdinetPath = "scripts/sync-daily-edinet.ts";
 const dailyEdinet = read(dailyEdinetPath);
 for (const marker of [
