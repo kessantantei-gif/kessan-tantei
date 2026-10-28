@@ -29,6 +29,7 @@ type QuarterlyRow = {
   investing_cf: number | null;
   financing_cf: number | null;
   extraction_version: string | null;
+  raw_financials: Record<string, unknown> | null;
 };
 
 function todayJst() {
@@ -121,7 +122,7 @@ async function loadDisclosures(from: string, to: string) {
 async function loadQuarterlyRow(disclosure: Disclosure) {
   const { data, error } = await supabaseAdmin
     .from("company_quarterly_financials")
-    .select("id, operating_cf, investing_cf, financing_cf, extraction_version")
+    .select("id, operating_cf, investing_cf, financing_cf, extraction_version, raw_financials")
     .eq("company_id", disclosure.company_id)
     .eq("fiscal_period_end", disclosure.fiscal_period_end!)
     .eq("quarter", disclosure.quarter!)
@@ -131,102 +132,151 @@ async function loadQuarterlyRow(disclosure: Disclosure) {
   return data as QuarterlyRow | null;
 }
 
+// TDnet removes old ZIP files. Do not mistake this retention policy for data
+// corruption: audit the full stored history and its captured original XBRL facts,
+// and independently re-download the recent disclosures while their URLs are live.
+const RECENT_SOURCE_DAYS = 7;
+const CASH_FLOW_FACTS = [
+  [/NetCashProvidedByUsedInOperatingActivities/i, /CashFlows?FromUsedInOperatingActivities/i],
+  [/NetCashProvidedByUsedInInvestingActivities/i, /CashFlows?FromUsedInInvestingActivities/i],
+  [/NetCashProvidedByUsedInFinancingActivities/i, /CashFlows?FromUsedInFinancingActivities/i],
+] as const;
+
+function finiteNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string" || value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function rawCashFlowFact(raw: Record<string, unknown>, patterns: readonly RegExp[]) {
+  const facts = Object.entries(raw)
+    .filter(([key, value]) =>
+      patterns.some((pattern) => pattern.test(key.split(":")[0])) && finiteNumber(value) !== null
+    );
+  const current = facts.filter(([key]) =>
+    /Current.*(?:YTD|Duration|Instant)|CurrentYear|CurrentQuarter/i.test(key)
+  );
+  return finiteNumber((current[0] ?? facts[0])?.[1]);
+}
+
+function storedEvidence(row: QuarterlyRow) {
+  const raw = row.raw_financials;
+  if (!raw || typeof raw !== "object") return null;
+  const fallback = raw.textBlockFallback;
+  if (fallback && typeof fallback === "object") {
+    const parsed = fallback as Record<string, unknown>;
+    if (parsed.cashFlowTableFound === true) {
+      return {
+        operatingCF: finiteNumber(parsed.operatingCF),
+        investingCF: finiteNumber(parsed.investingCF),
+        financingCF: finiteNumber(parsed.financingCF),
+      };
+    }
+  }
+  const values = CASH_FLOW_FACTS.map((patterns) => rawCashFlowFact(raw, patterns));
+  if (values.every((value) => value === null)) return null;
+  return { operatingCF: values[0], investingCF: values[1], financingCF: values[2] };
+}
+
+function cashFlowDiffs(
+  stored: { operatingCF: number | null; investingCF: number | null; financingCF: number | null },
+  expected: { operatingCF: number | null; investingCF: number | null; financingCF: number | null }
+) {
+  return (Object.keys(expected) as Array<keyof typeof expected>)
+    .filter((field) => expected[field] !== null && stored[field] !== expected[field])
+    .map((field) => `${field}:${String(stored[field])}!=${String(expected[field])}`);
+}
+
 async function main() {
   const { from, to } = targetRange();
   const disclosures = await loadDisclosures(from, to);
   const latestByKey = new Map<string, Disclosure>();
-  for (const disclosure of disclosures) {
-    latestByKey.set(disclosureKey(disclosure), disclosure);
-  }
+  for (const disclosure of disclosures) latestByKey.set(disclosureKey(disclosure), disclosure);
 
-  const cashFlowReports: Array<Record<string, unknown>> = [];
+  const freshCutoff = addDays(todayJst(), -RECENT_SOURCE_DAYS);
   const problems: string[] = [];
-  let cashFlowTableCount = 0;
-  let matchedCount = 0;
+  const matchedEvidence: Array<Record<string, unknown>> = [];
+  let historicalStoredRows = 0;
+  let archivedWithoutRawCashFlowEvidence = 0;
+  let archivedRawFactsVerified = 0;
+  let freshSourceChecked = 0;
+  let freshCashFlowTables = 0;
+  let freshSourceMatches = 0;
 
   for (const disclosure of latestByKey.values()) {
+    // The immutable quarterly key is mandatory even when TDnet's old ZIP expired.
+    const row = await loadQuarterlyRow(disclosure);
+    if (!row) {
+      problems.push(`${disclosure.ticker}:${disclosure.id} 四半期数値行なし`);
+      continue;
+    }
+    const stored = {
+      operatingCF: row.operating_cf,
+      investingCF: row.investing_cf,
+      financingCF: row.financing_cf,
+    };
+    historicalStoredRows += 1;
+
+    const evidence = storedEvidence(row);
+    if (evidence) {
+      const diffs = cashFlowDiffs(stored, evidence);
+      if (diffs.length > 0) {
+        problems.push(`${disclosure.ticker}:${disclosure.id} 保存済みXBRLのCF値と不一致 ${diffs.join(",")}`);
+      } else {
+        archivedRawFactsVerified += 1;
+      }
+    } else if (disclosure.disclosed_at.slice(0, 10) < freshCutoff) {
+      // Historic documents may not have original cash-flow facts saved.
+      // Explicitly count these as NOT independently source-reverified.
+      archivedWithoutRawCashFlowEvidence += 1;
+    }
+
+    if (disclosure.disclosed_at.slice(0, 10) < freshCutoff) continue;
+
     try {
       const parsed = parseTdnetTextBlockFinancials(await fetchBuffer(disclosure.xbrl_url!));
+      freshSourceChecked += 1;
       if (!parsed.cashFlowTableFound) continue;
-      cashFlowTableCount += 1;
-
+      freshCashFlowTables += 1;
       const expected = {
         operatingCF: parsed.operatingCF,
         investingCF: parsed.investingCF,
         financingCF: parsed.financingCF,
       };
-      const missingParsed = Object.entries(expected)
-        .filter(([, value]) => value === null)
-        .map(([name]) => name);
-      if (missingParsed.length > 0) {
-        problems.push(
-          `${disclosure.ticker}:${disclosure.id} CF表解析欠損 ${missingParsed.join(",")}`
-        );
-      }
-
-      const row = await loadQuarterlyRow(disclosure);
-      if (!row) {
-        problems.push(`${disclosure.ticker}:${disclosure.id} 四半期数値行なし`);
-        continue;
-      }
-
-      const stored = {
-        operatingCF: row.operating_cf,
-        investingCF: row.investing_cf,
-        financingCF: row.financing_cf,
-      };
-      const mismatches = (Object.keys(expected) as Array<keyof typeof expected>).filter(
-        (name) => expected[name] !== null && stored[name] !== expected[name]
-      );
-      if (mismatches.length > 0) {
-        problems.push(
-          `${disclosure.ticker}:${disclosure.id} CF保存値不一致 ${mismatches
-            .map((name) => `${name}:${stored[name]}!=${expected[name]}`)
-            .join(",")}`
-        );
-      } else if (missingParsed.length === 0) {
-        matchedCount += 1;
-      }
-
-      cashFlowReports.push({
-        ticker: disclosure.ticker,
-        disclosureId: disclosure.id,
-        title: disclosure.title,
-        disclosedAt: disclosure.disclosed_at,
-        fiscalPeriodEnd: disclosure.fiscal_period_end,
-        quarter: disclosure.quarter,
-        accountingScope: disclosure.accounting_scope,
-        expected,
-        stored,
-        extractionVersion: row.extraction_version,
-      });
+      const missing = Object.entries(expected).filter(([, value]) => value === null).map(([name]) => name);
+      if (missing.length > 0) problems.push(`${disclosure.ticker}:${disclosure.id} CF表解析欠損 ${missing.join(",")}`);
+      const diffs = cashFlowDiffs(stored, expected);
+      if (diffs.length > 0) problems.push(`${disclosure.ticker}:${disclosure.id} CF保存値不一致 ${diffs.join(",")}`);
+      if (!missing.length && !diffs.length) freshSourceMatches += 1;
+      matchedEvidence.push({ ticker: disclosure.ticker, disclosureId: disclosure.id, expected, stored });
     } catch (error) {
-      problems.push(
-        `${disclosure.ticker}:${disclosure.id} ${error instanceof Error ? error.message : String(error)}`
-      );
+      problems.push(`${disclosure.ticker}:${disclosure.id} 最近のTDnet ZIP取得または解析失敗 ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   const report = {
     generatedAt: new Date().toISOString(),
     range: { from, to },
+    freshCutoff,
     disclosures: disclosures.length,
     latestQuarterlyKeys: latestByKey.size,
-    cashFlowTableCount,
-    matchedCount,
-    cashFlowReports,
+    historicalStoredRows,
+    archivedRawFactsVerified,
+    archivedWithoutRawCashFlowEvidence,
+    freshSourceChecked,
+    freshCashFlowTables,
+    freshSourceMatches,
+    matchedEvidence,
     problems,
+    historicalSourceLimitation:
+      "Archived ZIPs are no longer provided by TDnet. Missing raw facts are disclosed but cannot be independently source-reverified; archived normalized row existence remains mandatory.",
   };
-
-  console.log("===== TDnet cash-flow audit =====");
-  console.log(JSON.stringify(report, null, 2));
-
+  console.log("===== TDnet cash-flow audit: stored history + fresh source =====");
+  console.log(JSON.stringify({ ...report, matchedEvidence: matchedEvidence.slice(0, 10) }, null, 2));
   const reportPath = process.env.TDNET_CASH_FLOW_AUDIT_REPORT_PATH;
   if (reportPath) await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-
-  if (problems.length > 0) {
-    throw new Error(`TDnetキャッシュフロー監査で${problems.length}件の問題を検出しました`);
-  }
+  if (problems.length > 0) throw new Error(`TDnetキャッシュフロー監査で${problems.length}件の問題を検出しました`);
 }
 
 main().catch((error) => {
