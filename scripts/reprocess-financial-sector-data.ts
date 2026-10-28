@@ -47,7 +47,10 @@ function parsePositiveInteger(name: string, fallback: number) {
 function latestHistoryDocument(history: AnalysisRow["history"]) {
   if (!Array.isArray(history)) return null;
   return [...history]
-    .filter((row) => typeof row.docID === "string" && /^S100[A-Z0-9]+$/.test(row.docID))
+    .filter((row) =>
+      typeof row.docID === "string" && /^S100[A-Z0-9]+$/.test(row.docID) &&
+      typeof row.revenue === "number" && Number.isFinite(row.revenue) && row.revenue > 0
+    )
     .sort((left, right) => {
       const leftKey = left.periodEnd ?? String(left.fiscalYear ?? left.year ?? "");
       const rightKey = right.periodEnd ?? String(right.fiscalYear ?? right.year ?? "");
@@ -170,9 +173,9 @@ async function main() {
       const historyDocIDs = Array.from(
         new Set([
           latestDocID,
-          analysis.doc_id,
           ...(Array.isArray(analysis.history)
             ? analysis.history
+                .filter((row) => typeof row.revenue === "number" && row.revenue > 0)
                 .map((row) => row?.docID)
                 .filter(
                   (docID): docID is string =>
