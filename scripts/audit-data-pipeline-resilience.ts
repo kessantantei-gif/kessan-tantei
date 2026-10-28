@@ -75,7 +75,21 @@ const nightly = read(nightlyPath);
 requireMarker(
   nightlyPath,
   nightly,
-  "REPAIR_SCORE_MODELS=1 npm run complete:all-markets -- --with-daily-edinet --with-repairs"
+  "REPAIR_SCORE_MODELS=1 npm run complete:all-markets -- --with-daily-edinet --with-repairs --skip-production-final-audit"
 );
+
+const completionPath = "scripts/run-all-markets-completion.ts";
+const completion = read(completionPath);
+for (const marker of [
+  "--skip-production-final-audit",
+  "includeProductionFinalAudit",
+]) requireMarker(completionPath, completion, marker);
+
+const quarterlyWorkflowPath = ".github/workflows/quarterly-disclosures.yml";
+const quarterlyWorkflow = read(quarterlyWorkflowPath);
+for (const marker of [
+  "scripts/audit-tdnet-xbrl-availability-v2.ts",
+  "lib/tdnet-document-title.ts",
+]) requireMarker(quarterlyWorkflowPath, quarterlyWorkflow, marker);
 
 console.log("Data pipeline resilience audit passed.");

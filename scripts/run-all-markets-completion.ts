@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 const includeSync = !process.argv.includes("--skip-sync");
 const includeRepairs = process.argv.includes("--with-repairs");
 const includeDailyEdinet = process.argv.includes("--with-daily-edinet");
+const includeProductionFinalAudit = !process.argv.includes("--skip-production-final-audit");
 
 type Step = {
   name: string;
@@ -97,7 +98,9 @@ const steps: Step[] = [
   { name: "Stripe監査", command: "npm run audit:stripe", required: true },
   { name: "SEO監査", command: "npm run audit:seo", required: true },
   { name: "Release監査", command: "npm run audit:release", required: true },
-  { name: "最終監査", command: "npm run audit:final", required: true },
+  ...(includeProductionFinalAudit
+    ? [{ name: "最終監査", command: "npm run audit:final", required: true }]
+    : []),
   {
     name: "Phase 16 全市場受入監査",
     command: "npm run audit:phase16-all-markets",
@@ -112,6 +115,7 @@ console.log("決算探偵 全市場完全版 統合実行");
 console.log(`市場同期: ${includeSync ? "実行" : "省略"}`);
 console.log(`EDINET日次同期: ${includeDailyEdinet ? "実行" : "省略"}`);
 console.log(`財務修復: ${includeRepairs ? "実行" : "省略"}`);
+console.log(`本番認証最終監査: ${includeProductionFinalAudit ? "実行" : "省略（データNightly）"}`);
 console.log("============================================================\n");
 
 for (const [index, step] of steps.entries()) {
