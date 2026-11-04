@@ -29,6 +29,12 @@ requireText("app/company/[ticker]/layout.tsx", "loadRuntimeCompanyMasterEntry");
 requireText("app/company/[ticker]/layout.tsx", "company-layout-context-v2");
 forbidText("app/company/[ticker]/layout.tsx", "loadRuntimeCompanyMasterMap");
 
+// Public SSR data may be cached, but personalized access and reactions must not be.
+requireText("app/company/[ticker]/page.tsx", "company-page-public-core-v1");
+requireText("app/company/[ticker]/page.tsx", "company-page-public-news-v1");
+requireText("app/company/[ticker]/page.tsx", "loadCompanyPublicCore(ticker)");
+requireText("app/company/[ticker]/page.tsx", "const { userId } = await auth()");
+
 requireText("components/company-ai-summary.tsx", "cache: \"force-cache\"");
 requireText("components/company-ai-summary.tsx", "isSignedIn");
 forbidText(
