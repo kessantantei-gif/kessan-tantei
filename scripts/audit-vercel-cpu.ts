@@ -29,6 +29,12 @@ requireText("app/company/[ticker]/layout.tsx", "loadRuntimeCompanyMasterEntry");
 requireText("app/company/[ticker]/layout.tsx", "company-layout-context-v2");
 forbidText("app/company/[ticker]/layout.tsx", "loadRuntimeCompanyMasterMap");
 
+// Public SSR data may be cached, but personalized access and reactions must not be.
+requireText("app/company/[ticker]/page.tsx", "company-page-public-core-v1");
+requireText("app/company/[ticker]/page.tsx", "company-page-public-news-v1");
+requireText("app/company/[ticker]/page.tsx", "loadCompanyPublicCore(ticker)");
+requireText("app/company/[ticker]/page.tsx", "const { userId } = await auth()");
+
 requireText("components/company-ai-summary.tsx", "cache: \"force-cache\"");
 requireText("components/company-ai-summary.tsx", "isSignedIn");
 forbidText(
@@ -42,6 +48,21 @@ requireText("next.config.ts", "stale-while-revalidate=86400");
 
 requireText("lib/load-ranking-companies.ts", "unstable_cache");
 requireText("lib/load-ranking-companies.ts", "ranking-companies-v2");
+
+// Full-market peer comparisons must use bounded, shared caches rather than
+// downloading and decoding thousands of financial records on every request.
+requireText("app/api/company/[ticker]/peer-comparison/route.ts", "unstable_cache");
+requireText("app/api/company/[ticker]/peer-comparison/route.ts", "loadComparisonPeersPage");
+requireText("app/api/company/[ticker]/peer-comparison/route.ts", "loadComparisonMarketsPage");
+requireText("app/api/company/[ticker]/peer-comparison/route.ts", "PEER_PAGE_SIZE");
+requireText("app/api/company/[ticker]/peer-comparison/route.ts", "s-maxage=900");
+requireText("app/api/company/[ticker]/peer-comparison/route.ts", "stale-while-revalidate=1800");
+
+// News search needs the complete listed-company directory for name matching,
+// but the lookup must be shared across visitors, without suppressing fresh news.
+requireText("app/news/page.tsx", "const loadListedCompanies = unstable_cache(");
+requireText("app/news/page.tsx", "const loadMarketTickers = unstable_cache(");
+requireText("app/news/page.tsx", 'revalidate: 1800');
 
 if (failures.length > 0) {
   console.error("Vercel CPU regression audit failed:\n");
