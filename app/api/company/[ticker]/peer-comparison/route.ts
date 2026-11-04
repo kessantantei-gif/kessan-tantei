@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase";
 import { loadAllSupabaseRows } from "@/lib/load-all-supabase-rows";
 import {
@@ -180,6 +181,41 @@ function group(
   };
 }
 
+// Cache each bounded page separately: a single all-market response can exceed
+// Next's per-entry Data Cache limit. All candidates are still included.
+const PEER_PAGE_SIZE = 400;
+const PEER_CACHE_SECONDS = 1800;
+
+const loadComparisonPeersPage = unstable_cache(
+  async (from: number, to: number): Promise<CompanyRow[]> => {
+    const { data, error } = await supabaseAdmin
+      .from("company_analyses")
+      .select("ticker, company_name, score, danger_score, financials, risk_level")
+      .neq("risk_level", "EXCLUDED")
+      .order("ticker", { ascending: true })
+      .range(from, to);
+    if (error) throw new Error(`比較候補全社取得失敗: ${error.message}`);
+    return (data ?? []) as CompanyRow[];
+  },
+  ["comparison-peers-page-v1"],
+  { revalidate: PEER_CACHE_SECONDS }
+);
+
+const loadComparisonMarketsPage = unstable_cache(
+  async (from: number, to: number): Promise<MarketCompany[]> => {
+    const { data, error } = await supabaseAdmin
+      .from("all_market_companies")
+      .select("ticker, industry_name, market_segment")
+      .eq("listing_status", "listed")
+      .order("ticker", { ascending: true })
+      .range(from, to);
+    if (error) throw new Error(`比較候補業種取得失敗: ${error.message}`);
+    return (data ?? []) as MarketCompany[];
+  },
+  ["comparison-markets-page-v1"],
+  { revalidate: PEER_CACHE_SECONDS }
+);
+
 export async function GET(_req: Request, { params }: RouteProps) {
   const { ticker } = await params;
 
@@ -191,21 +227,15 @@ export async function GET(_req: Request, { params }: RouteProps) {
         .eq("ticker", ticker)
         .maybeSingle(),
       loadRuntimeCompanyMasterEntries(),
-      loadAllSupabaseRows<CompanyRow>("比較候補全社取得失敗", (from, to) =>
-        supabaseAdmin
-          .from("company_analyses")
-          .select("ticker, company_name, score, danger_score, financials, risk_level")
-          .neq("risk_level", "EXCLUDED")
-          .order("ticker", { ascending: true })
-          .range(from, to)
+      loadAllSupabaseRows<CompanyRow>(
+        "比較候補全社取得失敗",
+        async (from, to) => ({ data: await loadComparisonPeersPage(from, to), error: null }),
+        PEER_PAGE_SIZE
       ),
-      loadAllSupabaseRows<MarketCompany>("比較候補業種取得失敗", (from, to) =>
-        supabaseAdmin
-          .from("all_market_companies")
-          .select("ticker, industry_name, market_segment")
-          .eq("listing_status", "listed")
-          .order("ticker", { ascending: true })
-          .range(from, to)
+      loadAllSupabaseRows<MarketCompany>(
+        "比較候補業種取得失敗",
+        async (from, to) => ({ data: await loadComparisonMarketsPage(from, to), error: null }),
+        PEER_PAGE_SIZE
       ),
     ]);
 
@@ -301,7 +331,7 @@ export async function GET(_req: Request, { params }: RouteProps) {
     ),
   ].filter((item) => item.companies.length > 1);
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     ticker: targetCompany.ticker,
     companyName: targetCompany.company_name,
     peerBasis: master?.reviewed
@@ -317,4 +347,7 @@ export async function GET(_req: Request, { params }: RouteProps) {
     disclaimer:
       "比較候補は事業テーマと取得済み財務データの理解補助です。実際の競合関係や売買判断を示すものではありません。",
   });
+  // Public, non-personalized results are safe to reuse at the CDN layer.
+  response.headers.set("Cache-Control", "public, s-maxage=900, stale-while-revalidate=1800");
+  return response;
 }
