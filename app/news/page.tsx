@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import NewsSearchForm from "@/components/news-search-form";
 import { supabaseAdmin } from "@/lib/supabase";
 import { isBlockedNews } from "@/lib/news-filter";
@@ -101,33 +102,42 @@ function safeSearchTerm(value: string) {
   return value.replace(/[,%()"']/g, " ").trim();
 }
 
-async function loadMarketTickers(market: MarketSlug) {
-  if (market === "all") return null;
+// The full listed-company directory rarely changes during a request window.
+// Cache it across news page views instead of fetching every company on every hit.
+const loadMarketTickers = unstable_cache(
+  async (market: MarketSlug) => {
+    if (market === "all") return null;
 
-  const { data, error } = await supabaseAdmin
-    .from("all_market_companies")
-    .select("ticker")
-    .eq("listing_status", "listed")
-    .eq("market_segment", market)
-    .order("ticker", { ascending: true });
+    const { data, error } = await supabaseAdmin
+      .from("all_market_companies")
+      .select("ticker")
+      .eq("listing_status", "listed")
+      .eq("market_segment", market)
+      .order("ticker", { ascending: true });
 
-  if (error) throw new Error(`市場企業取得失敗: ${error.message}`);
-  return (data ?? []).map((row) => row.ticker as string);
-}
+    if (error) throw new Error(`市場企業取得失敗: ${error.message}`);
+    return (data ?? []).map((row) => row.ticker as string);
+  },
+  ["news-market-tickers-v1"],
+  { revalidate: 1800 }
+);
 
-async function loadListedCompanies() {
-  return loadAllSupabaseRows<CompanyMaster>(
-    "ニュース検索会社マスタ取得失敗",
-    (from, to) =>
-      supabaseAdmin
-        .from("all_market_companies")
-        .select("ticker, company_name, market_segment")
-        .eq("listing_status", "listed")
-        .in("market_segment", ["prime", "standard", "growth"])
-        .order("ticker", { ascending: true })
-        .range(from, to)
-  );
-}
+const loadListedCompanies = unstable_cache(
+  async () =>
+    loadAllSupabaseRows<CompanyMaster>(
+      "ニュース検索会社マスタ取得失敗",
+      (from, to) =>
+        supabaseAdmin
+          .from("all_market_companies")
+          .select("ticker, company_name, market_segment")
+          .eq("listing_status", "listed")
+          .in("market_segment", ["prime", "standard", "growth"])
+          .order("ticker", { ascending: true })
+          .range(from, to)
+    ),
+  ["news-listed-companies-v1"],
+  { revalidate: 1800 }
+);
 
 function toKatakana(value: string) {
   return value.replace(/[ぁ-ゖ]/g, (char) =>
