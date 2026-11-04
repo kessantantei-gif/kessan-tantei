@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/clerk-server";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -28,6 +29,42 @@ type PageProps = {
 };
 
 export const dynamic = "force-dynamic";
+
+// Only public financial records are cached. Authentication, free-use accounting,
+// comments and reactions remain request-specific and are never cached.
+const loadCompanyPublicCore = unstable_cache(
+  async (ticker: string) => {
+    const [analysisResult, masterResult] = await Promise.all([
+      supabaseAdmin
+        .from("company_analyses")
+        .select("*")
+        .eq("ticker", ticker)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("all_market_companies")
+        .select("ticker, company_name, market_segment, industry_name, listing_status")
+        .eq("ticker", ticker)
+        .eq("listing_status", "listed")
+        .maybeSingle(),
+    ]);
+    if (analysisResult.error || masterResult.error) {
+      throw new Error(
+        `企業ページデータ取得失敗 (${ticker}): ${analysisResult.error?.message ?? masterResult.error?.message}`
+      );
+    }
+    return { analysis: analysisResult.data, master: masterResult.data };
+  },
+  ["company-page-public-core-v1"],
+  { revalidate: 600 }
+);
+
+const loadCompanyNewsCached = unstable_cache(
+  async (ticker: string) => getCompanyNews(ticker, 5),
+  ["company-page-public-news-v1"],
+  { revalidate: 300 }
+);
+
+
 
 type Comment = {
   id: string;
@@ -76,19 +113,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { ticker } = await params;
 
-  const [{ data: analysis }, { data: master }] = await Promise.all([
-    supabaseAdmin
-      .from("company_analyses")
-      .select("ticker, company_name, score, danger_score")
-      .eq("ticker", ticker)
-      .maybeSingle(),
-    supabaseAdmin
-      .from("all_market_companies")
-      .select("ticker, company_name, market_segment, industry_name, listing_status")
-      .eq("ticker", ticker)
-      .eq("listing_status", "listed")
-      .maybeSingle(),
-  ]);
+  const { analysis, master } = await loadCompanyPublicCore(ticker);
 
   const companyName = analysis?.company_name ?? master?.company_name;
   const title = companyName
@@ -139,18 +164,7 @@ export async function generateMetadata({
 export default async function CompanyPage({ params }: PageProps) {
   const { ticker } = await params;
 
-  const { data: master, error: masterError } = await supabaseAdmin
-    .from("all_market_companies")
-    .select("ticker, company_name, market_segment, industry_name, listing_status")
-    .eq("ticker", ticker)
-    .eq("listing_status", "listed")
-    .maybeSingle();
-
-  const { data, error: analysisError } = await supabaseAdmin
-    .from("company_analyses")
-    .select("*")
-    .eq("ticker", ticker)
-    .maybeSingle();
+  const { analysis: data, master } = await loadCompanyPublicCore(ticker);
 
   if (!data) {
     if (master) {
@@ -161,12 +175,6 @@ export default async function CompanyPage({ params }: PageProps) {
           marketSegment={master.market_segment}
           industryName={master.industry_name}
         />
-      );
-    }
-
-    if (masterError || analysisError) {
-      throw new Error(
-        `企業ページデータ取得失敗 (${ticker}): ${analysisError?.message ?? masterError?.message ?? "unknown error"}`
       );
     }
 
@@ -235,7 +243,7 @@ export default async function CompanyPage({ params }: PageProps) {
     comments.filter((comment) => !comment.deleted_at)
   );
 
-  const companyNews = await getCompanyNews(ticker, 5);
+  const companyNews = await loadCompanyNewsCached(ticker);
 
   const { data: latestDisclosure } = await supabaseAdmin
     .from("company_disclosures")
